@@ -1,0 +1,8 @@
+# Superpowers brainstorming session artifacts (mockups, state)
+.superpowers/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
