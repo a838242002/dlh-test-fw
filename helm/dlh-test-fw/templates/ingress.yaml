@@ -1,0 +1,27 @@
+{{- if .Values.platform.ingress.enabled -}}
+{{- $svcMap := dict "argo" (dict "host" .Values.platform.ingress.hosts.argo "svc" "dlh-argo-workflows-server" "port" 2746)
+                   "grafana" (dict "host" .Values.platform.ingress.hosts.grafana "svc" "dlh-grafana" "port" 80)
+                   "minio" (dict "host" .Values.platform.ingress.hosts.minio "svc" "dlh-minio-console" "port" 9001) -}}
+{{- range $key, $cfg := $svcMap }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dlh-{{ $key }}
+  namespace: {{ include "dlh.namespace" $ }}
+  labels: {{- include "dlh.labels" $ | nindent 4 }}
+spec:
+  ingressClassName: {{ $.Values.platform.ingress.className }}
+  rules:
+  - host: {{ $cfg.host }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ $cfg.svc }}
+            port:
+              number: {{ $cfg.port }}
+{{- end -}}
+{{- end -}}
