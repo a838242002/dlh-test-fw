@@ -1,0 +1,65 @@
+# Per spikes/k6-vm-remote-write/FINDINGS.md:
+# - k6 reserves the `scenario` label in its prometheus-rw output (always set to
+#   the k6 internal scenario name). We tag our application-level scenario as
+#   `dlh_scenario` so PromQL filters in dashboards / verdict use that.
+# - Runner image is pinned to grafana/k6:0.50.0 — older images may not have the
+#   experimental-prometheus-rw output.
+# - env_map is reserved for future dynamic env injection; k6-operator 4.x does
+#   not yet support arbitrary JSON-string env mapping cleanly, so this template
+#   accepts the param but doesn't yet wire it through.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: load-k6-run
+  labels:
+    dlh.category: load
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: script_configmap        # name of ConfigMap containing script.js
+      - name: vus
+      - name: duration                # e.g. "180s"
+      - name: env_map                 # JSON string of extra env vars (may be "{}") — see header note
+      - name: scenario_label          # used as dlh_scenario= tag on prom-rw output
+    outputs:
+      parameters:
+      - name: metrics_namespace
+        value: "{{`{{inputs.parameters.scenario_label}}`}}"
+    resource:
+      action: create
+      successCondition: status.stage = finished
+      failureCondition: status.stage = error
+      manifest: |
+        apiVersion: k6.io/v1alpha1
+        kind: TestRun
+        metadata:
+          generateName: dlh-k6-
+          namespace: {{`{{workflow.namespace}}`}}
+          labels:
+            dlh.scenario: {{`{{inputs.parameters.scenario_label}}`}}
+        spec:
+          parallelism: 1
+          script:
+            configMap:
+              name: {{`{{inputs.parameters.script_configmap}}`}}
+              file: script.js
+          arguments: >-
+            --tag dlh_scenario={{`{{inputs.parameters.scenario_label}}`}}
+            --out experimental-prometheus-rw
+          runner:
+            image: grafana/k6:0.50.0
+            env:
+            - name: K6_PROMETHEUS_RW_SERVER_URL
+              value: {{ .Values.platform.vm.remoteWriteUrl }}
+            - name: K6_PROMETHEUS_RW_PUSH_INTERVAL
+              value: "5s"
+            - name: K6_PROMETHEUS_RW_TREND_STATS
+              value: "p(95),p(99),min,max,avg"
+            - name: VUS
+              value: {{`"{{inputs.parameters.vus}}"`}}
+            - name: DURATION
+              value: {{`"{{inputs.parameters.duration}}"`}}
