@@ -1,0 +1,18 @@
+dependencies:
+- name: argo-workflows
+  repository: https://argoproj.github.io/argo-helm
+  version: 0.42.7
+- name: litmus
+  repository: https://litmuschaos.github.io/litmus-helm/
+  version: 3.28.0
+- name: k6-operator
+  repository: https://grafana.github.io/helm-charts
+  version: 4.4.1
+- name: victoria-metrics-single
+  repository: https://victoriametrics.github.io/helm-charts/
+  version: 0.38.0
+- name: grafana
+  repository: https://grafana.github.io/helm-charts
+  version: 8.15.0
+digest: sha256:dc5a1b449b6c3eaffaf0ae61abe01d30dd034a4548517004dc38771ca44f3e46
+generated: "2026-05-16T16:02:46.484177+08:00"

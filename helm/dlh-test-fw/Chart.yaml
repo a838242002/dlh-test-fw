@@ -20,10 +20,11 @@ dependencies:
   # NOTE: k6-operator 4.4.1's values.schema.json has additionalProperties:false at
   # the root and forbids the conventional `enabled` flag, so we cannot use a
   # `condition: k6-operator.enabled` toggle. Subchart is always installed.
-- name: minio
-  version: 14.10.5
-  repository: https://charts.bitnami.com/bitnami
-  condition: minio.enabled
+# Bitnami minio chart removed -- their secure-images migration yanked the
+# public `bitnami/minio` Docker tags in 2025, and the chart's pre-install hook
+# blocks alternate images. We ship our own minimal MinIO Deployment in
+# templates/minio.yaml instead. The chart's release-name-derived Service
+# (`dlh-minio`) is preserved so values, ingress, and bootstrap Job remain valid.
 - name: victoria-metrics-single
   version: 0.38.0
   repository: https://victoriametrics.github.io/helm-charts/

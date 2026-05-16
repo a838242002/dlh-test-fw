@@ -48,16 +48,21 @@ argo-workflows:
       name: argo-workflow
 
 litmus:
-  enabled: true
+  # DISABLED for Phase 1 (2026-05-16). Litmus 3.28.0 depends on the Bitnami
+  # MongoDB sub-subchart, whose images were yanked from Docker Hub by Bitnami's
+  # 2025 "secure-images" migration -- `bitnamilegacy/mongodb:8.0.13-debian-12-r0`
+  # has no linux/arm64 manifest, and the bitnami/minio tag the chart references
+  # is also gone. Re-enable after pinning a chart that uses bitnamisecure/* or
+  # by overriding mongodb.image to a public arm64-compatible source.
+  # See FINDINGS.md "Platform chart observations" for rationale.
+  enabled: false
   portal:
     frontend:
       service:
         type: ClusterIP
-  # NOTE: subchart key is `mongodb` (Bitnami MongoDB subchart), not `mongo`.
-  # Plan draft said `mongo:` — schema actually uses `mongodb:`. Adapted.
   mongodb:
     persistence:
-      enabled: false                    # spike default; override in values-prod.yaml later
+      enabled: false
 
 k6-operator:
   # NOTE: chart 4.4.1's strict JSON schema rejects an `enabled` key here.
@@ -71,18 +76,11 @@ k6-operator:
     # all namespaces). Don't re-create the umbrella namespace — Helm-managed.
     create: false
 
-minio:
-  enabled: true
-  mode: standalone
-  auth:
-    rootUser: admin
-    existingSecret: minio-root-credentials   # created by templates/secrets.yaml
-  defaultBuckets: ""                    # we provision via post-install Job for explicitness
-  persistence:
-    enabled: true
-    size: 10Gi
-  service:
-    type: ClusterIP
+# MinIO is now installed directly via templates/minio.yaml (not a subchart).
+# Knobs live under `platform.minio` so we don't fake-namespace under the (now
+# absent) `minio:` subchart key.
+platform_minio_image: minio/minio:RELEASE.2024-12-13T22-19-12Z
+platform_minio_persistence_enabled: false   # set true on real clusters
 
 victoria-metrics-single:
   enabled: true

@@ -5,12 +5,8 @@ platform:
     enabled: true                       # minikube has the ingress addon
     className: nginx                    # minikube's ingress addon uses ingress-nginx
 
-minio:
-  persistence:
-    enabled: false                      # ephemeral — minikube restarts blow away PV anyway
-  resources:
-    requests: { cpu: 100m, memory: 256Mi }
-    limits:   { cpu: 500m, memory: 512Mi }
+# MinIO subchart removed (see Chart.yaml). Our minimal minio template
+# (templates/minio.yaml) is already low-resource and ephemeral.
 
 victoria-metrics-single:
   server:
@@ -20,14 +16,7 @@ victoria-metrics-single:
       requests: { cpu: 100m, memory: 256Mi }
       limits:   { cpu: 500m, memory: 512Mi }
 
-litmus:
-  # NOTE: subchart key is `mongodb` (matches values.yaml).
-  mongodb:
-    persistence:
-      enabled: false
-    resources:
-      requests: { cpu: 100m, memory: 256Mi }
-      limits:   { cpu: 500m, memory: 768Mi }
+# Litmus disabled in values.yaml (Bitnami mongodb image gone). No overrides needed.
 
 grafana:
   persistence:
