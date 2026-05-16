@@ -1,5 +1,11 @@
 SHELL := /usr/bin/env bash
-.PHONY: platform-up platform-down platform-verify chart-lint fixture-images verify-templates
+.PHONY: platform-up platform-down platform-verify chart-lint fixture-images verify-templates sync-dashboards run-mysql
+
+sync-dashboards:
+	cp dashboards/grafana/*.json helm/dlh-test-fw/files/dashboards/
+
+run-mysql:
+	./scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml
 
 fixture-images:
 	for d in mysql doris kafka; do \
