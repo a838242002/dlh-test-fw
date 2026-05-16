@@ -57,7 +57,7 @@ spec:
   - name: write-slo
     serviceAccountName: argo-workflow
     script:
-      image: bitnami/kubectl:1.30
+      image: alpine/k8s:1.30.0
       command: [bash]
       source: |
         set -euo pipefail
