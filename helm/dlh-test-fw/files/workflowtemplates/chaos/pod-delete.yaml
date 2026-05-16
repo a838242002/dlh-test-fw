@@ -1,0 +1,52 @@
+# Naming convention: Litmus names ChaosResult as "<engine-name>-<experiment>".
+# This template outputs the ChaosEngine name via jsonPath; callers (verdict
+# template / Plan 5 scenarios) append "-pod-delete" to get the ChaosResult name.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: chaos-pod-delete
+  labels:
+    dlh.category: chaos
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: target_namespace
+      - name: target_pod_selector       # e.g. app=mysql
+      - name: duration                  # seconds, e.g. "60"
+      - name: interval                  # seconds between kills, e.g. "10"
+      - name: force                     # "true" / "false"
+    outputs:
+      parameters:
+      - name: chaos_result_name
+        valueFrom:
+          jsonPath: '{.metadata.name}'
+    resource:
+      action: create
+      successCondition: status.experimentStatus.verdict in (Pass, Fail, Stopped)
+      manifest: |
+        apiVersion: litmuschaos.io/v1alpha1
+        kind: ChaosEngine
+        metadata:
+          generateName: dlh-pod-delete-
+          namespace: {{`{{workflow.namespace}}`}}
+        spec:
+          appinfo:
+            appns: {{`{{inputs.parameters.target_namespace}}`}}
+            applabel: {{`{{inputs.parameters.target_pod_selector}}`}}
+            appkind: deployment
+          chaosServiceAccount: litmus
+          experiments:
+          - name: pod-delete
+            spec:
+              components:
+                env:
+                - name: TOTAL_CHAOS_DURATION
+                  value: {{`"{{inputs.parameters.duration}}"`}}
+                - name: CHAOS_INTERVAL
+                  value: {{`"{{inputs.parameters.interval}}"`}}
+                - name: FORCE
+                  value: {{`"{{inputs.parameters.force}}"`}}

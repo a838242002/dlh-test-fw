@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: chaos-network-loss
+  labels:
+    dlh.category: chaos
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: target_namespace
+      - name: target_pod_selector
+      - name: loss_percent
+      - name: duration
+    outputs:
+      parameters:
+      - name: chaos_result_name
+        valueFrom:
+          jsonPath: '{.metadata.name}'
+    resource:
+      action: create
+      successCondition: status.experimentStatus.verdict in (Pass, Fail, Stopped)
+      manifest: |
+        apiVersion: litmuschaos.io/v1alpha1
+        kind: ChaosEngine
+        metadata:
+          generateName: dlh-network-loss-
+          namespace: {{`{{workflow.namespace}}`}}
+        spec:
+          appinfo:
+            appns: {{`{{inputs.parameters.target_namespace}}`}}
+            applabel: {{`{{inputs.parameters.target_pod_selector}}`}}
+            appkind: deployment
+          chaosServiceAccount: litmus
+          experiments:
+          - name: pod-network-loss
+            spec:
+              components:
+                env:
+                - name: TOTAL_CHAOS_DURATION
+                  value: {{`"{{inputs.parameters.duration}}"`}}
+                - name: NETWORK_PACKET_LOSS_PERCENTAGE
+                  value: {{`"{{inputs.parameters.loss_percent}}"`}}

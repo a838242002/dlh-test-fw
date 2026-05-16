@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: chaos-kafka-broker-partition
+  labels:
+    dlh.category: chaos
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: kafka_namespace
+      - name: broker_id
+      - name: duration
+    outputs:
+      parameters:
+      - name: chaos_result_name
+        valueFrom:
+          jsonPath: '{.metadata.name}'
+    resource:
+      action: create
+      successCondition: status.experimentStatus.verdict in (Pass, Fail, Stopped)
+      manifest: |
+        apiVersion: litmuschaos.io/v1alpha1
+        kind: ChaosEngine
+        metadata:
+          generateName: dlh-kafka-partition-
+          namespace: {{`{{workflow.namespace}}`}}
+        spec:
+          appinfo:
+            appns: {{`{{inputs.parameters.kafka_namespace}}`}}
+            applabel: "kafka.broker.id={{`{{inputs.parameters.broker_id}}`}}"
+            appkind: statefulset
+          chaosServiceAccount: litmus
+          experiments:
+          - name: pod-network-partition
+            spec:
+              components:
+                env:
+                - name: TOTAL_CHAOS_DURATION
+                  value: {{`"{{inputs.parameters.duration}}"`}}
+                - name: POLICY_TYPES
+                  value: "all"

@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: fixture-minio-load-mysql
+  labels:
+    dlh.category: fixture
+spec:
+  entrypoint: main
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: uri                    # e.g. s3://fixtures/users.sql
+      - name: db_host                # mysql.default.svc.cluster.local
+      - name: credentials_secret     # K8s Secret with keys: user, password, database
+    outputs:
+      parameters:
+      - name: loaded_rows
+        valueFrom: { path: /tmp/loaded_rows }
+      - name: duration_sec
+        valueFrom: { path: /tmp/duration_sec }
+    container:
+      image: dlh-fixture-mysql:0.1.0
+      imagePullPolicy: Never
+      env:
+      - name: MINIO_USER
+        valueFrom: { secretKeyRef: { name: minio-artifact-creds, key: accesskey } }
+      - name: MINIO_PASS
+        valueFrom: { secretKeyRef: { name: minio-artifact-creds, key: secretkey } }
+      - name: DB_USER
+        valueFrom: { secretKeyRef: { name: "{{`{{inputs.parameters.credentials_secret}}`}}", key: user } }
+      - name: DB_PASS
+        valueFrom: { secretKeyRef: { name: "{{`{{inputs.parameters.credentials_secret}}`}}", key: password } }
+      - name: DB_NAME
+        valueFrom: { secretKeyRef: { name: "{{`{{inputs.parameters.credentials_secret}}`}}", key: database } }
+      command: ["/bin/bash", "-c"]
+      args:
+      - |
+        set -euo pipefail
+        start=$(date +%s)
+        mc alias set dlh http://dlh-minio.{{ .Release.Namespace }}.svc.cluster.local:9000 "$MINIO_USER" "$MINIO_PASS"
+        path=$(echo "{{`{{inputs.parameters.uri}}`}}" | sed 's|^s3://|dlh/|')
+        mc cp "$path" /tmp/fixture.sql
+        mysql -h "{{`{{inputs.parameters.db_host}}`}}" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < /tmp/fixture.sql
+        rows=$(mysql -h "{{`{{inputs.parameters.db_host}}`}}" -u "$DB_USER" -p"$DB_PASS" -N -e "SELECT ROW_COUNT()" "$DB_NAME" || echo 0)
+        echo "$rows" > /tmp/loaded_rows
+        echo $(( $(date +%s) - start )) > /tmp/duration_sec
