@@ -165,3 +165,48 @@ Release name: `dlh` (so every subchart resource is prefixed `dlh-`).
   is up but the addon needs `minikube tunnel` (or `/etc/hosts` + addon-enable) to
   be reachable from the host. **In-cluster smoke test is the authoritative check.**
 
+
+## Litmus re-enable (2026-05-17)
+
+Reversed the Plan 2 decision to disable Litmus.
+
+- **Root cause of the original blocker**: Bitnami's 2025 secure-images
+  migration both yanked the chart's `bitnamilegacy/mongodb:8.0.13-debian-12-r0`
+  arm64 manifest *and* replaced it with `bitnamisecure/mongodb:latest` whose
+  image contract no longer matches what the chart templates assume (the
+  container starts under `docker run` but exits silently inside the chart's
+  StatefulSet pod spec — script/permissions drift that's not worth untangling).
+
+- **What we did instead**: shipped an in-tree single-node MongoDB
+  StatefulSet at `helm/dlh-test-fw/templates/mongodb.yaml` using the
+  upstream `mongo:6` image. Replicaset is initialized via `postStart`.
+
+- **Three real surprises we hit before it worked**:
+
+  1. **Litmus init container's wait command hardcodes the replicaset DNS**
+     (`dlh-mongodb-0.dlh-mongodb-headless`) and the args
+     `mongosh -u $DBUSER -p $DBPASSWORD URL --eval 'rs.status()'`. So
+     the in-tree mongo must (a) be a StatefulSet with a headless Service
+     under exactly the chart's expected name, and (b) accept a SCRAM
+     auth attempt — mongo without `--auth` still rejects empty `-u`/`-p`
+     and rejects credentials for non-existent users.
+
+  2. **`use admin; db.createUser(...)` does not work in `mongosh --eval`.**
+     The `use` helper switches the shell context but does not propagate
+     to subsequent commands in the same `--eval` string — the createUser
+     silently runs against the wrong db and the user is never created.
+     Use `db.getSiblingDB("admin").createUser(...)`.
+
+  3. **Default exec-probe timeout is 1 second**; `mongosh` startup on the
+     `mongo:6` image regularly exceeds that. Use TCP probes for mongo,
+     not `mongosh` exec.
+
+- **Result**: all 8 platform pods Ready, both helm test suites pass,
+  `make platform-verify` PASS.
+
+- **Implications for Plans 3-5**: Litmus is back on the menu — Plan 4's
+  `chaos/litmus-run` WorkflowTemplate is feasible. Production-grade
+  concerns to revisit later: the in-tree mongo is no-auth and
+  emptyDir-backed; it must gain keyFile auth and a PVC before any
+  shared/CI deploy. Litmus's `adminConfig.DBUSER`/`DBPASSWORD` will
+  become the actual SCRAM credentials at that point.
