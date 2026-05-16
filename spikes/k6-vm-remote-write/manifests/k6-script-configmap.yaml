@@ -10,8 +10,10 @@ data:
     export const options = {
       vus: 5,
       duration: '60s',
-      // Tag every metric with the scenario label so VM-side filtering works.
-      tags: { scenario: 'spike-httpbin' },
+      // Tag every metric with our scenario label so VM-side filtering works.
+      // NOTE: `scenario` is reserved by k6 (set to the k6 scenario name, e.g.
+      // "default"), so we namespace ours as `dlh_scenario`.
+      tags: { dlh_scenario: 'spike-httpbin' },
     };
 
     export default function () {

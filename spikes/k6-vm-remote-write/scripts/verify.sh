@@ -19,14 +19,14 @@ PF_PID=$!
 trap 'kill $PF_PID 2>/dev/null || true' EXIT
 sleep 3
 
-QUERY='sum(k6_http_reqs_total{scenario="spike-httpbin"})'
+QUERY='sum(k6_http_reqs_total{dlh_scenario="spike-httpbin"})'
 
 while (( $(date +%s) < DEADLINE )); do
   RESP=$(curl -s --get "http://127.0.0.1:8428/api/v1/query" \
     --data-urlencode "query=${QUERY}")
   VAL=$(echo "$RESP" | jq -r '.data.result[0].value[1] // "0"')
   if [[ "$VAL" != "0" && "$VAL" != "null" ]]; then
-    echo "PASS: k6_http_reqs_total{scenario=spike-httpbin} = $VAL"
+    echo "PASS: k6_http_reqs_total{dlh_scenario=spike-httpbin} = $VAL"
     exit 0
   fi
   echo "waiting… current value=$VAL"

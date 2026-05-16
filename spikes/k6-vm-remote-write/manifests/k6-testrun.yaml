@@ -9,7 +9,7 @@ spec:
       name: k6-spike-script
       file: script.js
   arguments: >-
-    --tag scenario=spike-httpbin
+    --tag dlh_scenario=spike-httpbin
     --out experimental-prometheus-rw
   runner:
     image: grafana/k6:0.50.0
