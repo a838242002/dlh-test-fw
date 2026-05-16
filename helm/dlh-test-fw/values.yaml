@@ -1,0 +1,124 @@
+namespace: dlh-test-fw
+
+# Knobs that our own templates read (NOT subchart values).
+platform:
+  vm:
+    # Used by Plan 4's load/k6-run template. Matches FINDINGS.md service DNS.
+    remoteWriteUrl: http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428/api/v1/write
+    queryUrl: http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428
+  chaosHub:
+    url: https://github.com/litmuschaos/chaos-charts.git
+    ref: master
+  verdict:
+    image: ghcr.io/dlh/dlh-verdict
+    tag: 0.1.0
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      argo: argo.dlh.local
+      grafana: grafana.dlh.local
+      minio: minio.dlh.local
+  secrets:
+    useExternal: false
+    minio:
+      user: admin
+      password: dlh-dev-secret-please-rotate
+    grafana:
+      user: admin
+      password: dlh-dev-secret-please-rotate
+
+# ---------- subchart overrides ----------
+
+argo-workflows:
+  enabled: true
+  server:
+    extraArgs: ["--auth-mode=server"]   # no SSO — confirmed open question 4
+    serviceType: ClusterIP
+  controller:
+    workflowDefaults:
+      spec:
+        # Default artifact repo wired to MinIO (configured by templates/argo-artifact-config.yaml).
+        artifactRepositoryRef:
+          configMap: artifact-repositories
+          key: default-v1
+  workflow:
+    serviceAccount:
+      create: true
+      name: argo-workflow
+
+litmus:
+  enabled: true
+  portal:
+    frontend:
+      service:
+        type: ClusterIP
+  # NOTE: subchart key is `mongodb` (Bitnami MongoDB subchart), not `mongo`.
+  # Plan draft said `mongo:` — schema actually uses `mongodb:`. Adapted.
+  mongodb:
+    persistence:
+      enabled: false                    # spike default; override in values-prod.yaml later
+
+k6-operator:
+  # NOTE: chart 4.4.1's strict JSON schema rejects an `enabled` key here.
+  # See Chart.yaml comment. Subchart is always installed.
+  manager:
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits:   { cpu: 200m, memory: 128Mi }
+  namespace:
+    # Chart 3.x had `namespace.watch`; chart 4.x removed it (operator watches
+    # all namespaces). Don't re-create the umbrella namespace — Helm-managed.
+    create: false
+
+minio:
+  enabled: true
+  mode: standalone
+  auth:
+    rootUser: admin
+    existingSecret: minio-root-credentials   # created by templates/secrets.yaml
+  defaultBuckets: ""                    # we provision via post-install Job for explicitness
+  persistence:
+    enabled: true
+    size: 10Gi
+  service:
+    type: ClusterIP
+
+victoria-metrics-single:
+  enabled: true
+  server:
+    retentionPeriod: 30d
+    persistentVolume:
+      enabled: true
+      size: 10Gi
+    extraArgs:
+      search.maxUniqueTimeseries: "100000"
+  service:
+    type: ClusterIP
+
+grafana:
+  enabled: true
+  admin:
+    existingSecret: grafana-admin-credentials
+    userKey: admin-user
+    passwordKey: admin-password
+  service:
+    type: ClusterIP
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: VictoriaMetrics
+        type: prometheus
+        access: proxy
+        url: http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428
+        isDefault: true
+      - name: Infinity                  # for reading dlh-result-* ConfigMaps in Plan 5
+        type: yesoreyeram-infinity-datasource
+        access: proxy
+  plugins:
+  - yesoreyeram-infinity-datasource
+  sidecar:
+    dashboards:
+      enabled: true                     # Plan 5 will drop dashboards as ConfigMaps with label
+      label: dlh-dashboard
