@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: fixture-kafka-topic-seed
+  labels:
+    dlh.category: fixture
+spec:
+  entrypoint: main
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: bootstrap
+      - name: topic
+      - name: seed_uri                # s3://fixtures/events.jsonl (one record per line)
+    outputs:
+      parameters:
+      - name: produced_count
+        valueFrom: { path: /tmp/produced_count }
+    container:
+      image: dlh-fixture-kafka:0.1.0
+      imagePullPolicy: Never
+      env:
+      - name: MINIO_USER
+        valueFrom: { secretKeyRef: { name: minio-artifact-creds, key: accesskey } }
+      - name: MINIO_PASS
+        valueFrom: { secretKeyRef: { name: minio-artifact-creds, key: secretkey } }
+      command: ["/bin/bash", "-c"]
+      args:
+      - |
+        set -euo pipefail
+        mc alias set dlh http://dlh-minio.{{ .Release.Namespace }}.svc.cluster.local:9000 "$MINIO_USER" "$MINIO_PASS"
+        path=$(echo "{{`{{inputs.parameters.seed_uri}}`}}" | sed 's|^s3://|dlh/|')
+        mc cp "$path" /tmp/seed.jsonl
+        count=$(wc -l < /tmp/seed.jsonl)
+        kcat -b "{{`{{inputs.parameters.bootstrap}}`}}" -t "{{`{{inputs.parameters.topic}}`}}" -P -l /tmp/seed.jsonl
+        echo "$count" > /tmp/produced_count
