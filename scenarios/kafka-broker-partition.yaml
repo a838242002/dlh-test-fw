@@ -1,0 +1,72 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: kafka-broker-partition-
+  namespace: dlh-test-fw
+spec:
+  serviceAccountName: argo-workflow
+  entrypoint: main
+  arguments:
+    parameters:
+    - { name: load_duration,     value: 180s }
+    - { name: chaos_start_after, value: 30s }
+    - { name: chaos_duration,    value: 60s }
+    - { name: scenario_label,    value: kafka-broker-partition }
+  templates:
+  - name: main
+    steps:
+    - - name: prep-slo
+        template: write-slo
+    - - name: load-fixture
+        templateRef: { name: fixture-kafka-topic-seed, template: main }
+        arguments:
+          parameters:
+          - { name: bootstrap, value: "kafka.kafka-sys.svc.cluster.local:9092" }
+          - { name: topic,     value: "events" }
+          - { name: seed_uri,  value: "s3://fixtures/kafka-events.jsonl" }
+    - - name: chaos
+        templateRef: { name: chaos-kafka-broker-partition, template: main }
+        continueOn: { failed: true }
+        arguments:
+          parameters:
+          - { name: kafka_namespace, value: "kafka-sys" }
+          - { name: broker_id,       value: "0" }
+          - { name: duration,        value: "{{workflow.parameters.chaos_duration}}" }
+      - name: load
+        templateRef: { name: load-k6-run, template: main }
+        arguments:
+          parameters:
+          - { name: script_configmap, value: "k6-script-kafka-broker-partition" }
+          - { name: vus,              value: "5" }
+          - { name: duration,         value: "{{workflow.parameters.load_duration}}" }
+          - { name: env_map,          value: "{}" }
+          - { name: scenario_label,   value: "{{workflow.parameters.scenario_label}}" }
+    - - name: verdict
+        templateRef: { name: verdict-slo-eval, template: main }
+        arguments:
+          parameters:
+          - { name: slo_yaml,          value: "(unused)" }
+          - { name: chaos_result_name, value: "{{steps.chaos.outputs.parameters.chaos_result_name}}-pod-network-partition" }
+          - { name: load_start_ts,     value: "{{steps.load.startedAt}}" }
+          - { name: chaos_start_after, value: "{{workflow.parameters.chaos_start_after}}" }
+          - { name: chaos_duration,    value: "{{workflow.parameters.chaos_duration}}" }
+          - { name: load_duration,     value: "{{workflow.parameters.load_duration}}" }
+          - { name: metrics_namespace, value: "{{workflow.parameters.scenario_label}}" }
+          - { name: workflow_name,     value: "{{workflow.name}}" }
+
+  - name: write-slo
+    serviceAccountName: argo-workflow
+    script:
+      image: bitnami/kubectl:1.30
+      command: [bash]
+      source: |
+        set -euo pipefail
+        cat > /tmp/slo.yaml <<'EOF'
+        thresholds:
+        - metric: p95-latency-chaos
+          query: histogram_quantile(0.95, sum(rate(k6_http_req_duration_seconds_bucket{dlh_scenario="kafka-broker-partition"}[1m])) by (le))
+          lt: 2.0
+          window: chaos
+        EOF
+        kubectl -n dlh-test-fw create configmap dlh-slo-{{workflow.name}} \
+          --from-file=slo.yaml=/tmp/slo.yaml --dry-run=client -o yaml | kubectl apply -f -
