@@ -1,0 +1,47 @@
+# Overrides for local minikube. Apply with `-f values.yaml -f values-minikube.yaml`,
+# or rely on Makefile which passes both.
+platform:
+  ingress:
+    enabled: true                       # minikube has the ingress addon
+    className: nginx                    # minikube's ingress addon uses ingress-nginx
+
+minio:
+  persistence:
+    enabled: false                      # ephemeral — minikube restarts blow away PV anyway
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+victoria-metrics-single:
+  server:
+    persistentVolume:
+      enabled: false
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+
+litmus:
+  # NOTE: subchart key is `mongodb` (matches values.yaml).
+  mongodb:
+    persistence:
+      enabled: false
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 500m, memory: 768Mi }
+
+grafana:
+  persistence:
+    enabled: false
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 200m, memory: 256Mi }
+
+argo-workflows:
+  controller:
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits:   { cpu: 200m, memory: 128Mi }
+  server:
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits:   { cpu: 200m, memory: 128Mi }
