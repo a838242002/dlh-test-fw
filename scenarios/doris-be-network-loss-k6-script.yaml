@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-script-doris-be-network-loss
+  namespace: dlh-test-fw
+data:
+  script.js: |
+    import http from 'k6/http';
+    import { sleep } from 'k6';
+    export const options = {
+      vus: parseInt(__ENV.VUS || '5'),
+      duration: __ENV.DURATION || '180s',
+      tags: { dlh_scenario: 'doris-be-network-loss' },
+    };
+    export default function () {
+      http.get('http://httpbin.dlh-test-fw.svc.cluster.local/status/200');
+      sleep(0.5);
+    }
