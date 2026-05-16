@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-minio-bootstrap
+  namespace: {{ include "dlh.namespace" . }}
+  labels: {{- include "dlh.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: mc
+        image: minio/mc:RELEASE.2024-11-21T17-21-54Z
+        env:
+        - name: MINIO_USER
+          valueFrom: { secretKeyRef: { name: minio-root-credentials, key: root-user } }
+        - name: MINIO_PASSWORD
+          valueFrom: { secretKeyRef: { name: minio-root-credentials, key: root-password } }
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -euo pipefail
+          # Wait for MinIO Service to answer.
+          for i in $(seq 1 30); do
+            if mc alias set dlh http://dlh-minio.dlh-test-fw.svc.cluster.local:9000 \
+                 "$MINIO_USER" "$MINIO_PASSWORD" >/dev/null 2>&1; then
+              break
+            fi
+            echo "waiting for minio… ($i)"
+            sleep 5
+          done
+          mc mb --ignore-existing dlh/fixtures
+          mc mb --ignore-existing dlh/artifacts
+          mc anonymous set download dlh/artifacts || true
+          mc ls dlh
