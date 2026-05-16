@@ -177,7 +177,7 @@ spec:
         app.kubernetes.io/managed-by: kubectl
         name: chaos-operator
     spec:
-      serviceAccountName: litmus
+      serviceAccountName: dlh-litmus-operator
       containers:
         - name: chaos-operator
           image: litmuschaos.docker.scarf.sh/litmuschaos/chaos-operator:3.10.0
