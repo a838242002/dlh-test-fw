@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-spike-script
+data:
+  script.js: |
+    import http from 'k6/http';
+    import { sleep } from 'k6';
+
+    export const options = {
+      vus: 5,
+      duration: '60s',
+      // Tag every metric with the scenario label so VM-side filtering works.
+      tags: { scenario: 'spike-httpbin' },
+    };
+
+    export default function () {
+      http.get('http://httpbin.dlh-test-fw.svc.cluster.local/status/200');
+      sleep(1);
+    }
