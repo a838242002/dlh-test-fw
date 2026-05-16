@@ -1,0 +1,48 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-litmus-cluster-admin-lite
+  labels:
+    {{- include "dlh.labels" . | nindent 4 }}
+rules:
+# Pod-level chaos: kill, exec into, monitor.
+- apiGroups: [""]
+  resources: ["pods", "pods/exec", "pods/log", "pods/eviction"]
+  verbs: ["get", "list", "watch", "create", "delete", "deletecollection"]
+# Network chaos uses NetworkPolicies + traffic-control via privileged sidecars.
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch", "create", "update", "delete"]
+# Litmus CRs.
+- apiGroups: ["litmuschaos.io"]
+  resources: ["chaosengines", "chaosexperiments", "chaosresults"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Read deployments/statefulsets to discover targets.
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+  verbs: ["get", "list", "watch"]
+# Events for visibility.
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["services", "namespaces"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-litmus-cluster-admin-lite
+  labels:
+    {{- include "dlh.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-litmus-cluster-admin-lite
+subjects:
+- kind: ServiceAccount
+  name: litmus
+  namespace: {{ include "dlh.namespace" . }}
