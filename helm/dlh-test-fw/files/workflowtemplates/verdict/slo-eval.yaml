@@ -1,0 +1,52 @@
+# Caller contract: a sibling step in the scenario workflow MUST create a
+# ConfigMap named `dlh-slo-<workflow-name>` containing key `slo.yaml`
+# (the full SLO YAML for the run). Plan 5 scenarios materialize this CM
+# before invoking verdict-slo-eval.
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: verdict-slo-eval
+  labels:
+    dlh.category: verdict
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: slo_yaml                  # full YAML string (informational; runtime reads /etc/slo/slo.yaml)
+      - name: chaos_result_name         # output from chaos step
+      - name: load_start_ts             # steps.load.startedAt from caller
+      - name: chaos_start_after         # e.g. "30s"
+      - name: chaos_duration            # e.g. "60s"
+      - name: load_duration             # e.g. "180s"
+      - name: metrics_namespace         # scenario label
+      - name: workflow_name             # workflow.name from caller
+    outputs:
+      artifacts:
+      - name: report
+        path: /tmp/verdict
+        archive:
+          none: {}
+    container:
+      image: {{ .Values.platform.verdict.image }}:{{ .Values.platform.verdict.tag }}
+      imagePullPolicy: Never
+      args:
+      - -slo-yaml=/etc/slo/slo.yaml
+      - -chaos-result-name={{`{{inputs.parameters.chaos_result_name}}`}}
+      - -load-start-ts={{`{{inputs.parameters.load_start_ts}}`}}
+      - -chaos-start-after={{`{{inputs.parameters.chaos_start_after}}`}}
+      - -chaos-duration={{`{{inputs.parameters.chaos_duration}}`}}
+      - -load-duration={{`{{inputs.parameters.load_duration}}`}}
+      - -prom-url={{ .Values.platform.vm.queryUrl }}
+      - -workflow-name={{`{{inputs.parameters.workflow_name}}`}}
+      - -artifact-dir=/tmp/verdict
+      - -namespace={{`{{workflow.namespace}}`}}
+      volumeMounts:
+      - name: slo
+        mountPath: /etc/slo
+    volumes:
+    - name: slo
+      configMap:
+        name: dlh-slo-{{`{{workflow.name}}`}}
