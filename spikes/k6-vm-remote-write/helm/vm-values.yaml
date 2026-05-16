@@ -1,0 +1,18 @@
+# victoria-metrics-single chart 0.12.x overrides
+server:
+  retentionPeriod: 30d        # matches spec verdict.retention guideline
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  persistentVolume:
+    enabled: false             # spike-only; ephemeral PV is fine
+  extraArgs:
+    # Permissive label cardinality for the spike; we'll tighten in Plan 2.
+    search.maxUniqueTimeseries: "100000"
+service:
+  type: ClusterIP
+  servicePort: 8428
