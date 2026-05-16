@@ -36,6 +36,9 @@ spec:
       containers:
       - name: mysql
         image: mysql:8.0
+        # MariaDB client (shipped in dlh-fixture-mysql) can't speak
+        # caching_sha2_password — fall back to native auth.
+        args: ["--default-authentication-plugin=mysql_native_password"]
         envFrom:
         - secretRef:
             name: mysql-creds
