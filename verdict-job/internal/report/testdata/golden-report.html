@@ -1,0 +1,37 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>DLH Verdict — demo</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem}
+.banner{padding:1.5rem;border-radius:.5rem;color:#fff;font-size:1.5rem;font-weight:600}
+.pass{background:#16a34a}.fail{background:#dc2626}
+table{width:100%;border-collapse:collapse;margin-top:1rem}
+th,td{border:1px solid #ddd;padding:.5rem;text-align:left;font-size:.9rem}
+th{background:#f3f4f6}
+.btnrow{margin-top:1rem;display:flex;gap:.5rem}
+.btn{padding:.5rem 1rem;border:1px solid #888;border-radius:.25rem;text-decoration:none;color:#222}
+</style></head><body>
+<div class="banner pass">
+  PASS — demo
+  <div style="font-size:.9rem;font-weight:400;margin-top:.25rem">
+    chaos verdict: Pass · duration: 120s
+  </div>
+</div>
+<h2>Thresholds</h2>
+<table>
+<tr><th>Metric</th><th>Window</th><th>Value</th><th>Bound</th><th>Status</th></tr>
+
+<tr>
+  <td>p95-latency<br><small><code>Q1</code></small></td>
+  <td>chaos<br><small>2026-05-16T10:00:30Z → 2026-05-16T10:01:00Z</small></td>
+  <td>0.4200</td>
+  <td>&lt; 0.5</td>
+  <td>PASS</td>
+</tr>
+</table>
+
+<div class="btnrow">
+  <a class="btn" href="http://grafana/d/x">Open in Grafana</a>
+  <a class="btn" href="http://argo/wf">Argo Workflow</a>
+  
+</div>
+</body></html>
