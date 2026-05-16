@@ -96,3 +96,72 @@ apiVersion: `k6.io/v1alpha1`
 (Note: `make up` is idempotent on minikube — on a host with a prior
 k6-operator install you may need to follow the orphaned-resource cleanup
 described in "Gotchas" above before `helm upgrade --install` will succeed.)
+
+## Platform chart observations (from Plan 2)
+
+Date verified: 2026-05-16
+Release name: `dlh` (so every subchart resource is prefixed `dlh-`).
+
+- Confirmed service names (post-install) — all match the plan:
+    - argo server:   `dlh-argo-workflows-server:2746`
+    - grafana:       `dlh-grafana:80`
+    - minio API:     `dlh-minio:9000` (in-tree template, not Bitnami subchart — see drift below)
+    - minio console: `dlh-minio-console:9001`
+    - VM server:     `dlh-victoria-metrics-single-server:8428`
+- Helm `--wait` timeout: 10 minutes was sufficient. First install took ~45s for all
+  Deployments to be Ready (without Litmus).
+- **Litmus chaoscenter brought up 0 pods — subchart was disabled.** Reason: Bitnami's
+  2025 "secure-images" migration yanked their public Docker images, and Litmus 3.28.0
+  depends on the Bitnami MongoDB sub-subchart whose `bitnamilegacy/mongodb:8.0.13`
+  tag has no linux/arm64 manifest and whose `bitnami/minio:2024.12.18` tag was
+  removed entirely. Re-enable Litmus once a chart bump migrates the deps to
+  `bitnamisecure/*`, or override `litmus.mongodb.image.*` to a public alternative.
+  Tracked in Phase 1 backlog.
+- **MinIO replaced with an in-tree template** (`helm/dlh-test-fw/templates/minio.yaml`)
+  for the same reason. Uses upstream `minio/minio:RELEASE.2024-12-13T22-19-12Z` plus
+  a 2nd Service `dlh-minio-console` to preserve the ingress / artifact-repo wiring.
+  Subchart entry was removed from Chart.yaml.
+- Total minikube memory consumed at idle: **2953Mi (~22%)** with 6 platform pods
+  Ready. Headroom remains for k6 runners and chaos experiments.
+
+### Chart version drift from plan
+| Subchart | Plan said | Actually used | Reason |
+|---|---|---|---|
+| argo-workflows | 0.42.0 | 0.42.7 | 0.42.0 still in repo, just picked latest 0.42.x patch |
+| litmus | 3.5.0 | (disabled) 3.28.0 declared | 3.5.0 never existed in repo; 3.28.0 is latest 3.x but blocked by Bitnami image yanks |
+| k6-operator | 4.4.1 | 4.4.1 | matches FINDINGS |
+| minio (bitnami) | 14.6.0 | (removed) replaced by in-tree template | Bitnami images yanked |
+| victoria-metrics-single | 0.38.0 | 0.38.0 | matches FINDINGS |
+| grafana | 8.5.0 | 8.15.0 | 8.5.0 still in repo; picked latest 8.x |
+
+### Values-schema drift from plan
+- `litmus.mongo.*` → actual subchart key is **`mongodb`** (it's the Bitnami MongoDB
+  sub-subchart). Adapted before disabling. Plans 3-5 should reference `mongodb` when
+  re-enabling Litmus.
+- `k6-operator.enabled` → **rejected by k6-operator 4.4.1's strict JSON schema**
+  (additionalProperties: false at the root). Removed the `condition` from
+  Chart.yaml; subchart is now always installed. Same will apply to anyone wanting
+  to toggle k6-operator with values overrides.
+- `helm/<chart>/tests/` is **not** rendered by `helm template`/`helm install`.
+  Helm-test pods must live under `templates/` even if their hook is `test`.
+  Moved `platform-smoke.yaml` into `templates/`.
+
+### Cluster-resource conflicts encountered
+- Orphaned `*.argoproj.io` CRDs from a prior `kubectl apply` (not helm-managed)
+  caused server-side apply conflicts. Deleted the CRDs (no in-flight CRs) and
+  re-installed cleanly. Re-annotation didn't help because `kubectl-client-side-apply`
+  owned `.spec.versions`.
+- The `dlh-test-fw` namespace pre-existed from Plan 1. Helm refused to adopt it
+  until labelled `app.kubernetes.io/managed-by=Helm` and annotated with the
+  release-name/namespace pair. Script `platform-up.sh` does **not** handle this;
+  document the one-time `kubectl annotate ns` step in the README if reproducing.
+
+### platform-verify outputs (final run)
+- `kubectl wait ... pod --all`: all 6 pods condition met (argo server + controller,
+  grafana, k6-operator manager, minio, vm-single).
+- `helm test dlh`: `dlh-grafana-test` Succeeded, `dlh-platform-smoke` Succeeded (all
+  four `/health` endpoints returned 2xx from inside the cluster).
+- Ingress curl through `minikube ip` returned HTTP 000 — minikube's ingress addon
+  is up but the addon needs `minikube tunnel` (or `/etc/hosts` + addon-enable) to
+  be reachable from the host. **In-cluster smoke test is the authoritative check.**
+
