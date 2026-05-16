@@ -1,0 +1,73 @@
+{
+  "title": "DLH — Run Detail",
+  "uid": "dlh-run",
+  "schemaVersion": 39,
+  "tags": ["dlh"],
+  "timezone": "",
+  "time": { "from": "now-30m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "workflow",
+        "label": "Workflow",
+        "type": "textbox",
+        "current": { "text": "", "value": "" }
+      },
+      {
+        "name": "scenario",
+        "label": "Scenario label",
+        "type": "textbox",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "k6 HTTP req rate",
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(k6_http_reqs_total{dlh_scenario=\"$scenario\"}[30s]))",
+          "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
+        }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "k6 p95 latency",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(k6_http_req_duration_seconds_bucket{dlh_scenario=\"$scenario\"}[30s])) by (le))",
+          "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
+        }
+      ],
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "k6 error rate (non-2xx)",
+      "targets": [
+        {
+          "expr": "sum(rate(k6_http_reqs_total{dlh_scenario=\"$scenario\",status!~\"2..\"}[30s])) / clamp_min(sum(rate(k6_http_reqs_total{dlh_scenario=\"$scenario\"}[30s])), 1e-9)",
+          "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
+        }
+      ],
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+    },
+    {
+      "type": "stat",
+      "title": "Verdict summary (dlh-result-$workflow)",
+      "targets": [
+        {
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "Infinity" },
+          "type": "json",
+          "source": "url",
+          "url": "http://kubernetes.default.svc/api/v1/namespaces/dlh-test-fw/configmaps/dlh-result-$workflow",
+          "root_selector": "data['result.json']"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+    }
+  ]
+}
