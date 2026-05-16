@@ -32,6 +32,11 @@ spec:
     container:
       image: {{ .Values.platform.verdict.image }}:{{ .Values.platform.verdict.tag }}
       imagePullPolicy: Never
+      # Argo emissary executor refuses to derive the entrypoint when
+      # imagePullPolicy: Never and the registry rejects unauthenticated
+      # manifest reads (ghcr.io/dlh is private). Pin the command explicitly
+      # — verdict-job's Dockerfile sets ENTRYPOINT ["/verdict"].
+      command: ["/verdict"]
       args:
       - -slo-yaml=/etc/slo/slo.yaml
       - -chaos-result-name={{`{{inputs.parameters.chaos_result_name}}`}}

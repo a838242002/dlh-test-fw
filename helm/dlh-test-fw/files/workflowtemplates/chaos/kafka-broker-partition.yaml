@@ -21,7 +21,8 @@ spec:
           jsonPath: '{.metadata.name}'
     resource:
       action: create
-      successCondition: status.experimentStatus.verdict in (Pass, Fail, Stopped)
+      successCondition: status.engineStatus == completed
+      failureCondition: status.engineStatus == stopped
       manifest: |
         apiVersion: litmuschaos.io/v1alpha1
         kind: ChaosEngine

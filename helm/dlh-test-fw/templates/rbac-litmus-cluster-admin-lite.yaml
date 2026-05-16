@@ -21,10 +21,15 @@ rules:
 - apiGroups: ["apps"]
   resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
   verbs: ["get", "list", "watch"]
-# Events for visibility.
+# Events for visibility. (Plan 5: chaos-runner also needs get/list to attach
+# events to ChaosResults.)
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create", "patch"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+# Batch Jobs — the chaos-runner launches each ChaosExperiment as a Job.
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "deletecollection"]
 - apiGroups: [""]
   resources: ["configmaps", "secrets"]
   verbs: ["get", "list"]

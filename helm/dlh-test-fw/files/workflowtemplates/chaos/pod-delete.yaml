@@ -26,7 +26,11 @@ spec:
           jsonPath: '{.metadata.name}'
     resource:
       action: create
-      successCondition: status.experimentStatus.verdict in (Pass, Fail, Stopped)
+      # Litmus 3.x reports verdict at .status.experiments[0].verdict, not
+      # .status.experimentStatus (which was the 1.x path). Plan 5 corrects
+      # this so the Argo step actually returns when chaos completes.
+      successCondition: status.engineStatus == completed
+      failureCondition: status.engineStatus == stopped
       manifest: |
         apiVersion: litmuschaos.io/v1alpha1
         kind: ChaosEngine
