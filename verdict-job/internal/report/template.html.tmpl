@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>DLH Verdict — {{.ScenarioName}}</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem}
+.banner{padding:1.5rem;border-radius:.5rem;color:#fff;font-size:1.5rem;font-weight:600}
+.pass{background:#16a34a}.fail{background:#dc2626}
+table{width:100%;border-collapse:collapse;margin-top:1rem}
+th,td{border:1px solid #ddd;padding:.5rem;text-align:left;font-size:.9rem}
+th{background:#f3f4f6}
+.btnrow{margin-top:1rem;display:flex;gap:.5rem}
+.btn{padding:.5rem 1rem;border:1px solid #888;border-radius:.25rem;text-decoration:none;color:#222}
+</style></head><body>
+<div class="banner {{if .Overall}}pass{{else}}fail{{end}}">
+  {{if .Overall}}PASS{{else}}FAIL{{end}} — {{.ScenarioName}}
+  <div style="font-size:.9rem;font-weight:400;margin-top:.25rem">
+    chaos verdict: {{.ChaosVerdict}} · duration: {{.LoadDurationSec}}s
+  </div>
+</div>
+<h2>Thresholds</h2>
+<table>
+<tr><th>Metric</th><th>Window</th><th>Value</th><th>Bound</th><th>Status</th></tr>
+{{range .Thresholds}}
+<tr>
+  <td>{{.Metric}}<br><small><code>{{.Query}}</code></small></td>
+  <td>{{.Window}}<br><small>{{.WindowStart}} → {{.WindowEnd}}</small></td>
+  <td>{{printf "%.4f" .Value}}</td>
+  <td>{{if .LT}}&lt; {{printf "%g" (deref .LT)}}{{end}}{{if .GT}}&gt; {{printf "%g" (deref .GT)}}{{end}}</td>
+  <td>{{if .Passed}}PASS{{else}}FAIL{{end}}</td>
+</tr>{{end}}
+</table>
+{{if .RawPromQL}}
+<h2>Raw PromQL</h2>
+<table>
+<tr><th>Query</th><th>Value</th><th>Status</th></tr>
+<tr><td><code>{{.RawPromQL}}</code></td><td>{{printf "%g" .RawPromQLValue}}</td>
+<td>{{if .RawPromQLPass}}PASS{{else}}FAIL{{end}}</td></tr>
+</table>
+{{end}}
+<div class="btnrow">
+  {{if .GrafanaURL}}<a class="btn" href="{{.GrafanaURL}}">Open in Grafana</a>{{end}}
+  {{if .ArgoURL}}<a class="btn" href="{{.ArgoURL}}">Argo Workflow</a>{{end}}
+  {{if .JSONURL}}<a class="btn" href="{{.JSONURL}}">Download JSON</a>{{end}}
+</div>
+</body></html>

@@ -1,0 +1,5 @@
+thresholds:
+- metric: bad
+  query: foo
+  # neither lt nor gt — invalid
+  window: chaos
