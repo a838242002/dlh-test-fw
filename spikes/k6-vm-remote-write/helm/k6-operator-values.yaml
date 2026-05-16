@@ -1,9 +1,0 @@
-# grafana/k6-operator chart 4.x
-# Chart 3.x's `namespace.watch` field was removed; operator watches all
-# namespaces by default. Spike scope is single-namespace anyway.
-namespace:
-  create: false
-manager:
-  resources:
-    requests: { cpu: 50m, memory: 64Mi }
-    limits:   { cpu: 200m, memory: 128Mi }
