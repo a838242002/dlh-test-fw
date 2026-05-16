@@ -1,0 +1,131 @@
+namespace: dlh-test-fw
+
+# Knobs that our own templates read (NOT subchart values).
+platform:
+  vm:
+    # Used by Plan 4's load/k6-run template. Matches FINDINGS.md service DNS.
+    remoteWriteUrl: http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428/api/v1/write
+    queryUrl: http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428
+  chaosHub:
+    url: https://github.com/litmuschaos/chaos-charts.git
+    ref: master
+  verdict:
+    image: ghcr.io/dlh/dlh-verdict
+    tag: 0.1.0
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      argo: argo.dlh.local
+      grafana: grafana.dlh.local
+      minio: minio.dlh.local
+  secrets:
+    useExternal: false
+    minio:
+      user: admin
+      password: dlh-dev-secret-please-rotate
+    grafana:
+      user: admin
+      password: dlh-dev-secret-please-rotate
+
+# ---------- subchart overrides ----------
+
+argo-workflows:
+  enabled: true
+  server:
+    extraArgs: ["--auth-mode=server"]   # no SSO — confirmed open question 4
+    serviceType: ClusterIP
+  controller:
+    workflowDefaults:
+      spec:
+        # Default artifact repo wired to MinIO (configured by templates/argo-artifact-config.yaml).
+        artifactRepositoryRef:
+          configMap: artifact-repositories
+          key: default-v1
+  workflow:
+    serviceAccount:
+      create: true
+      name: argo-workflow
+
+litmus:
+  # Re-enabled 2026-05-17. The Bitnami MongoDB sub-subchart shipped with
+  # litmus 3.28.0 is unusable on arm64 due to Bitnami's 2025 secure-images
+  # migration (legacy tags yanked, secure-images run fine standalone but
+  # crash inside the chart's pod spec — chart/image contract drift).
+  # We disable the subchart and run an in-tree single-node mongo replicaset
+  # via templates/mongodb.yaml. Litmus's DB_SERVER is rewired to our service.
+  enabled: true
+  portal:
+    frontend:
+      service:
+        type: ClusterIP
+  adminConfig:
+    # Points litmus at our in-tree mongo (templates/mongodb.yaml). The pod
+    # hostname matches what the chart's wait-for-mongo init container greps
+    # for, so leaving it as the headless-DNS form preserves that contract.
+    DB_SERVER: "mongodb://dlh-mongodb-0.dlh-mongodb-headless.dlh-test-fw.svc.cluster.local:27017/admin?replicaSet=rs0"
+    # Our in-tree mongo runs --noauth; values must still be non-empty because the
+    # litmus init container builds `mongosh -u $DBUSER -p $DBPASSWORD`, which
+    # rejects empty -u/-p as a parse error. Mongo ignores the credentials.
+    DBUSER: "litmus"
+    DBPASSWORD: "noauth-but-required-by-init-container"
+  mongodb:
+    # Disabled — we ship our own. See templates/mongodb.yaml.
+    enabled: false
+
+k6-operator:
+  # NOTE: chart 4.4.1's strict JSON schema rejects an `enabled` key here.
+  # See Chart.yaml comment. Subchart is always installed.
+  manager:
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits:   { cpu: 200m, memory: 128Mi }
+  namespace:
+    # Chart 3.x had `namespace.watch`; chart 4.x removed it (operator watches
+    # all namespaces). Don't re-create the umbrella namespace — Helm-managed.
+    create: false
+
+# MinIO is now installed directly via templates/minio.yaml (not a subchart).
+# Knobs live under `platform.minio` so we don't fake-namespace under the (now
+# absent) `minio:` subchart key.
+platform_minio_image: minio/minio:RELEASE.2024-12-13T22-19-12Z
+platform_minio_persistence_enabled: false   # set true on real clusters
+
+victoria-metrics-single:
+  enabled: true
+  server:
+    retentionPeriod: 30d
+    persistentVolume:
+      enabled: true
+      size: 10Gi
+    extraArgs:
+      search.maxUniqueTimeseries: "100000"
+  service:
+    type: ClusterIP
+
+grafana:
+  enabled: true
+  admin:
+    existingSecret: grafana-admin-credentials
+    userKey: admin-user
+    passwordKey: admin-password
+  service:
+    type: ClusterIP
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: VictoriaMetrics
+        type: prometheus
+        access: proxy
+        url: http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428
+        isDefault: true
+      - name: Infinity                  # for reading dlh-result-* ConfigMaps in Plan 5
+        type: yesoreyeram-infinity-datasource
+        access: proxy
+  plugins:
+  - yesoreyeram-infinity-datasource
+  sidecar:
+    dashboards:
+      enabled: true                     # Plan 5 will drop dashboards as ConfigMaps with label
+      label: dlh-dashboard

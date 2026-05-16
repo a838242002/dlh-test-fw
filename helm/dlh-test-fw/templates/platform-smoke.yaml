@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}-platform-smoke
+  namespace: {{ include "dlh.namespace" . }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+  - name: smoke
+    image: curlimages/curl:8.8.0
+    command: ["/bin/sh", "-c"]
+    args:
+    - |
+      set -euo pipefail
+      fail=0
+      check() {
+        local url=$1
+        if curl -sf --max-time 5 "$url" >/dev/null; then
+          echo "OK   $url"
+        else
+          echo "FAIL $url" >&2
+          fail=1
+        fi
+      }
+      check http://dlh-argo-workflows-server.dlh-test-fw.svc.cluster.local:2746/
+      check http://dlh-grafana.dlh-test-fw.svc.cluster.local:80/api/health
+      check http://dlh-minio.dlh-test-fw.svc.cluster.local:9000/minio/health/live
+      check http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428/health
+      exit $fail

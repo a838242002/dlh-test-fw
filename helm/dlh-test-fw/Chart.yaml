@@ -1,0 +1,35 @@
+apiVersion: v2
+name: dlh-test-fw
+description: Chaos + Load Test Platform — umbrella chart (Argo + Litmus + k6 + MinIO + VM + Grafana)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+dependencies:
+- name: argo-workflows
+  version: 0.42.7
+  repository: https://argoproj.github.io/argo-helm
+  condition: argo-workflows.enabled
+- name: litmus
+  version: 3.28.0
+  repository: https://litmuschaos.github.io/litmus-helm/
+  condition: litmus.enabled
+- name: k6-operator
+  version: 4.4.1
+  repository: https://grafana.github.io/helm-charts
+  # NOTE: k6-operator 4.4.1's values.schema.json has additionalProperties:false at
+  # the root and forbids the conventional `enabled` flag, so we cannot use a
+  # `condition: k6-operator.enabled` toggle. Subchart is always installed.
+# Bitnami minio chart removed -- their secure-images migration yanked the
+# public `bitnami/minio` Docker tags in 2025, and the chart's pre-install hook
+# blocks alternate images. We ship our own minimal MinIO Deployment in
+# templates/minio.yaml instead. The chart's release-name-derived Service
+# (`dlh-minio`) is preserved so values, ingress, and bootstrap Job remain valid.
+- name: victoria-metrics-single
+  version: 0.38.0
+  repository: https://victoriametrics.github.io/helm-charts/
+  condition: victoria-metrics-single.enabled
+- name: grafana
+  version: 8.15.0
+  repository: https://grafana.github.io/helm-charts
+  condition: grafana.enabled
