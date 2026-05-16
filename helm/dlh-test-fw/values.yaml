@@ -48,21 +48,30 @@ argo-workflows:
       name: argo-workflow
 
 litmus:
-  # DISABLED for Phase 1 (2026-05-16). Litmus 3.28.0 depends on the Bitnami
-  # MongoDB sub-subchart, whose images were yanked from Docker Hub by Bitnami's
-  # 2025 "secure-images" migration -- `bitnamilegacy/mongodb:8.0.13-debian-12-r0`
-  # has no linux/arm64 manifest, and the bitnami/minio tag the chart references
-  # is also gone. Re-enable after pinning a chart that uses bitnamisecure/* or
-  # by overriding mongodb.image to a public arm64-compatible source.
-  # See FINDINGS.md "Platform chart observations" for rationale.
-  enabled: false
+  # Re-enabled 2026-05-17. The Bitnami MongoDB sub-subchart shipped with
+  # litmus 3.28.0 is unusable on arm64 due to Bitnami's 2025 secure-images
+  # migration (legacy tags yanked, secure-images run fine standalone but
+  # crash inside the chart's pod spec — chart/image contract drift).
+  # We disable the subchart and run an in-tree single-node mongo replicaset
+  # via templates/mongodb.yaml. Litmus's DB_SERVER is rewired to our service.
+  enabled: true
   portal:
     frontend:
       service:
         type: ClusterIP
+  adminConfig:
+    # Points litmus at our in-tree mongo (templates/mongodb.yaml). The pod
+    # hostname matches what the chart's wait-for-mongo init container greps
+    # for, so leaving it as the headless-DNS form preserves that contract.
+    DB_SERVER: "mongodb://dlh-mongodb-0.dlh-mongodb-headless.dlh-test-fw.svc.cluster.local:27017/admin?replicaSet=rs0"
+    # Our in-tree mongo runs --noauth; values must still be non-empty because the
+    # litmus init container builds `mongosh -u $DBUSER -p $DBPASSWORD`, which
+    # rejects empty -u/-p as a parse error. Mongo ignores the credentials.
+    DBUSER: "litmus"
+    DBPASSWORD: "noauth-but-required-by-init-container"
   mongodb:
-    persistence:
-      enabled: false
+    # Disabled — we ship our own. See templates/mongodb.yaml.
+    enabled: false
 
 k6-operator:
   # NOTE: chart 4.4.1's strict JSON schema rejects an `enabled` key here.
