@@ -11,6 +11,8 @@
 **Prerequisites:**
 - Plan 1 complete; `spikes/k6-vm-remote-write/FINDINGS.md` filled in.
 - Minikube is up (Plan 1's `make up` left it running) or can be brought up by reusing `spikes/k6-vm-remote-write/scripts/minikube-up.sh`.
+- **Plan 1 already installed `k6-operator` and `victoria-metrics-single` releases into the `dlh-test-fw` namespace.** Before running this plan's `helm install dlh ...`, either (a) `helm uninstall -n dlh-test-fw vm k6-operator` so the umbrella release can own those resources, or (b) reuse the same release names by setting `argo-workflows.enabled` etc. and disabling the two already-installed subcharts. Recommended: uninstall the standalone releases first — Plan 1's purpose was to prove the wiring, not to be the production install.
+- **Orphaned k6 cluster-scoped resources gotcha (from FINDINGS):** if the cluster has ever had k6-operator installed in a different namespace, helm install will fail to adopt the pre-existing `testruns.k6.io` / `privateloadzones.k6.io` CRDs and the `k6-operator-*` ClusterRoles/Bindings. Fix by re-annotating each with `meta.helm.sh/release-namespace=dlh-test-fw` and `meta.helm.sh/release-name=dlh` (this plan's release name), or `kubectl delete` them with no in-flight TestRun resources.
 
 **Out of scope:** WorkflowTemplate contents (Plan 4), verdict binary image (Plan 3 produces it; we only reference its image tag here), Grafana dashboards (Plan 5), example scenarios (Plan 5).
 
@@ -64,9 +66,9 @@ These must match `spikes/k6-vm-remote-write/FINDINGS.md` for `victoria-metrics-s
 |---|---|---|---|
 | `argo-workflows` | `https://argoproj.github.io/argo-helm` | `0.42.x` | charts repo: `argo/argo-workflows` |
 | `litmus` (ChaosCenter) | `https://litmuschaos.github.io/litmus-helm/` | `3.x` | full chaoscenter with mongo + frontend |
-| `k6-operator` | `https://grafana.github.io/helm-charts` | (from FINDINGS) | reuse Plan 1 |
+| `k6-operator` | `https://grafana.github.io/helm-charts` | **4.4.1** (per FINDINGS — chart 3.x is no longer available) | reuse Plan 1; `namespace.watch` value was removed in 4.x |
 | `minio` | `https://charts.bitnami.com/bitnami` | `14.x` | use Bitnami chart (single-mode for minikube) |
-| `victoria-metrics-single` | `https://victoriametrics.github.io/helm-charts/` | (from FINDINGS) | reuse Plan 1 |
+| `victoria-metrics-single` | `https://victoriametrics.github.io/helm-charts/` | **0.38.0** (per FINDINGS — chart 0.12.x is no longer in the repo) | reuse Plan 1 |
 | `grafana` | `https://grafana.github.io/helm-charts` | `8.x` | sidecar disabled for now; dashboards in Plan 5 |
 
 **If any pinned version is unavailable**, pick the closest patch in the same minor and update both this plan's table and `Chart.yaml` in the same commit.
@@ -102,7 +104,7 @@ dependencies:
   repository: https://litmuschaos.github.io/litmus-helm/
   condition: litmus.enabled
 - name: k6-operator
-  version: 3.5.0
+  version: 4.4.1
   repository: https://grafana.github.io/helm-charts
   condition: k6-operator.enabled
 - name: minio
@@ -110,7 +112,7 @@ dependencies:
   repository: https://charts.bitnami.com/bitnami
   condition: minio.enabled
 - name: victoria-metrics-single
-  version: 0.12.0
+  version: 0.38.0
   repository: https://victoriametrics.github.io/helm-charts/
   condition: victoria-metrics-single.enabled
 - name: grafana
@@ -268,7 +270,9 @@ k6-operator:
       requests: { cpu: 50m, memory: 64Mi }
       limits:   { cpu: 200m, memory: 128Mi }
   namespace:
-    watch: dlh-test-fw
+    # Chart 3.x had `namespace.watch`; chart 4.x removed it (operator watches
+    # all namespaces). Don't re-create the umbrella namespace — Helm-managed.
+    create: false
 
 minio:
   enabled: true
