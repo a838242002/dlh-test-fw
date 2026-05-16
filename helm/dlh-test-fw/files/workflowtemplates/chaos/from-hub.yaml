@@ -1,0 +1,66 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: chaos-from-hub
+  labels:
+    dlh.category: chaos
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: hub_url
+        value: "{{ .Values.platform.chaosHub.url }}"
+      - name: hub_ref
+        value: "{{ .Values.platform.chaosHub.ref }}"
+      - name: experiment_name           # e.g. "pod-cpu-hog"
+      - name: target_namespace
+      - name: target_pod_selector
+      - name: args_map                  # JSON: {"TOTAL_CHAOS_DURATION":"60", ...}
+    outputs:
+      parameters:
+      - name: chaos_result_name
+        valueFrom: { path: /tmp/cr_name }
+    script:
+      image: alpine/git:2.43.0
+      command: [sh]
+      source: |
+        set -euo pipefail
+        apk add --no-cache curl jq yq kubectl >/dev/null
+        git clone --depth 1 --branch "{{`{{inputs.parameters.hub_ref}}`}}" \
+          "{{`{{inputs.parameters.hub_url}}`}}" /tmp/hub
+        exp="{{`{{inputs.parameters.experiment_name}}`}}"
+        manifest=$(find /tmp/hub -path "*/$exp/experiment.yaml" | head -1)
+        if [ -z "$manifest" ]; then echo "experiment $exp not found in hub" >&2; exit 1; fi
+        kubectl apply -n {{`{{workflow.namespace}}`}} -f "$manifest"
+        cat > /tmp/engine.yaml <<EOF
+        apiVersion: litmuschaos.io/v1alpha1
+        kind: ChaosEngine
+        metadata:
+          generateName: dlh-hub-${exp}-
+          namespace: {{`{{workflow.namespace}}`}}
+        spec:
+          appinfo:
+            appns: {{`{{inputs.parameters.target_namespace}}`}}
+            applabel: {{`{{inputs.parameters.target_pod_selector}}`}}
+            appkind: deployment
+          chaosServiceAccount: litmus
+          experiments:
+          - name: ${exp}
+            spec:
+              components:
+                env: []
+        EOF
+        envs=$(echo '{{`{{inputs.parameters.args_map}}`}}' | jq -r 'to_entries | map({name: .key, value: (.value|tostring)})')
+        yq -i ".spec.experiments[0].spec.components.env = $envs" /tmp/engine.yaml
+        engine_name=$(kubectl create -n {{`{{workflow.namespace}}`}} -f /tmp/engine.yaml -o jsonpath='{.metadata.name}')
+        echo "$engine_name-$exp" > /tmp/cr_name
+        for i in $(seq 1 60); do
+          v=$(kubectl -n {{`{{workflow.namespace}}`}} get chaosresult "$engine_name-$exp" -o jsonpath='{.status.experimentStatus.verdict}' 2>/dev/null || true)
+          if [ "$v" = "Pass" ] || [ "$v" = "Fail" ] || [ "$v" = "Stopped" ]; then exit 0; fi
+          sleep 5
+        done
+        echo "timed out waiting for ChaosResult" >&2
+        exit 1
