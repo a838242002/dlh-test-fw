@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: fixture-minio-load-doris
+  labels:
+    dlh.category: fixture
+spec:
+  entrypoint: main
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: uri
+      - name: fe_host                                  # Doris FE host:port
+      - name: stream_load_credentials_secret           # keys: user, password, database, table
+    outputs:
+      parameters:
+      - name: loaded_rows
+        valueFrom: { path: /tmp/loaded_rows }
+      - name: duration_sec
+        valueFrom: { path: /tmp/duration_sec }
+    container:
+      image: dlh-fixture-doris:0.1.0
+      imagePullPolicy: Never
+      env:
+      - name: MINIO_USER
+        valueFrom: { secretKeyRef: { name: minio-artifact-creds, key: accesskey } }
+      - name: MINIO_PASS
+        valueFrom: { secretKeyRef: { name: minio-artifact-creds, key: secretkey } }
+      - name: DR_USER
+        valueFrom: { secretKeyRef: { name: "{{`{{inputs.parameters.stream_load_credentials_secret}}`}}", key: user } }
+      - name: DR_PASS
+        valueFrom: { secretKeyRef: { name: "{{`{{inputs.parameters.stream_load_credentials_secret}}`}}", key: password } }
+      - name: DR_DB
+        valueFrom: { secretKeyRef: { name: "{{`{{inputs.parameters.stream_load_credentials_secret}}`}}", key: database } }
+      - name: DR_TABLE
+        valueFrom: { secretKeyRef: { name: "{{`{{inputs.parameters.stream_load_credentials_secret}}`}}", key: table } }
+      command: ["/bin/bash", "-c"]
+      args:
+      - |
+        set -euo pipefail
+        start=$(date +%s)
+        mc alias set dlh http://dlh-minio.{{ .Release.Namespace }}.svc.cluster.local:9000 "$MINIO_USER" "$MINIO_PASS"
+        path=$(echo "{{`{{inputs.parameters.uri}}`}}" | sed 's|^s3://|dlh/|')
+        mc cp "$path" /tmp/fixture.csv
+        resp=$(curl -sS -u "$DR_USER:$DR_PASS" \
+          -H 'expect:100-continue' \
+          -H 'column_separator:,' \
+          -T /tmp/fixture.csv \
+          "http://{{`{{inputs.parameters.fe_host}}`}}/api/$DR_DB/$DR_TABLE/_stream_load")
+        echo "$resp"
+        rows=$(echo "$resp" | sed -n 's/.*"NumberLoadedRows":\([0-9]*\).*/\1/p')
+        echo "${rows:-0}" > /tmp/loaded_rows
+        echo $(( $(date +%s) - start )) > /tmp/duration_sec
