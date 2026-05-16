@@ -1,0 +1,11 @@
+thresholds:
+- metric: p95-latency-chaos
+  query: histogram_quantile(0.95, sum(rate(k6_http_req_duration_seconds_bucket{dlh_scenario="x"}[1m])) by (le))
+  lt: 0.5
+  window: chaos
+- metric: error-rate-recovery
+  query: sum(rate(k6_http_reqs_total{dlh_scenario="x",status!~"2.."}[1m])) / sum(rate(k6_http_reqs_total{dlh_scenario="x"}[1m]))
+  lt: 0.01
+  window: recovery
+raw_promql: sum(up{job="my-svc"}) > 0
+raw_window: chaos
