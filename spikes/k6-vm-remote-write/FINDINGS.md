@@ -210,3 +210,50 @@ Reversed the Plan 2 decision to disable Litmus.
   emptyDir-backed; it must gain keyFile auth and a PVC before any
   shared/CI deploy. Litmus's `adminConfig.DBUSER`/`DBPASSWORD` will
   become the actual SCRAM credentials at that point.
+
+## dlh-k6 image (Plan 6, 2026-05-17)
+
+- **Image**: `ghcr.io/dlh/dlh-k6:0.1.0` — produced by `make k6-image` from
+  `fixture-images/k6/Dockerfile`. Same registry prefix and the same
+  `minikube image load` + force-reload pattern as `dlh-verdict`.
+- **Resolved plugin versions** (live in the Dockerfile as ARGs — drifted
+  from the plan defaults due to the go.k6.io/k6 → go.k6.io/k6/v2 module
+  path split in late 2025):
+    - k6 base: v1.6.1 (last v1-module-path release of `go.k6.io/k6`)
+    - xk6: v1.4.3 (CLI; xk6@latest requires Go >= 1.25 via GOTOOLCHAIN=auto)
+    - xk6-sql: v1.0.6 (v1.1.0+ moved to k6/v2 module path)
+    - xk6-sql-driver-mysql: v0.2.2 (v0.3.0+ moved to k6/v2 module path)
+    - xk6-kafka: v1.3.0 (v2.0.0 moved to /v2 module path; stays on v1)
+- **Why these versions**: mixing v1 and v2 of the k6 module silently drops
+  the older-major-version extensions (xk6 prints a "conflicting k6 versions"
+  warning and the v2-using extension fails to register). The pinned set
+  above is the latest mutually-compatible combination on the v1 path.
+- **Baked script paths**:
+    - `/scripts/lib/{common,mysql,kafka,doris,smoke}.js`
+    - `/scripts/runners/{mysql,kafka,doris}.js`
+- **Smoke command** (run after every image rebuild):
+    ```
+    docker run --rm ghcr.io/dlh/dlh-k6:0.1.0 run /scripts/lib/smoke.js
+    ```
+- **Static parse check for a single script (no target needed)**:
+    ```
+    docker run --rm ghcr.io/dlh/dlh-k6:0.1.0 archive --env MYSQL_DSN=dummy \
+      -O /tmp/a.tar /scripts/runners/mysql.js
+    ```
+    Each runner enforces required env vars at init time, so the archive
+    invocation must supply them (any dummy value is fine for a parse check).
+- **xk6 CLI breaking change**: xk6 v1.x renamed the positional k6-version
+  argument to `--k6-version` (the positional clashes with the default
+  `"latest"` value of the flag). The Dockerfile uses the flag form.
+
+### Implications for Plan 7
+
+- The `load/k6-run` WorkflowTemplate must pin `runner.image: ghcr.io/dlh/dlh-k6:0.1.0`
+  and replace its `script_configmap` input with a `script_path` input that
+  receives values like `/scripts/runners/mysql.js`.
+- Scenario YAMLs pass per-scenario env vars via `env_map`. Each runner's env
+  contract is documented inline in its script and in the Phase 2 spec.
+- After bumping the image tag in the chart (or any code change in `fixture-images/k6/`),
+  use `make -C fixture-images/k6 reload-minikube` to force kubelet to pick up the new image
+  (it caches by image ID; bare `make k6-image` + `minikube image load` is not enough
+  if pods already have the previous version of the same tag).
