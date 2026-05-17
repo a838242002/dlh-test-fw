@@ -1,0 +1,15 @@
+{{- range $path, $_ := .Files.Glob "files/dashboards/*.json" }}
+{{- $name := base $path | trimSuffix ".json" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlh-dashboard-{{ $name }}
+  namespace: {{ include "dlh.namespace" $ }}
+  labels:
+    {{- include "dlh.labels" $ | nindent 4 }}
+    dlh-dashboard: "true"
+data:
+  {{ $name }}.json: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}

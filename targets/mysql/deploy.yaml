@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mysql-sys
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-creds
+  namespace: mysql-sys
+type: Opaque
+stringData:
+  user: root
+  password: dlh-mysql-dev
+  database: dlh
+  MYSQL_ROOT_PASSWORD: dlh-mysql-dev
+  MYSQL_DATABASE: dlh
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: mysql-sys
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        # MariaDB client (shipped in dlh-fixture-mysql) can't speak
+        # caching_sha2_password — fall back to native auth.
+        args: ["--default-authentication-plugin=mysql_native_password"]
+        envFrom:
+        - secretRef:
+            name: mysql-creds
+        ports:
+        - containerPort: 3306
+        resources:
+          requests:
+            cpu: 200m
+            memory: 384Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - mysqladmin -uroot -p"$MYSQL_ROOT_PASSWORD" ping
+          initialDelaySeconds: 15
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: mysql-sys
+spec:
+  selector:
+    app: mysql
+  ports:
+  - port: 3306
+    targetPort: 3306

@@ -1,0 +1,86 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: mysql-pod-delete-
+  namespace: dlh-test-fw
+spec:
+  serviceAccountName: argo-workflow
+  entrypoint: main
+  arguments:
+    parameters:
+    - name: load_duration
+      value: 180s
+    - name: chaos_start_after
+      value: 30s
+    - name: chaos_duration
+      value: 60s
+    - name: scenario_label
+      value: mysql-pod-delete
+  templates:
+  - name: main
+    steps:
+    # Stage 0 — materialise SLO ConfigMap (consumed by verdict-slo-eval).
+    - - name: prep-slo
+        template: write-slo
+    # Stage 1 — fixture must complete before chaos+load (fail-fast).
+    - - name: load-fixture
+        templateRef: { name: fixture-minio-load-mysql, template: main }
+        arguments:
+          parameters:
+          - { name: uri,                 value: "s3://fixtures/mysql-users.sql" }
+          - { name: db_host,             value: "mysql.mysql-sys.svc.cluster.local" }
+          - { name: credentials_secret,  value: "mysql-creds" }
+    # Stage 2 — chaos and load run in parallel; chaos failure does NOT abort load.
+    - - name: chaos
+        templateRef: { name: chaos-pod-delete, template: main }
+        continueOn: { failed: true }
+        arguments:
+          parameters:
+          - { name: target_namespace,    value: "mysql-sys" }
+          - { name: target_pod_selector, value: "app=mysql" }
+          - { name: duration,            value: "{{workflow.parameters.chaos_duration}}" }
+          - { name: interval,            value: "10" }
+          - { name: force,               value: "true" }
+      - name: load
+        templateRef: { name: load-k6-run, template: main }
+        arguments:
+          parameters:
+          - { name: script_configmap, value: "k6-script-mysql-pod-delete" }
+          - { name: vus,              value: "10" }
+          - { name: duration,         value: "{{workflow.parameters.load_duration}}" }
+          - { name: env_map,          value: "{}" }
+          - { name: scenario_label,   value: "{{workflow.parameters.scenario_label}}" }
+    # Stage 3 — verdict (waits for stage 2 to finish).
+    - - name: verdict
+        templateRef: { name: verdict-slo-eval, template: main }
+        arguments:
+          parameters:
+          - { name: slo_yaml,           value: "(unused — passed via ConfigMap)" }
+          - { name: chaos_result_name,  value: "{{steps.chaos.outputs.parameters.chaos_result_name}}-pod-delete" }
+          - { name: load_start_ts,      value: "{{steps.load.startedAt}}" }
+          - { name: chaos_start_after,  value: "{{workflow.parameters.chaos_start_after}}" }
+          - { name: chaos_duration,     value: "{{workflow.parameters.chaos_duration}}" }
+          - { name: load_duration,      value: "{{workflow.parameters.load_duration}}" }
+          - { name: metrics_namespace,  value: "{{workflow.parameters.scenario_label}}" }
+          - { name: workflow_name,      value: "{{workflow.name}}" }
+
+  - name: write-slo
+    serviceAccountName: argo-workflow
+    script:
+      image: alpine/k8s:1.30.0
+      command: [bash]
+      source: |
+        set -euo pipefail
+        cat > /tmp/slo.yaml <<'EOF'
+        thresholds:
+        - metric: p95-latency-chaos
+          query: histogram_quantile(0.95, sum(rate(k6_http_req_duration_seconds_bucket{dlh_scenario="mysql-pod-delete"}[1m])) by (le))
+          lt: 1.0
+          window: chaos
+        - metric: error-rate-recovery
+          query: sum(rate(k6_http_reqs_total{dlh_scenario="mysql-pod-delete",status!~"2.."}[30s])) / sum(rate(k6_http_reqs_total{dlh_scenario="mysql-pod-delete"}[30s]))
+          lt: 0.05
+          window: recovery
+        EOF
+        kubectl -n dlh-test-fw create configmap dlh-slo-{{workflow.name}} \
+          --from-file=slo.yaml=/tmp/slo.yaml --dry-run=client -o yaml | kubectl apply -f -

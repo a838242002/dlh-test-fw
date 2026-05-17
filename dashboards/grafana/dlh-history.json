@@ -1,0 +1,35 @@
+{
+  "title": "DLH — History",
+  "uid": "dlh-history",
+  "schemaVersion": 39,
+  "tags": ["dlh"],
+  "timezone": "",
+  "time": { "from": "now-7d", "to": "now" },
+  "panels": [
+    {
+      "type": "table",
+      "title": "Recent verdict ConfigMaps",
+      "targets": [
+        {
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "Infinity" },
+          "type": "json",
+          "source": "url",
+          "url": "http://kubernetes.default.svc/api/v1/namespaces/dlh-test-fw/configmaps?labelSelector=app.kubernetes.io%2Fmanaged-by%3Ddlh-verdict",
+          "root_selector": "items"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 12 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Mean p95 latency over last 7d (per scenario)",
+      "targets": [
+        {
+          "expr": "avg by (dlh_scenario) (histogram_quantile(0.95, sum(rate(k6_http_req_duration_seconds_bucket[5m])) by (le, dlh_scenario)))",
+          "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
+        }
+      ],
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 }
+    }
+  ]
+}

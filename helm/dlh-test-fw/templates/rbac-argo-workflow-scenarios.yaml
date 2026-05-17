@@ -1,0 +1,42 @@
+{{/*
+  RBAC for the argo-workflow ServiceAccount so scenario Workflows can:
+    - create ChaosEngines (litmuschaos.io)   used by chaos-* WTs
+    - create TestRuns (k6.io)                used by load-k6-run WT
+    - create/get/update ConfigMaps           used by prep-slo step writing dlh-slo-<wf>
+    - read ChaosResults                      used by verdict step (extra safety)
+
+  Plan 4 left these gaps; Plan 5 plugs them so the platform actually runs.
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dlh-argo-workflow-scenarios
+  namespace: {{ include "dlh.namespace" . }}
+  labels:
+    {{- include "dlh.labels" . | nindent 4 }}
+rules:
+- apiGroups: ["litmuschaos.io"]
+  resources: ["chaosengines", "chaosresults"]
+  verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+- apiGroups: ["k6.io"]
+  resources: ["testruns"]
+  verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create", "get", "list", "watch", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dlh-argo-workflow-scenarios
+  namespace: {{ include "dlh.namespace" . }}
+  labels:
+    {{- include "dlh.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dlh-argo-workflow-scenarios
+subjects:
+- kind: ServiceAccount
+  name: argo-workflow
+  namespace: {{ include "dlh.namespace" . }}
