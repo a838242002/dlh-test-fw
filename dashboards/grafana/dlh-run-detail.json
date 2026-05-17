@@ -41,7 +41,7 @@
           "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
         }
       ],
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 }
     },
     {
       "type": "timeseries",
@@ -52,7 +52,7 @@
           "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
         }
       ],
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 }
     },
     {
       "type": "timeseries",
@@ -63,7 +63,7 @@
           "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
         }
       ],
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 }
     },
     {
       "type": "stat",
@@ -82,7 +82,7 @@
         }
       },
       "options": { "colorMode": "background", "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
-      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 }
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 5 }
     },
     {
       "type": "stat",
@@ -100,7 +100,7 @@
         }
       },
       "options": { "colorMode": "background", "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
-      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 4 }
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 5 }
     },
     {
       "type": "table",
@@ -145,7 +145,7 @@
           }
         ]
       },
-      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 4 }
+      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 8 }
     }
   ]
 }
