@@ -257,3 +257,27 @@ Reversed the Plan 2 decision to disable Litmus.
   use `make -C fixture-images/k6 reload-minikube` to force kubelet to pick up the new image
   (it caches by image ID; bare `make k6-image` + `minikube image load` is not enough
   if pods already have the previous version of the same tag).
+
+## Plan 7 Task 1: k6 custom-Trend prom-rw emits `_p95` gauges — WITH `k6_` PREFIX (2026-05-17)
+
+Verified empirically on `dlh-k6:0.1.0` (k6 v1.6.1) with
+`K6_PROMETHEUS_RW_TREND_STATS=p(95),p(99),min,max,avg`. A custom
+`new Trend('dlh_probe_duration_seconds', true)` produced the full
+gauge family in VM:
+
+    k6_dlh_probe_duration_seconds_p95
+    k6_dlh_probe_duration_seconds_p99
+    k6_dlh_probe_duration_seconds_avg
+    k6_dlh_probe_duration_seconds_min
+    k6_dlh_probe_duration_seconds_max
+    k6_dlh_probe_ops_total_total
+
+**Critical drift from spec:** k6's prometheus-rw output unconditionally
+prefixes EVERY metric name with `k6_` (and appends `_total` to Counters).
+Our custom metrics `dlh_<type>_<thing>` thus surface in VM as
+`k6_dlh_<type>_<thing>_p95` etc.
+
+**Implication:** Plan 7 SLO queries and Plan 8 dashboards use
+`k6_dlh_<type>_*` (NOT `dlh_<type>_*`). The hypothesis on `_p95` gauge
+form is otherwise confirmed — no `histogram_quantile()` and no
+`rate(_sum)/rate(_count)` fallback needed.
