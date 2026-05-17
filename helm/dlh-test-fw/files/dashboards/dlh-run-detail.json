@@ -67,17 +67,54 @@
     },
     {
       "type": "stat",
-      "title": "Verdict summary (dlh-result-$workflow)",
+      "title": "Verdict — overall",
+      "description": "1 = pass, 0 = fail. Pushed by verdict-job to VictoriaMetrics under labels dlh_workflow + dlh_scenario.",
       "targets": [
-        {
-          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "Infinity" },
-          "type": "json",
-          "source": "url",
-          "url": "http://kubernetes.default.svc/api/v1/namespaces/dlh-test-fw/configmaps/dlh-result-$workflow",
-          "root_selector": "data['result.json']"
-        }
+        { "expr": "dlh_verdict_overall{dlh_workflow=\"$workflow\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true }
       ],
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "FAIL", "color": "red" }, "1": { "text": "PASS", "color": "green" } } }
+          ],
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Verdict — chaos",
+      "targets": [
+        { "expr": "dlh_verdict_chaos_pass{dlh_workflow=\"$workflow\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "NOT PASS", "color": "red" }, "1": { "text": "PASS", "color": "green" } } }
+          ],
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 4 }
+    },
+    {
+      "type": "table",
+      "title": "Verdict — SLO thresholds",
+      "description": "One row per threshold defined in the scenario's SLO YAML; pass = 1 means the threshold was met.",
+      "targets": [
+        { "expr": "dlh_verdict_threshold_pass{dlh_workflow=\"$workflow\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "A" },
+        { "expr": "dlh_verdict_threshold_value{dlh_workflow=\"$workflow\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "B" }
+      ],
+      "transformations": [
+        { "id": "merge" },
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "dlh_workflow": true, "dlh_scenario": true } } }
+      ],
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 4 }
     }
   ]
 }

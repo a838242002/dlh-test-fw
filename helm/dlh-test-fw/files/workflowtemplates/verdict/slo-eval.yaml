@@ -45,6 +45,7 @@ spec:
       - -chaos-duration={{`{{inputs.parameters.chaos_duration}}`}}
       - -load-duration={{`{{inputs.parameters.load_duration}}`}}
       - -prom-url={{ .Values.platform.vm.queryUrl }}
+      - -scenario-label={{`{{inputs.parameters.metrics_namespace}}`}}
       - -workflow-name={{`{{inputs.parameters.workflow_name}}`}}
       - -artifact-dir=/tmp/verdict
       - -namespace={{`{{workflow.namespace}}`}}
