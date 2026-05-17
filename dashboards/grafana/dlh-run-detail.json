@@ -38,7 +38,7 @@
       "title": "k6 p95 latency",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(k6_http_req_duration_seconds_bucket{dlh_scenario=\"$scenario\"}[30s])) by (le))",
+          "expr": "avg(k6_http_req_duration_p95{dlh_scenario=\"$scenario\"})",
           "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
         }
       ],
