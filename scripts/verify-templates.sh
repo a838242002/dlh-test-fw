@@ -10,6 +10,8 @@ EXPECTED=(
   chaos-from-hub
   load-k6-run
   verdict-slo-eval
+  util-write-slo
+  util-ensure-mysql-table
 )
 missing=0
 for t in "${EXPECTED[@]}"; do
@@ -24,4 +26,4 @@ if (( missing > 0 )); then
   echo "FAIL: $missing WorkflowTemplates missing" >&2
   exit 1
 fi
-echo "PASS: all 9 WorkflowTemplates present"
+echo "PASS: all 11 WorkflowTemplates present"
