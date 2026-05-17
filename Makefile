@@ -36,3 +36,9 @@ k6-image:
 
 k6-smoke:
 	$(MAKE) -C fixture-images/k6 smoke
+
+# --- Phase 2 scenarios ---
+.PHONY: run-kafka
+
+run-kafka:
+	./scripts/run-scenario.sh scenarios/kafka-broker-partition.yaml
