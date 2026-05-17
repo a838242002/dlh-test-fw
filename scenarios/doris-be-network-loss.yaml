@@ -67,7 +67,7 @@ spec:
         cat > /tmp/slo.yaml <<'EOF'
         thresholds:
         - metric: p95-latency-chaos
-          query: histogram_quantile(0.95, sum(rate(k6_http_req_duration_seconds_bucket{dlh_scenario="doris-be-network-loss"}[1m])) by (le))
+          query: avg(k6_http_req_duration_p95{dlh_scenario="doris-be-network-loss"})
           lt: 3.0
           window: chaos
         EOF

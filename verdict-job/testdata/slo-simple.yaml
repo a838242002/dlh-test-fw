@@ -1,6 +1,6 @@
 thresholds:
 - metric: p95-latency-chaos
-  query: histogram_quantile(0.95, sum(rate(k6_http_req_duration_seconds_bucket{dlh_scenario="x"}[1m])) by (le))
+  query: avg(k6_http_req_duration_p95{dlh_scenario="x"})
   lt: 0.5
   window: chaos
 - metric: error-rate-recovery

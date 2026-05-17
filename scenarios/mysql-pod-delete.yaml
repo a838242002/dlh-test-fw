@@ -74,7 +74,7 @@ spec:
         cat > /tmp/slo.yaml <<'EOF'
         thresholds:
         - metric: p95-latency-chaos
-          query: histogram_quantile(0.95, sum(rate(k6_http_req_duration_seconds_bucket{dlh_scenario="mysql-pod-delete"}[1m])) by (le))
+          query: avg(k6_http_req_duration_p95{dlh_scenario="mysql-pod-delete"})
           lt: 1.0
           window: chaos
         - metric: error-rate-recovery
