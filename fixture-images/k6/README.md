@@ -5,8 +5,10 @@ Custom k6 binary with three community xk6 plugins bundled in:
 | Plugin | Version | What it gives k6 |
 |---|---|---|
 | `xk6-sql` | v1.0.4 | `k6/x/sql` module — generic SQL driver entrypoint |
-| `xk6-sql-driver-mysql` | v1.0.1 | MySQL driver consumed by `xk6-sql` (covers Doris too — Doris is MySQL-protocol compatible for queries) |
-| `xk6-kafka` | v0.27.0 | `k6/x/kafka` module — Writer/Reader for Kafka |
+| `xk6-sql-driver-mysql` | v0.3.1 | MySQL driver consumed by `xk6-sql` (covers Doris too — Doris is MySQL-protocol compatible for queries) |
+| `xk6-kafka` | v1.3.0 | `k6/x/kafka` module — Writer/Reader for Kafka |
+
+Base k6 is v0.57.0 (bumped from v0.55.0 to satisfy xk6-sql v1.0.4's minimum).
 
 Plus a baked-in script tree at `/scripts/lib/` (primitives) and `/scripts/runners/` (generic per-target runners).
 
