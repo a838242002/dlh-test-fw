@@ -293,7 +293,7 @@ deleted.
 
 | Scenario | Runner | Metrics actually in VM | Verdict overall |
 |---|---|---|---|
-| `mysql-pod-delete` | `runners/mysql.js` | `k6_dlh_mysql_query_duration_seconds_{p95,p99,avg,min,max,count,sum}` (tagged `op`); `k6_dlh_app_errors_total_total{kind=~"mysql.*"}` | PASS (dlh_verdict_overall=1, p95≈2µs) |
+| `mysql-pod-delete` | `runners/mysql.js` | `k6_dlh_mysql_query_duration_seconds_{p95,p99,avg,min,max}` (tagged `op`); `k6_dlh_mysql_queries_total_total{op}` (Counter, added post-review); `k6_dlh_app_errors_total_total{kind=~"mysql.*"}` | PASS pre-fix (zero errors masked broken denominator); post-fix exposes real recovery-window write errors |
 | `kafka-broker-partition` | `runners/kafka.js` | `k6_dlh_kafka_produce_duration_seconds_{p95,...}` (tagged `topic`); `k6_dlh_kafka_messages_produced_total_total{topic}`; `k6_dlh_app_errors_total_total{kind="kafka-produce"}` | PASS (dlh_verdict_overall=1) |
 | `doris-be-network-loss` | deferred (Plan 7 spike NO-GO) | none — scenario YAML is the Phase 1 stub; deferred in `scenarios/README.md`. Future work: revive with `apache/doris.fe-ubuntu` + `apache/doris.be-ubuntu` separated images on a VM with `vm.max_map_count=2000000` tunable. | N/A |
 
@@ -341,3 +341,31 @@ deleted.
   from `dlh-run-detail` or replaces them with per-target equivalents.
 - Doris dashboard ships as a placeholder with no live data path until
   Doris BE comes up in a future phase.
+
+### Trend prom-rw NEVER emits `_count` or `_sum` — Counter pairing is mandatory for ratio SLOs (post-review fix)
+
+Plan 7 spec compliance review caught a false-positive SLO: the
+mysql `error-rate-recovery` query divided by
+`k6_dlh_mysql_query_duration_seconds_count`, a series that does not
+exist. k6's prometheus-rw output exports a Trend ONLY as its configured
+stat suffixes (`_p95`, `_p99`, `_avg`, `_min`, `_max` — controlled by
+`K6_PROMETHEUS_RW_TREND_STATS`). It NEVER emits `_count` or `_sum`
+companions, unlike the native Prometheus client. Verified via VM
+`/api/v1/label/__name__/values`: only the five stat-suffix series
+appear; no `_count`/`_sum`.
+
+With the bogus denominator missing, `clamp_min(..., 1e-9)` floored the
+ratio to `errors * 1e9`. The original PASS only worked because the run
+genuinely produced zero `kind="mysql.*"` errors during the recovery
+window (and the prior numerator `k6_dlh_app_errors_total` — single
+`_total` — also missed the doubled-`_total` Counter series, so both
+numerator and denominator were empty → 0/clamp = 0 → pass).
+
+**Rule:** every ratio-style SLO over a Trend metric MUST have a paired
+Counter (e.g. `dlh_mysql_queries_total` → VM
+`k6_dlh_mysql_queries_total_total`) incremented at the same call site,
+and the SLO query must divide by the Counter's `rate(...)`. The Kafka
+scenario already followed this pattern via
+`dlh_kafka_messages_produced_total`; the mysql lib has been brought in
+line. Doris (when revived) and any future Trend-backed SLO must do the
+same.
