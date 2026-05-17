@@ -27,8 +27,8 @@
       "title": "Recent verdict runs",
       "description": "One row per scenario run. Sourced from `dlh_verdict_overall` + `dlh_verdict_chaos_pass` pushed by verdict-job at end-of-run.",
       "targets": [
-        { "expr": "dlh_verdict_overall{dlh_scenario=~\"$scenario\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "A" },
-        { "expr": "dlh_verdict_chaos_pass{dlh_scenario=~\"$scenario\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "B" }
+        { "expr": "last_over_time(dlh_verdict_overall{dlh_scenario=~\"$scenario\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "A" },
+        { "expr": "last_over_time(dlh_verdict_chaos_pass{dlh_scenario=~\"$scenario\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "B" }
       ],
       "transformations": [
         { "id": "merge" },
@@ -89,7 +89,7 @@
       "title": "Total runs by scenario (last 7d)",
       "description": "Count of distinct workflows that produced a verdict per scenario.",
       "targets": [
-        { "expr": "count by (dlh_scenario) (group by (dlh_workflow, dlh_scenario) (dlh_verdict_overall{dlh_scenario=~\"$scenario\"}))", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true, "legendFormat": "{{dlh_scenario}}" }
+        { "expr": "count by (dlh_scenario) (group by (dlh_workflow, dlh_scenario) (last_over_time(dlh_verdict_overall{dlh_scenario=~\"$scenario\"}[7d])))", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true, "legendFormat": "{{dlh_scenario}}" }
       ],
       "fieldConfig": { "defaults": { "unit": "short" } },
       "options": { "colorMode": "value", "graphMode": "none", "textMode": "value_and_name", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },

@@ -4,7 +4,7 @@
   "schemaVersion": 39,
   "tags": ["dlh"],
   "timezone": "",
-  "time": { "from": "now-30m", "to": "now" },
+  "time": { "from": "now-7d", "to": "now" },
   "templating": {
     "list": [
       {
@@ -70,7 +70,7 @@
       "title": "Verdict — overall",
       "description": "1 = pass, 0 = fail. Pushed by verdict-job to VictoriaMetrics under labels dlh_workflow + dlh_scenario.",
       "targets": [
-        { "expr": "dlh_verdict_overall{dlh_workflow=\"$workflow\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true }
+        { "expr": "last_over_time(dlh_verdict_overall{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true }
       ],
       "fieldConfig": {
         "defaults": {
@@ -88,7 +88,7 @@
       "type": "stat",
       "title": "Verdict — chaos",
       "targets": [
-        { "expr": "dlh_verdict_chaos_pass{dlh_workflow=\"$workflow\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true }
+        { "expr": "last_over_time(dlh_verdict_chaos_pass{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true }
       ],
       "fieldConfig": {
         "defaults": {
@@ -107,8 +107,8 @@
       "title": "Verdict — SLO thresholds",
       "description": "One row per threshold defined in the scenario's SLO YAML; pass = 1 means the threshold was met.",
       "targets": [
-        { "expr": "dlh_verdict_threshold_pass{dlh_workflow=\"$workflow\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "A" },
-        { "expr": "dlh_verdict_threshold_value{dlh_workflow=\"$workflow\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "B" }
+        { "expr": "last_over_time(dlh_verdict_threshold_pass{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "A" },
+        { "expr": "last_over_time(dlh_verdict_threshold_value{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "B" }
       ],
       "transformations": [
         { "id": "merge" },
