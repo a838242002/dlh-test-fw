@@ -62,11 +62,9 @@ scenario.yaml (Workflow) ── kubectl apply ──▶ Argo Workflow Engine
                                    │
               ┌────────────────────┼────────────────────┐
               ▼                    ▼                    ▼
-       Argo artifact         ConfigMap              Workflow exit code
-    (report.json + .html)  (dlh-result-<wf>)         (0=Pass, 1=Fail)
-                                   │
-                                   ▼
-                              Grafana（讀 metrics + ConfigMap）
+       Argo artifact     VM gauges (dlh_verdict_*)  Workflow exit code
+    (report.json + .html → MinIO)  ────► Grafana    (0=Pass, 1=Fail)
+                                        dashboard
 ```
 
 ### 時序模型
@@ -196,7 +194,7 @@ k6 CRD 建立時開啟 `--out experimental-prometheus-rw=http://victoriametrics-
 
 | 名稱 | 輸入 | 輸出 |
 |---|---|---|
-| `verdict/slo-eval` | `slo_yaml`、`chaos_result_name`、`load_start_ts`、`chaos_start_after`、`chaos_duration`、`load_duration`、`metrics_namespace` | artifact: `report.json` + `report.html`、ConfigMap: `dlh-result-<workflow>` |
+| `verdict/slo-eval` | `slo_yaml`、`chaos_result_name`、`load_start_ts`、`chaos_start_after`、`chaos_duration`、`load_duration`、`metrics_namespace`、`workflow_name` | artifact: `report.json` + `report.html` (archived to MinIO `artifacts/<workflow>/verdict/report/` by Argo); VM gauges: `dlh_verdict_overall`/`chaos_pass`/`threshold_pass`/`threshold_value` |
 
 ## SLO Verdict 設計
 
@@ -226,8 +224,8 @@ verdict:
 5. 透過 K8s API 讀 ChaosResult.status.experimentStatus.verdict（"Pass" / "Fail" / "Awaited"）
    - "Awaited" 時 bounded retry（最多 30s）
 6. Overall = all(threshold_pass) AND raw_promql_pass AND chaos_verdict == "Pass"
-7. 輸出 report.json 與 report.html 為 artifact
-8. Patch ConfigMap dlh-result-<workflow>（精簡版）
+7. 輸出 report.json 與 report.html 為 Argo artifact（Argo 自動歸檔到 MinIO `artifacts/<workflow>/verdict/report/`）
+8. POST verdict 摘要 gauges 到 VictoriaMetrics（`dlh_verdict_overall`/`chaos_pass`/`threshold_pass`/`threshold_value`,labels: `dlh_workflow`+`dlh_scenario`+`name`）
 9. sys.exit(0 if overall else 1)
 ```
 
@@ -240,9 +238,18 @@ verdict:
 - 中間 metric 表格（per-window value、threshold、Pass）
 - 下方按鈕：Open in Grafana / Download JSON / View Argo workflow
 
-`report.html` 可直接在 Argo UI artifact viewer 內預覽，或上傳 MinIO bucket 啟用 static website 取得永久 URL。
+`report.html` 可直接在 Argo UI artifact viewer 內預覽，或從 MinIO bucket 取得永久 URL。
 
-**ConfigMap `dlh-result-<workflow>`**：JSON 精簡版（verdict + key metrics），給 Grafana Infinity datasource 撈來顯示。
+**VictoriaMetrics gauges**（給 Grafana dashboard 用,取代原設計的 ConfigMap+Infinity datasource）：
+
+| Metric | Type | Labels | 值 |
+|---|---|---|---|
+| `dlh_verdict_overall` | gauge | `dlh_workflow`, `dlh_scenario` | 0=Fail, 1=Pass |
+| `dlh_verdict_chaos_pass` | gauge | `dlh_workflow`, `dlh_scenario` | 0/1 |
+| `dlh_verdict_threshold_pass` | gauge | `name`, `dlh_workflow`, `dlh_scenario` | 0/1（每條 SLO threshold 一條 series） |
+| `dlh_verdict_threshold_value` | gauge | `name`, `dlh_workflow`, `dlh_scenario` | 實測 PromQL 值 |
+
+完整 query/window/lt|gt 等結構化資料在 `report.json` artifact 裡;dashboard 用 PromQL `last_over_time(metric[7d])` 撈最近一筆。
 
 ## 結果檢視路徑
 
@@ -352,3 +359,39 @@ Phase 1 跑 1-2 個月真實 scenarios 後再評估：
 ---
 
 **Next step**：使用者 review 此 spec、確認上述四個 open question 後，進入 `writing-plans` 階段，產出可執行的 implementation plan。
+
+---
+
+## Post-Phase-1 amendments
+
+This spec was authored before Phase 1 implementation. The following design points were revised based on real-world findings during execution. Plans 1-5 reflect the original intent; the live code (tag `phase-1-mvp` and beyond) reflects these amendments.
+
+### A1. `dlh_scenario` label replaces `scenario`
+k6's `experimental-prometheus-rw` output reserves the `scenario` label for its own internal scenario name (always `default`). The platform's user-facing partitioning label is therefore **`dlh_scenario`**. Applies everywhere PromQL filters by run identity (SLO YAML, dashboards, verdict metric labels).
+
+### A2. k6 only emits pre-computed quantile gauges, not histogram buckets
+`k6_http_req_duration_seconds_bucket` doesn't exist. SLO queries and dashboards must use `k6_http_req_duration_p95` (and friends, per `K6_PROMETHEUS_RW_TREND_STATS`). Unit is seconds.
+
+### A3. Verdict output: artifact, not ConfigMap
+Original design wrote a `dlh-result-<workflow>` ConfigMap containing a slimmed report for a Grafana Infinity datasource to read. The Infinity datasource never got the k8s API auth plumbing needed to read ConfigMaps over HTTPS, and bridging it would have duplicated state across two stores.
+
+Replacement: verdict-job emits `report.json` + `report.html` as an Argo workflow artifact (auto-archived to MinIO `artifacts/<workflow>/verdict/report/`), and also POSTs a 4-series summary to VictoriaMetrics. Dashboards read from VM only — same datasource as k6 metrics. ConfigMap and the `configmaps` verb in `rbac-verdict` are removed.
+
+### A4. Workflow names are timestamps, not random suffixes
+`scripts/run-scenario.sh` rewrites the scenario's `metadata.generateName: <prefix>-` to `metadata.name: <prefix>-YYYYMMDD-HHMMSS` (UTC) before submission. Results: sortable by name, recognisable in `kubectl get workflow` and the Grafana dropdown.
+
+### A5. Bitnami secure-images migration broke Litmus's MongoDB dependency
+Litmus 3.28.0 ships a Bitnami MongoDB sub-subchart whose `bitnamilegacy/*` arm64 image was yanked mid-2025; the `bitnamisecure/mongodb:latest` replacement starts under `docker run` but exits silently inside the chart's StatefulSet pod spec (script/permissions contract drift not worth untangling).
+
+Replacement: in-tree `mongo:6` StatefulSet at `helm/dlh-test-fw/templates/mongodb.yaml` — single-node replicaset, postStart hook idempotently initiates `rs0` and creates the auth user the Litmus chart's wait-init expects. No-auth on the wire; rotate to `--auth --keyFile` before any shared deploy. Same applies to MinIO (Bitnami subchart removed, in-tree Deployment at `templates/minio.yaml`).
+
+### A6. Litmus chart 3.x ships only the portal
+ChaosOperator + per-namespace `ChaosExperiment` CRs are NOT installed by the Helm chart. Backfilled in `templates/litmus-chaos-{operator,experiments}.yaml`. Chaos `successCondition` was also rewritten from Litmus 1.x's `status.experimentStatus.verdict in (Pass,...)` to 3.x's `status.engineStatus == completed`.
+
+### A7. Smaller deltas worth noting
+- `k6-operator` chart bumped 3.x → 4.4.1; `namespace.watch` value removed (4.x watches all namespaces).
+- `victoria-metrics-single` chart bumped 0.12.x → 0.38.0 (0.12 yanked from repo).
+- Grafana datasources need explicit `uid:` pinning so shipped dashboards' `datasource.uid` references resolve.
+- VM's default lookback-delta is 5min; dashboards wrap point-in-time verdict gauges in `last_over_time(...[7d])` so panels survive past staleness.
+- MinIO pinned to `RELEASE.2024-12-13T22-19-12Z` — the last community release with the admin console; newer releases dropped it.
+

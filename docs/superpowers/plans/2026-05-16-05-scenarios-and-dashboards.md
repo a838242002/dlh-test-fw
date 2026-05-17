@@ -1,5 +1,12 @@
 # Plan 5 — Sample Scenarios + Grafana Dashboards Implementation Plan
 
+> **Post-MVP note (2026-05-17):** Historical. Real execution differs:
+> - Dashboards do NOT use the Infinity datasource — verdict summary is queried via PromQL gauges (`dlh_verdict_overall`/`chaos_pass`/`threshold_pass`/`threshold_value`) pushed by verdict-job. Datasource UIDs explicitly pinned in chart so dashboard refs resolve.
+> - All instant `dlh_verdict_*` queries wrapped in `last_over_time(...[7d])` — VM's 5-min lookback-delta otherwise drops the single end-of-run gauge sample.
+> - SLO threshold queries in scenario YAMLs rewritten from `_seconds_bucket` to `k6_http_req_duration_p95` (spec amendment A2).
+> - Plan 5 execution also backfilled several gaps Plan 4 missed: chaos-operator + per-namespace ChaosExperiments, argo-workflow SA RBAC for ChaosEngine/TestRun, cluster-admin-lite events+jobs verbs, chaos WT successCondition rewrite.
+> - Scenarios use `metadata.generateName` in YAML but `scripts/run-scenario.sh` rewrites it to `metadata.name: <prefix>-YYYYMMDD-HHMMSS` (UTC) for sortable workflow names.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Wire the platform (Plans 1-4) into three runnable end-to-end scenarios — `mysql-pod-delete`, `doris-be-network-loss`, `kafka-broker-partition` — and ship the two Grafana dashboards the spec calls out (`dlh-run-detail`, `dlh-history`). After this plan, `kubectl apply -f scenarios/mysql-pod-delete.yaml && argo watch -n dlh-test-fw @latest` runs end-to-end and produces a verdict report viewable in the Argo UI and the dashboards in Grafana.

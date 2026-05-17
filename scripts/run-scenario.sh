@@ -38,5 +38,6 @@ echo "Submitted workflow: $created"
 argo wait -n dlh-test-fw "$created" || true
 status=$(kubectl -n dlh-test-fw get workflow "$created" -o jsonpath='{.status.phase}')
 echo "Final phase: $status"
-echo "Report ConfigMap: kubectl -n dlh-test-fw get cm dlh-result-$created -o jsonpath='{.data.result\.json}' | jq ."
+echo "Report artifact: argo get -n dlh-test-fw $created  # shows the MinIO key in the artifact section, or:"
+echo "                 kubectl -n dlh-test-fw exec deploy/dlh-minio -- mc cat \"local/artifacts/${created}-main-*/verdict/report.json\" | jq ."
 [[ "$status" == "Succeeded" ]]

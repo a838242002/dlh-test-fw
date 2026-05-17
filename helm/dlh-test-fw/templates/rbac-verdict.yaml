@@ -9,9 +9,9 @@ rules:
 - apiGroups: ["litmuschaos.io"]
   resources: ["chaosresults"]
   verbs: ["get", "list", "watch"]
-- apiGroups: [""]
-  resources: ["configmaps"]
-  verbs: ["get", "create", "patch", "update"]
+# Note: verdict-job used to patch a `dlh-result-<workflow>` ConfigMap; the
+# full report.json + report.html now ship as an Argo workflow artifact to
+# the MinIO `artifacts` bucket instead. ConfigMap verbs no longer needed.
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

@@ -1,5 +1,8 @@
 # Plan 1 — Spike: k6 → VictoriaMetrics Remote-Write Implementation Plan
 
+> **Post-MVP note (2026-05-17):** This plan is historical — it documents the intent at planning time. Real execution diverged in places, captured in `spikes/k6-vm-remote-write/FINDINGS.md` and the spec's "Post-Phase-1 amendments" section. Most relevant deviation here: the `scenario` PromQL label is reserved by k6 — we use `dlh_scenario` everywhere instead.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Prove on minikube that a k6 load job running via k6-operator can remote-write Prometheus metrics into a single-node VictoriaMetrics instance, and that those metrics are queryable by PromQL filtered on a `scenario=<label>` tag.

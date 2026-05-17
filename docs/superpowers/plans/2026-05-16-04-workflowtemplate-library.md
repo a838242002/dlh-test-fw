@@ -1,5 +1,12 @@
 # Plan 4 — WorkflowTemplate Library + Fixture Images Implementation Plan
 
+> **Post-MVP note (2026-05-17):** Historical. Real execution differs:
+> - `load/k6-run`: tag is `--tag dlh_scenario=<label>` AND `--tag dlh_workflow={{workflow.name}}` (spec amendment A1 — `scenario` is reserved by k6).
+> - Chaos WTs: `successCondition` rewritten from Litmus 1.x's `status.experimentStatus.verdict in (Pass,Fail,Stopped)` to 3.x's `status.engineStatus == completed` (caught by Plan 5).
+> - `verdict/slo-eval`: explicit `command: ["/verdict"]` (Argo emissary can't derive entrypoint on private ghcr images with `Never` pull); now also passes `-scenario-label` so verdict's pushed VM metrics carry `dlh_scenario`.
+> - Fixture-image Dockerfiles arch-detect mc URL via `uname -m`.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Produce the reusable `WorkflowTemplate` library (fixture × 3, chaos × 4, load × 1, verdict × 1) plus three fixture container images (`dlh-fixture-mysql`, `dlh-fixture-doris`, `dlh-fixture-kafka`). After this plan, an engineer can write a `scenarios/<name>.yaml` Workflow that does `templateRef:` against any of these and have it execute end-to-end on the minikube platform stood up in Plan 2 using the verdict binary built in Plan 3.

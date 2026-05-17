@@ -33,13 +33,11 @@ import (
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/eval"
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/metrics"
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/prom"
-	"github.com/dlh/dlh-test-fw/verdict-job/internal/publish"
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/report"
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/slo"
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/window"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
@@ -121,10 +119,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("dynamic client: %v", err)
 	}
-	cs, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		log.Fatalf("kubernetes client: %v", err)
-	}
 
 	crClient := &chaosresult.Client{
 		Dyn: dyn, Namespace: f.namespace,
@@ -154,15 +148,12 @@ func main() {
 		log.Fatalf("report: %v", err)
 	}
 	fmt.Printf("wrote %s and %s\n", jpath, hpath)
+	fmt.Println("(report.json/report.html will be archived by Argo to MinIO under artifacts/<workflow>/report/)")
 
-	pub := &publish.Publisher{Cs: cs, Namespace: f.namespace}
-	if err := pub.Publish(ctx, f.workflowName, r); err != nil {
-		log.Fatalf("publish: %v", err)
-	}
-
-	// Push the verdict summary as PromQL gauges so dashboards can render it
-	// without a separate datasource. Soft-failure: log and continue — the
-	// CM is the authoritative record.
+	// Push the verdict summary as PromQL gauges so dashboards can render it.
+	// The full structured report lives in MinIO as a workflow artifact;
+	// these gauges are the dashboard-friendly summary indexed by
+	// dlh_workflow + dlh_scenario.
 	rwURL := f.promRwURL
 	if rwURL == "" {
 		rwURL = f.promURL + "/api/v1/import/prometheus"

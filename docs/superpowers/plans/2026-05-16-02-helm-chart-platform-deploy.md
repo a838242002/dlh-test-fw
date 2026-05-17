@@ -1,5 +1,11 @@
 # Plan 2 — Helm Chart + Minikube Platform Deploy Implementation Plan
 
+> **Post-MVP note (2026-05-17):** Historical. Real execution differed materially — see the spec's "Post-Phase-1 amendments". Highlights:
+> - MongoDB & MinIO: Bitnami subcharts replaced by in-tree templates (`templates/mongodb.yaml`, `templates/minio.yaml`) after the 2025 secure-images migration broke arm64 image availability.
+> - Litmus chart 3.x ships only the portal — backfilled `litmus-chaos-{operator,experiments}.yaml`.
+> - `rbac-verdict.yaml`: `configmaps` verb removed (verdict now writes an Argo artifact, not a CM).
+> - Chart pins bumped per FINDINGS.md (k6-operator 4.4.1, victoria-metrics-single 0.38.0).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Produce an installable umbrella Helm chart `helm/dlh-test-fw/` that, with one `helm install`, brings up Argo Workflows + Litmus + k6-operator + MinIO + VictoriaMetrics + Grafana on the local minikube created in Plan 1, exposes the three UIs via ingress, and provisions the RBAC, MinIO buckets, and secrets needed by later plans.

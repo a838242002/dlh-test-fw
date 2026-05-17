@@ -1,5 +1,11 @@
 # Plan 3 — Verdict Go Binary Implementation Plan
 
+> **Post-MVP note (2026-05-17):** Historical. Real execution differs:
+> - `internal/publish` package (ConfigMap patcher) was implemented per this plan, then **removed** — verdict output is now an Argo workflow artifact (auto-archived to MinIO at `artifacts/<workflow>/verdict/report/`).
+> - **`internal/metrics` package added** (post-plan): pushes `dlh_verdict_*` gauges to VictoriaMetrics's `/api/v1/import/prometheus` endpoint so dashboards read the verdict summary via PromQL — no separate datasource.
+> - New flags: `-prom-rw-url`, `-scenario-label`. Dockerfile sets `GOTOOLCHAIN=auto` so the Go 1.26 toolchain resolves on the 1.23-alpine build base.
+> - SLO testdata: `_seconds_bucket` queries replaced by `k6_http_req_duration_p95` (k6 prom-rw doesn't emit histogram buckets — see spec amendment A2).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A Go CLI binary `verdict` that consumes an SLO YAML + workflow timing parameters, queries VictoriaMetrics over windows (baseline / chaos / recovery / full), polls the ChaosResult CR with bounded retry, renders `report.json` + a self-contained `report.html`, patches a `dlh-result-<workflow>` ConfigMap, and exits 0 (Pass) or 1 (Fail).
