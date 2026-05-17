@@ -48,7 +48,7 @@ xk6-sql / xk6-kafka).
 |---------------------------|-----------------|--------------|
 | mysql-pod-delete          | yes             | yes (Task 12) |
 | kafka-broker-partition    | yes             | yes (Task 13) |
-| doris-be-network-loss     | **no** (deferred — arm64/memory) | no  |
+| doris-be-network-loss     | **DEFERRED** (Plan 7 spike NO-GO; see `targets/doris/README.md`) | no  |
 
 ## Adding a new scenario
 
