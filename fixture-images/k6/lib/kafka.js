@@ -37,9 +37,9 @@ export function produce(writer, topic, messages) {
   const t0 = nowSec();
   try {
     writer.produce({ messages: wire });
-    messagesProduced.add(messages.length, { topic: topic });
   } finally {
     produceDuration.add(nowSec() - t0, { topic: topic });
+    messagesProduced.add(messages.length, { topic: topic });
   }
 }
 
