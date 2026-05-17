@@ -1,0 +1,173 @@
+# Project Conventions — dlh-test-fw
+
+This file is the orientation guide for AI assistants (and humans) joining the project mid-stream. It covers the working conventions used in Phases 1-2; deviate only with a deliberate reason and a commit-message note.
+
+Last revised: 2026-05-17.
+
+---
+
+## Repo layout cheatsheet
+
+```
+helm/dlh-test-fw/                Umbrella Helm chart (the platform itself)
+verdict-job/                     Plan 3's Go binary (SLO verdict)
+fixture-images/                  Per-target build helpers (mysql, kafka, doris, k6 — one Dockerfile each)
+scenarios/                       Argo Workflow YAMLs (one per chaos+load+verdict scenario)
+targets/                         Minimal target deploys (mysql, kafka, doris) for scenarios
+dashboards/grafana/              Dashboard source-of-truth JSONs
+scripts/                         platform-up / down / verify / run-scenario / verify-templates
+spikes/k6-vm-remote-write/       Plan 1 spike — KEEP `FINDINGS.md` and `scripts/minikube-up.sh`
+docs/superpowers/specs/          YYYY-MM-DD-<topic>-design.md  (output of brainstorming)
+docs/superpowers/plans/          YYYY-MM-DD-NN-<feature>.md    (output of writing-plans)
+```
+
+**Authoritative cross-plan reference: `spikes/k6-vm-remote-write/FINDINGS.md`.** Every plan reads it; every plan that hits an unrelated drift appends to it. When a future session asks "is this still the right approach?", the answer is usually in FINDINGS first.
+
+---
+
+## Branching & worktree conventions
+
+### When to use a worktree
+
+Open a feature-branch + worktree for any work that:
+- Touches the live cluster's chart or workflow state (so you can `helm upgrade` from a checkout that's *not* `main` and roll back by checking out main)
+- Spans multiple commits / multiple sessions
+- Is part of a written plan in `docs/superpowers/plans/`
+
+For one-shot read/repair work (e.g., bumping a dashboard JSON, fixing a doc typo) you can work directly on `main`.
+
+### Branch naming
+
+- `feat/<topic>` — feature work (e.g., `feat/phase-2-scripts-dashboards`, `feat/plan3-verdict`)
+- `fix/<topic>` — non-feature bugfix that doesn't justify a plan
+- `spike/<topic>` — exploratory; may not survive to main
+
+The `phase-N-<topic>` pattern is reserved for cross-plan milestones. The `plan-N-<topic>` pattern is reserved for single-plan branches.
+
+### Worktree layout
+
+Sibling-directory pattern, matching Phase 1's:
+
+```
+/Users/allen/repo/
+├── dlh-test-fw/                ← main worktree, on `main`
+├── dlh-test-fw-phase2/         ← e.g. feat/phase-2-scripts-dashboards
+└── dlh-test-fw-plan7/          ← single-plan branches use this naming
+```
+
+**Create** (manual git fallback):
+```
+git worktree add ../dlh-test-fw-<short-name> -b feat/<branch-name> main
+```
+
+**If a native worktree tool (`EnterWorktree` or similar) is available in the harness, prefer it over `git worktree add` — it avoids phantom state the harness can't see.**
+
+**Remove after merge**:
+```
+git worktree remove ../dlh-test-fw-<short-name>     # add --force if a build artifact lingers
+git branch -d feat/<branch-name>                    # safe-delete (refuses if unmerged)
+```
+
+### Merge style
+
+`--no-ff` for every plan/milestone landing on `main`:
+
+```
+git checkout main
+git merge --no-ff feat/<branch> -m "Merge feat/<branch>: <one-line summary>
+
+<multi-line body explaining what landed and any drift from the plan>"
+```
+
+This produces a grep-able boundary in `git log --first-parent`. The atomic per-task commits are preserved for archaeology, but day-to-day `--first-parent` shows one merge per plan.
+
+Phase 1's main log demonstrates the pattern — every plan is one merge commit; the lines underneath are the per-task atomic commits.
+
+### Rebase before resuming a stale worktree
+
+If a worktree branched off `main` was paused while `main` advanced, rebase before starting:
+
+```
+cd ../dlh-test-fw-<name>
+git rebase main
+```
+
+Plan 5's worktree did this and it was clean.
+
+---
+
+## Image build + minikube reload
+
+We have three local images (`dlh-verdict`, `dlh-k6`, plus the three fixture images). They live at `ghcr.io/dlh/*:<tag>` but are never pushed — they're built locally and `minikube image load`-ed.
+
+### The cache trap (bit us twice — Plans 3 and 6)
+
+`minikube image load` writes the image into minikube's docker registry, but if a pod was already pulled with the same tag and `imagePullPolicy: Never`, the kubelet keeps the cached layer. **Re-pushing the same tag does NOT replace what's running.**
+
+Force the reload:
+
+```
+minikube ssh -- "docker ps -aq --filter ancestor=<image>:<tag> | xargs -r docker rm -f"
+minikube ssh -- docker rmi -f <image>:<tag> || true
+docker build -t <image>:<tag> .
+minikube image load <image>:<tag>
+```
+
+`fixture-images/k6/Makefile` and `verdict-job/Makefile` each have a `reload-minikube` target that runs this sequence.
+
+### `imagePullPolicy: Never` is intentional
+
+Used in `verdict-job` (slo-eval WT) and `dlh-k6` (load-k6-run WT, Plan 7) because the registry prefix `ghcr.io/dlh/` is not actually published; kubelet would try a registry pull and fail. `Never` means "use the local image unconditionally".
+
+---
+
+## Custom k6 image (`dlh-k6`) — short version
+
+- Built by `make k6-image` from `fixture-images/k6/Dockerfile`
+- Bundles `xk6-sql` (covers MySQL + Doris query) and `xk6-kafka`
+- `xk6-sql-driver-mysql` is bundled inside `xk6-sql` itself (was a separate module pre-2025; consolidated)
+- Baked scripts at `/scripts/lib/{common,mysql,kafka,doris,smoke}.js` and `/scripts/runners/{mysql,kafka,doris}.js`
+- Smoke target: `make k6-smoke` runs `k6 version` + `k6 run /scripts/lib/smoke.js`
+
+Plan 7 switches `load/k6-run` WorkflowTemplate's `runner.image` from `grafana/k6:0.50.0` to `ghcr.io/dlh/dlh-k6:0.1.0` and replaces the `script_configmap` parameter with `script_path`.
+
+---
+
+## Sticky gotchas (don't relearn these)
+
+1. **`dlh_scenario`, not `scenario`** — k6 reserves the `scenario` label for its internal scenario name (always `default` in our case). Every user-facing partitioning label in PromQL filters / dashboards / verdict metrics is **`dlh_scenario`**. This is non-negotiable.
+
+2. **k6 prom-rw emits gauges, not histogram buckets** — `histogram_quantile(... _seconds_bucket)` returns nothing for k6 metrics. Use the pre-computed quantile gauges (`*_p95`, `*_p99`, controlled by `K6_PROMETHEUS_RW_TREND_STATS`).
+
+3. **Verdict output is an Argo artifact, NOT a ConfigMap** — the original design used `dlh-result-<workflow>` ConfigMap + Grafana Infinity datasource. Switched in commit `e136e9a` to MinIO artifact + VM gauges (`dlh_verdict_*`). Dashboards query via PromQL only — no Infinity.
+
+4. **Bitnami's 2025 secure-images migration broke arm64** — MongoDB and MinIO Bitnami subcharts are unusable. We ship in-tree replacements at `helm/dlh-test-fw/templates/{mongodb,minio}.yaml`. Both are dev-grade (no auth on the wire, emptyDir-backed) — promote to keyFile/PVC before any shared deploy.
+
+5. **Litmus chart 3.x ships only the portal** — chaos-operator and per-namespace ChaosExperiment CRs are backfilled by `templates/litmus-chaos-{operator,experiments}.yaml`.
+
+6. **MinIO pinned to `RELEASE.2024-12-13T22-19-12Z`** — newer releases removed the admin console from the community edition. Keep the pin or accept losing the browser UI.
+
+7. **VM lookback-delta is 5 minutes** — a single end-of-run gauge push (`dlh_verdict_*`) goes stale to instant queries after 5 min. Dashboards wrap them in `last_over_time(...[7d])`.
+
+8. **Datasource UIDs must be pinned in chart values** — without explicit `uid:` in `grafana.datasources.datasources.yaml`, Grafana auto-assigns random UIDs and dashboards' `datasource.uid` references break.
+
+9. **Workflow names are timestamps** — `scripts/run-scenario.sh` rewrites scenario `metadata.generateName: <prefix>-` to `metadata.name: <prefix>-YYYYMMDD-HHMMSS`. Sortable; no random Argo suffixes.
+
+---
+
+## Doc workflow
+
+- **Spec** (`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`) — one per milestone, written from `superpowers:brainstorming`
+- **Plan** (`docs/superpowers/plans/YYYY-MM-DD-NN-<feature>.md`) — one per executable unit, written from `superpowers:writing-plans` against a spec. Multiple plans per spec is fine.
+- Plans are historical — they reflect intent at planning time. Real execution often differs (chart version drift, missing API features, etc.). Capture deviations in the merge commit body and in `FINDINGS.md`'s appended section.
+- The spec gets a "Post-Phase-N amendments" section as living architecture truth diverges from the original brainstorm. See `docs/superpowers/specs/2026-05-16-chaos-loadtest-platform-design.md` end for the pattern.
+
+---
+
+## What NOT to do
+
+- Don't commit on `main` if a feature branch + worktree already exists for that line of work. Use the worktree.
+- Don't `helm upgrade` from a worktree branch unless you intend to (the live cluster persists state across worktrees, so one worktree's upgrade affects the other's `kubectl get`). If you do upgrade for testing, mention in the commit message.
+- Don't delete `spikes/k6-vm-remote-write/FINDINGS.md` — it's load-bearing for every plan.
+- Don't introduce a new `bitnami/*` subchart without verifying the image is actually pullable on arm64 (it usually isn't, post-2025).
+- Don't `kubectl apply` ChaosEngine without first verifying the matching ChaosExperiment CR exists in the namespace (Plan 5 caught this — chart doesn't install them).
