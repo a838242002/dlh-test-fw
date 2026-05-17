@@ -116,11 +116,16 @@ grafana:
       apiVersion: 1
       datasources:
       - name: VictoriaMetrics
+        # Pin the UID so the shipped dashboards' `datasource.uid` references
+        # resolve. Without this Grafana auto-assigns a random UID per install
+        # and every panel renders "Datasource VictoriaMetrics was not found".
+        uid: VictoriaMetrics
         type: prometheus
         access: proxy
         url: http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428
         isDefault: true
       - name: Infinity                  # for reading dlh-result-* ConfigMaps in Plan 5
+        uid: Infinity
         type: yesoreyeram-infinity-datasource
         access: proxy
   plugins:
