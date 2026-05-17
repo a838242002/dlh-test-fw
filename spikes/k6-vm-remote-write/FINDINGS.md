@@ -369,3 +369,55 @@ scenario already followed this pattern via
 `dlh_kafka_messages_produced_total`; the mysql lib has been brought in
 line. Doris (when revived) and any future Trend-backed SLO must do the
 same.
+
+## Plan 8 + Phase 2 milestone wrap-up (2026-05-17)
+
+Phase 2 (`feat/phase-2-scripts-dashboards`) lands the custom `dlh-k6:0.1.0`
+image (Plan 6), real-protocol scenarios via env-driven runners (Plan 7),
+and three per-type dashboards (Plan 8). MySQL + Kafka scenarios run
+end-to-end with real protocols and produce real verdicts; Doris is
+deferred (target unavailable on this minikube).
+
+### Dashboards now in Grafana
+
+| UID | Title | Driven by |
+|---|---|---|
+| `dlh-run-detail` | DLH — Run Detail (generic k6 + verdict view; Phase 1) | `k6_*` built-ins + `dlh_verdict_*` |
+| `dlh-history` | DLH — History (cross-scenario; Phase 1) | `k6_*` + `dlh_verdict_*` |
+| `dlh-mysql` | DLH — MySQL | `k6_dlh_mysql_*`, `k6_dlh_app_errors_*`, `dlh_verdict_*` |
+| `dlh-kafka` | DLH — Kafka | `k6_dlh_kafka_*`, `k6_dlh_app_errors_*`, `dlh_verdict_*` |
+| `dlh-doris` | DLH — Doris | `k6_dlh_doris_*` (empty until Doris is up), `dlh_verdict_*` |
+
+All five dashboards share `datasource.uid = VictoriaMetrics`. Cross-links
+from Run Detail to the three per-type dashboards (and back via the
+`Open in Run Detail` link on each).
+
+### Out-of-the-box-broken caveats
+
+- `dlh-doris` shows "No data" — Doris target deploy was NO-GO on this
+  workstation (apache/doris all-in-one image entrypoint exits before
+  BE registers). Re-enable after a working `targets/doris/deploy.yaml`
+  lands; dashboards will populate without any JSON change.
+- `dlh-run-detail`'s k6 panels still reference `k6_http_*` series. Those
+  series are NO LONGER EMITTED by the new runners (real protocol tests,
+  not HTTP). The dashboard's k6 panels go blank for any post-Plan-7
+  workflow. Fixing them requires either:
+    1. Adding HTTP-mode synthetic workloads back, OR
+    2. Rewriting Run Detail's k6 panels to use the new `k6_dlh_<type>_*`
+       gauges (per-target view defeats the "generic" purpose).
+  Cleanest follow-up: replace Run Detail's k6 panels with a per-active-
+  scenario summary (top-N error kinds, total ops/sec) — Phase 3.
+
+### Phase 2 git boundary
+
+When merged to main, Phase 2 will appear as one `--no-ff` merge commit
+matching the Phase 1 convention. The 23+ atomic commits beneath are
+preserved for archaeology; `git log --first-parent` stays clean.
+
+### Verified end-to-end (Plan 8 task 9)
+
+- MySQL scenario: dashboard panels populated, verdict PASS after the
+  Plan 7 fixes (table prep + reconnect logic).
+- Kafka scenario: dashboard panels populated, verdict PASS.
+- Doris dashboard: provisioned via sidecar, panels render "No data"
+  state correctly (no errors in the Grafana JS console).
