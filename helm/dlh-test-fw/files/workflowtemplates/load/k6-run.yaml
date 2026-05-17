@@ -31,10 +31,6 @@ spec:
       - name: duration                # e.g. "180s"
       - name: env_map                 # multi-line "KEY=VALUE\nKEY=VALUE" (may be empty)
       - name: scenario_label          # used as dlh_scenario= tag on prom-rw output
-    outputs:
-      parameters:
-      - name: metrics_namespace
-        value: {{`"{{inputs.parameters.scenario_label}}"`}}
     steps:
     - - name: write-env
         template: write-env-cm
