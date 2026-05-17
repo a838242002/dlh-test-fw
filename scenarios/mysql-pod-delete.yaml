@@ -76,7 +76,7 @@ spec:
           lt: 1.0
           window: chaos
         - metric: error-rate-recovery
-          query: sum(rate(k6_dlh_app_errors_total_total{kind=~"mysql.*",dlh_workflow="{{workflow.name}}"}[30s])) / clamp_min(sum(rate(k6_dlh_mysql_query_duration_seconds_count{dlh_workflow="{{workflow.name}}"}[30s])), 1e-9)
+          query: sum(rate(k6_dlh_app_errors_total_total{kind=~"mysql.*",dlh_workflow="{{workflow.name}}"}[30s])) / clamp_min(sum(rate(k6_dlh_mysql_queries_total_total{dlh_workflow="{{workflow.name}}"}[30s])), 1e-9)
           lt: 0.05
           window: recovery
         EOF
