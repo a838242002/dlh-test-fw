@@ -2,11 +2,25 @@
   "title": "DLH — Doris",
   "uid": "dlh-doris",
   "schemaVersion": 39,
-  "tags": ["dlh"],
+  "tags": [
+    "dlh"
+  ],
   "timezone": "",
-  "time": { "from": "now-7d", "to": "now" },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
   "links": [
-    { "title": "Open in Run Detail", "type": "dashboards", "tags": [], "asDropdown": false, "includeVars": true, "keepTime": true, "url": "/d/dlh-run/", "targetBlank": false }
+    {
+      "title": "Open in Run Detail",
+      "type": "dashboards",
+      "tags": [],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "url": "/d/dlh-run/",
+      "targetBlank": false
+    }
   ],
   "templating": {
     "list": [
@@ -14,8 +28,14 @@
         "name": "scenario",
         "label": "Scenario",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
-        "query": { "query": "label_values(k6_dlh_doris_streamload_rows_total_total, dlh_scenario)", "refId": "StandardVariableQuery" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "query": {
+          "query": "label_values(k6_dlh_doris_streamload_rows_total_total, dlh_scenario)",
+          "refId": "StandardVariableQuery"
+        },
         "refresh": 2,
         "sort": 1,
         "includeAll": false,
@@ -25,10 +45,16 @@
         "name": "workflow",
         "label": "Workflow",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
-        "query": { "query": "label_values(k6_dlh_doris_streamload_rows_total_total{dlh_scenario=\"$scenario\"}, dlh_workflow)", "refId": "StandardVariableQuery" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "query": {
+          "query": "label_values(k6_dlh_doris_streamload_rows_total_total{dlh_scenario=\"$scenario\"}, dlh_workflow)",
+          "refId": "StandardVariableQuery"
+        },
         "refresh": 2,
-        "sort": 1,
+        "sort": 5,
         "includeAll": false,
         "multi": false
       }
@@ -40,87 +66,273 @@
       "title": "Stream Load rate (rows/sec)",
       "description": "Rows accepted per second per (db, table). Empty until Doris is alive (Plan 7 spike NO-GO; see targets/doris/README.md).",
       "targets": [
-        { "expr": "sum by (db, table) (rate(k6_dlh_doris_streamload_rows_total_total{dlh_scenario=\"$scenario\",dlh_workflow=\"$workflow\"}[30s]))", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "legendFormat": "{{db}}.{{table}}" }
+        {
+          "expr": "sum by (db, table) (rate(k6_dlh_doris_streamload_rows_total_total{dlh_scenario=\"$scenario\",dlh_workflow=\"$workflow\"}[30s]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "{{db}}.{{table}}"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "rps" } },
-      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "rps"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      }
     },
     {
       "type": "timeseries",
       "title": "Stream Load p95 latency",
       "description": "Per-batch p95 latency from lib/doris.js Trend.",
       "targets": [
-        { "expr": "k6_dlh_doris_streamload_duration_seconds_p95{dlh_scenario=\"$scenario\",dlh_workflow=\"$workflow\"}", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "legendFormat": "{{db}}.{{table}}" }
+        {
+          "expr": "k6_dlh_doris_streamload_duration_seconds_p95{dlh_scenario=\"$scenario\",dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "{{db}}.{{table}}"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "s" } },
-      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      }
     },
     {
       "type": "timeseries",
       "title": "Errors by kind",
       "description": "App-level errors filtered to doris-* kinds (streamload / query).",
       "targets": [
-        { "expr": "sum by (kind) (rate(k6_dlh_app_errors_total_total{kind=~\"doris.*\",dlh_workflow=\"$workflow\"}[30s]))", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "legendFormat": "{{kind}}" }
+        {
+          "expr": "sum by (kind) (rate(k6_dlh_app_errors_total_total{kind=~\"doris.*\",dlh_workflow=\"$workflow\"}[30s]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "{{kind}}"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "ops" } },
-      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      }
     },
     {
       "type": "stat",
       "title": "Verdict — overall",
       "targets": [
-        { "expr": "last_over_time(dlh_verdict_overall{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true }
+        {
+          "expr": "last_over_time(dlh_verdict_overall{dlh_workflow=\"$workflow\"}[7d])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "instant": true
+        }
       ],
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "FAIL", "color": "red" }, "1": { "text": "PASS", "color": "green" } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "FAIL",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "PASS",
+                  "color": "green"
+                }
+              }
+            }
           ],
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
         }
       },
-      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 5 }
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 5
+      }
     },
     {
       "type": "stat",
       "title": "Verdict — chaos",
       "targets": [
-        { "expr": "last_over_time(dlh_verdict_chaos_pass{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true }
+        {
+          "expr": "last_over_time(dlh_verdict_chaos_pass{dlh_workflow=\"$workflow\"}[7d])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "instant": true
+        }
       ],
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "NOT PASS", "color": "red" }, "1": { "text": "PASS", "color": "green" } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "NOT PASS",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "PASS",
+                  "color": "green"
+                }
+              }
+            }
           ],
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
         }
       },
-      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 5 }
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 5
+      }
     },
     {
       "type": "table",
       "title": "Verdict — SLO thresholds",
       "targets": [
-        { "expr": "last_over_time(dlh_verdict_threshold_pass{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "A" },
-        { "expr": "last_over_time(dlh_verdict_threshold_value{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "B" }
+        {
+          "expr": "last_over_time(dlh_verdict_threshold_pass{dlh_workflow=\"$workflow\"}[7d])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "last_over_time(dlh_verdict_threshold_value{dlh_workflow=\"$workflow\"}[7d])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        }
       ],
       "transformations": [
-        { "id": "joinByField", "options": { "byField": "name", "mode": "outer" } },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "name",
+            "mode": "outer"
+          }
+        },
         {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true, "Time 1": true, "Time 2": true,
-              "__name__": true, "__name__ 1": true, "__name__ 2": true,
-              "dlh_workflow": true, "dlh_workflow 1": true, "dlh_workflow 2": true,
-              "dlh_scenario": true, "dlh_scenario 1": true, "dlh_scenario 2": true
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "__name__": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "dlh_workflow": true,
+              "dlh_workflow 1": true,
+              "dlh_workflow 2": true,
+              "dlh_scenario": true,
+              "dlh_scenario 1": true,
+              "dlh_scenario 2": true
             },
-            "renameByName": { "name": "threshold", "Value #A": "pass", "Value #B": "value" },
-            "indexByName": { "name": 0, "Value #A": 1, "Value #B": 2 }
+            "renameByName": {
+              "name": "threshold",
+              "Value #A": "pass",
+              "Value #B": "value"
+            },
+            "indexByName": {
+              "name": 0,
+              "Value #A": 1,
+              "Value #B": 2
+            }
           }
         }
       ],
@@ -128,15 +340,45 @@
         "defaults": {},
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "pass" },
+            "matcher": {
+              "id": "byName",
+              "options": "pass"
+            },
             "properties": [
-              { "id": "mappings", "value": [ { "type": "value", "options": { "0": { "text": "FAIL", "color": "red" }, "1": { "text": "PASS", "color": "green" } } } ] },
-              { "id": "custom.cellOptions", "value": { "type": "color-background" } }
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "FAIL",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "PASS",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
             ]
           }
         ]
       },
-      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 8 }
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 8
+      }
     }
   ]
 }
