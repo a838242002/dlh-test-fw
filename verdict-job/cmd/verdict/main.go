@@ -9,6 +9,8 @@
 //	-chaos-duration       chaos duration
 //	-load-duration        full load duration
 //	-prom-url             VictoriaMetrics / Prometheus base URL
+//	-prom-rw-url          VictoriaMetrics import endpoint (defaults to -prom-url + /api/v1/import/prometheus)
+//	-scenario-label       dlh_scenario value embedded in pushed verdict metrics
 //	-workflow-name        Argo workflow name (used for dlh-result-<workflow> ConfigMap)
 //	-artifact-dir         where to write report.json / report.html
 //	-namespace            namespace for ChaosResult + ConfigMap
@@ -29,6 +31,7 @@ import (
 
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/chaosresult"
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/eval"
+	"github.com/dlh/dlh-test-fw/verdict-job/internal/metrics"
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/prom"
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/publish"
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/report"
@@ -48,6 +51,8 @@ type flags struct {
 	chaosDuration       time.Duration
 	loadDuration        time.Duration
 	promURL             string
+	promRwURL           string
+	scenarioLabel       string
 	workflowName        string
 	artifactDir         string
 	namespace           string
@@ -65,6 +70,8 @@ func parseFlags() flags {
 	flag.DurationVar(&f.chaosDuration, "chaos-duration", 0, "chaos duration")
 	flag.DurationVar(&f.loadDuration, "load-duration", 0, "load duration")
 	flag.StringVar(&f.promURL, "prom-url", "http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428", "PromQL endpoint")
+	flag.StringVar(&f.promRwURL, "prom-rw-url", "", "VictoriaMetrics import endpoint; if empty, derived from -prom-url + /api/v1/import/prometheus")
+	flag.StringVar(&f.scenarioLabel, "scenario-label", "", "dlh_scenario value to embed in pushed verdict metrics")
 	flag.StringVar(&f.workflowName, "workflow-name", "", "Argo workflow name (for ConfigMap)")
 	flag.StringVar(&f.artifactDir, "artifact-dir", "/tmp/verdict", "where to write report.json / report.html")
 	flag.StringVar(&f.namespace, "namespace", "dlh-test-fw", "namespace for ChaosResult + ConfigMap")
@@ -151,6 +158,19 @@ func main() {
 	pub := &publish.Publisher{Cs: cs, Namespace: f.namespace}
 	if err := pub.Publish(ctx, f.workflowName, r); err != nil {
 		log.Fatalf("publish: %v", err)
+	}
+
+	// Push the verdict summary as PromQL gauges so dashboards can render it
+	// without a separate datasource. Soft-failure: log and continue — the
+	// CM is the authoritative record.
+	rwURL := f.promRwURL
+	if rwURL == "" {
+		rwURL = f.promURL + "/api/v1/import/prometheus"
+	}
+	if err := metrics.New(rwURL).Push(ctx, f.workflowName, f.scenarioLabel, r); err != nil {
+		log.Printf("warn: failed to push verdict metrics to %s: %v", rwURL, err)
+	} else {
+		fmt.Printf("pushed verdict metrics to %s\n", rwURL)
 	}
 
 	if r.Overall {
