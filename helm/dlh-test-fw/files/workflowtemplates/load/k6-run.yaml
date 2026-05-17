@@ -49,6 +49,7 @@ spec:
               file: script.js
           arguments: >-
             --tag dlh_scenario={{`{{inputs.parameters.scenario_label}}`}}
+            --tag dlh_workflow={{`{{workflow.name}}`}}
             --out experimental-prometheus-rw
           runner:
             image: grafana/k6:0.50.0

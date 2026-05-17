@@ -8,16 +8,26 @@
   "templating": {
     "list": [
       {
-        "name": "workflow",
-        "label": "Workflow",
-        "type": "textbox",
-        "current": { "text": "", "value": "" }
-      },
-      {
         "name": "scenario",
         "label": "Scenario label",
-        "type": "textbox",
-        "current": { "text": "", "value": "" }
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
+        "query": { "query": "label_values(k6_http_reqs_total, dlh_scenario)", "refId": "StandardVariableQuery" },
+        "refresh": 2,
+        "sort": 1,
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "workflow",
+        "label": "Workflow",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
+        "query": { "query": "label_values(k6_http_reqs_total{dlh_scenario=\"$scenario\"}, dlh_workflow)", "refId": "StandardVariableQuery" },
+        "refresh": 2,
+        "sort": 5,
+        "includeAll": false,
+        "multi": false
       }
     ]
   },
