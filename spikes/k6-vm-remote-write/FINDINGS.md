@@ -281,3 +281,63 @@ Our custom metrics `dlh_<type>_<thing>` thus surface in VM as
 `k6_dlh_<type>_*` (NOT `dlh_<type>_*`). The hypothesis on `_p95` gauge
 form is otherwise confirmed — no `histogram_quantile()` and no
 `rate(_sum)/rate(_count)` fallback needed.
+
+## Plan 7 outcome — scripts + WT migration (2026-05-17)
+
+`load/k6-run` is now a two-step template (write-env CM → run TestRun on
+`dlh-k6:0.1.0`). Scenarios pass `script_path` + `env_map` (multi-line
+KEY=VALUE) instead of `script_configmap`. Three `*-k6-script.yaml` files
+deleted.
+
+### Live scenarios and the metric series they emit
+
+| Scenario | Runner | Metrics actually in VM | Verdict overall |
+|---|---|---|---|
+| `mysql-pod-delete` | `runners/mysql.js` | `k6_dlh_mysql_query_duration_seconds_{p95,p99,avg,min,max,count,sum}` (tagged `op`); `k6_dlh_app_errors_total_total{kind=~"mysql.*"}` | PASS (dlh_verdict_overall=1, p95≈2µs) |
+| `kafka-broker-partition` | `runners/kafka.js` | `k6_dlh_kafka_produce_duration_seconds_{p95,...}` (tagged `topic`); `k6_dlh_kafka_messages_produced_total_total{topic}`; `k6_dlh_app_errors_total_total{kind="kafka-produce"}` | PASS (dlh_verdict_overall=1) |
+| `doris-be-network-loss` | deferred (Plan 7 spike NO-GO) | none — scenario YAML is the Phase 1 stub; deferred in `scenarios/README.md`. Future work: revive with `apache/doris.fe-ubuntu` + `apache/doris.be-ubuntu` separated images on a VM with `vm.max_map_count=2000000` tunable. | N/A |
+
+### Critical drifts from spec (relevant to Plan 8)
+
+1. **`k6_` name prefix unconditional.** k6's prometheus-rw output prefixes
+   every metric name with `k6_`, no setting to disable. Custom Trend
+   `dlh_mysql_query_duration_seconds` → VM series
+   `k6_dlh_mysql_query_duration_seconds_p95` etc.
+
+2. **Counters get DOUBLE `_total`.** A k6 Counter named
+   `dlh_kafka_messages_produced_total` surfaces in VM as
+   `k6_dlh_kafka_messages_produced_total_total` (k6 prom-rw appends
+   `_total` even to already-suffixed names). Same for
+   `k6_dlh_app_errors_total_total`. SLO queries and dashboards must use
+   the doubled form.
+
+3. **`K6_INCLUDE_SYSTEM_ENV_VARS=true` required.** k6-operator 4.4.1
+   wires `runner.envFrom` onto both the initializer and runner pods,
+   but the initializer's `k6 archive` command only forwards
+   `runner.env` entries as `-e` flags — envFrom values aren't seen by
+   k6 unless `K6_INCLUDE_SYSTEM_ENV_VARS=true` is set in `runner.env`
+   (which IS passed via `-e`). The two-step `load/k6-run` WT now
+   includes this env var; without it, runners that validate required
+   env at init-time (e.g. `MYSQL_DSN`) throw at archive time.
+
+4. **Steps templates can't use static `value` for outputs.** The plan's
+   `main.outputs.metrics_namespace` with `value:` was rejected by Argo
+   ("output parameters must have a valueFrom specified"). Removed —
+   no caller consumed it; verdict reads `scenario_label` from workflow
+   parameters directly.
+
+### Implications for Plan 8
+
+- Type-specific dashboard PromQL uses the gauge form
+  `k6_dlh_<type>_*_p95` directly. Counter rates use the doubled
+  `*_total_total` form.
+- Variable cascade: `$scenario` from `label_values(<marker_metric>, dlh_scenario)`
+  where marker is `k6_dlh_mysql_query_duration_seconds_count` for mysql,
+  `k6_dlh_kafka_messages_produced_total_total` for kafka.
+- `$workflow` from `label_values(<marker_metric>{dlh_scenario="$scenario"}, dlh_workflow)`.
+- Existing `dlh-run-detail` dashboard's k6 panels still reference
+  `k6_http_*` series — those are NO LONGER EMITTED by the new runners
+  (real protocol tests, not HTTP). Plan 8 either drops those k6 panels
+  from `dlh-run-detail` or replaces them with per-target equivalents.
+- Doris dashboard ships as a placeholder with no live data path until
+  Doris BE comes up in a future phase.
