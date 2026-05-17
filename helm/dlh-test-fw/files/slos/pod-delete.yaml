@@ -1,0 +1,15 @@
+# Variables (all required — no defaults supported by util-write-slo):
+#   ${LATENCY_METRIC}     latency Trend metric base name (no _p95 suffix), e.g. k6_dlh_mysql_query_duration_seconds
+#   ${OPS_COUNTER}        denominator counter for error-rate, e.g. k6_dlh_mysql_queries_total_total
+#   ${ERR_KIND_PATTERN}   regex on dlh_app_errors_total kind label, e.g. mysql.*
+#   ${P95_LT}             latency budget in seconds during chaos window
+#   ${ERR_LT}             max acceptable error rate during recovery window
+thresholds:
+- metric: p95-latency-chaos
+  query: avg(${LATENCY_METRIC}_p95{dlh_workflow="{{workflow.name}}"})
+  lt: ${P95_LT}
+  window: chaos
+- metric: error-rate-recovery
+  query: sum(rate(k6_dlh_app_errors_total_total{kind=~"${ERR_KIND_PATTERN}",dlh_workflow="{{workflow.name}}"}[30s])) / clamp_min(sum(rate(${OPS_COUNTER}{dlh_workflow="{{workflow.name}}"}[30s])), 1e-9)
+  lt: ${ERR_LT}
+  window: recovery

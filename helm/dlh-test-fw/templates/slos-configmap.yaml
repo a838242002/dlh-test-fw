@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlh-slos
+  namespace: {{ include "dlh.namespace" . }}
+  labels:
+    {{- include "dlh.labels" . | nindent 4 }}
+data:
+{{- range $path, $_ := .Files.Glob "files/slos/*.yaml" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
