@@ -2,17 +2,28 @@
   "title": "DLH — Run Detail",
   "uid": "dlh-run",
   "schemaVersion": 39,
-  "tags": ["dlh"],
+  "tags": [
+    "dlh"
+  ],
   "timezone": "",
-  "time": { "from": "now-7d", "to": "now" },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
   "templating": {
     "list": [
       {
         "name": "scenario",
         "label": "Scenario label",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
-        "query": { "query": "label_values(k6_http_reqs_total, dlh_scenario)", "refId": "StandardVariableQuery" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "query": {
+          "query": "label_values(k6_http_reqs_total, dlh_scenario)",
+          "refId": "StandardVariableQuery"
+        },
         "refresh": 2,
         "sort": 1,
         "includeAll": false,
@@ -22,8 +33,14 @@
         "name": "workflow",
         "label": "Workflow",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" },
-        "query": { "query": "label_values(k6_http_reqs_total{dlh_scenario=\"$scenario\"}, dlh_workflow)", "refId": "StandardVariableQuery" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "query": {
+          "query": "label_values(k6_http_reqs_total{dlh_scenario=\"$scenario\"}, dlh_workflow)",
+          "refId": "StandardVariableQuery"
+        },
         "refresh": 2,
         "sort": 5,
         "includeAll": false,
@@ -38,10 +55,18 @@
       "targets": [
         {
           "expr": "sum by (status) (rate(k6_http_reqs_total{dlh_scenario=\"$scenario\"}[30s]))",
-          "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          }
         }
       ],
-      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 }
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      }
     },
     {
       "type": "timeseries",
@@ -49,10 +74,18 @@
       "targets": [
         {
           "expr": "avg(k6_http_req_duration_p95{dlh_scenario=\"$scenario\"})",
-          "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          }
         }
       ],
-      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 }
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      }
     },
     {
       "type": "timeseries",
@@ -60,76 +93,215 @@
       "targets": [
         {
           "expr": "sum(rate(k6_http_reqs_total{dlh_scenario=\"$scenario\",status!~\"2..\"}[30s])) / clamp_min(sum(rate(k6_http_reqs_total{dlh_scenario=\"$scenario\"}[30s])), 1e-9)",
-          "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          }
         }
       ],
-      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 }
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      }
     },
     {
       "type": "stat",
       "title": "Verdict — overall",
       "description": "1 = pass, 0 = fail. Pushed by verdict-job to VictoriaMetrics under labels dlh_workflow + dlh_scenario.",
       "targets": [
-        { "expr": "last_over_time(dlh_verdict_overall{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true }
+        {
+          "expr": "last_over_time(dlh_verdict_overall{dlh_workflow=\"$workflow\"}[7d])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "instant": true
+        }
       ],
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "FAIL", "color": "red" }, "1": { "text": "PASS", "color": "green" } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "FAIL",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "PASS",
+                  "color": "green"
+                }
+              }
+            }
           ],
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
         }
       },
-      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 5 }
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 5
+      }
     },
     {
       "type": "stat",
       "title": "Verdict — chaos",
       "targets": [
-        { "expr": "last_over_time(dlh_verdict_chaos_pass{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "instant": true }
+        {
+          "expr": "last_over_time(dlh_verdict_chaos_pass{dlh_workflow=\"$workflow\"}[7d])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "instant": true
+        }
       ],
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "NOT PASS", "color": "red" }, "1": { "text": "PASS", "color": "green" } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "NOT PASS",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "PASS",
+                  "color": "green"
+                }
+              }
+            }
           ],
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
         }
       },
-      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 5 }
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 5
+      }
     },
     {
       "type": "table",
       "title": "Verdict — SLO thresholds",
       "description": "One row per threshold defined in the scenario's SLO YAML; pass = 1 means the threshold was met.",
       "targets": [
-        { "expr": "last_over_time(dlh_verdict_threshold_pass{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "A" },
-        { "expr": "last_over_time(dlh_verdict_threshold_value{dlh_workflow=\"$workflow\"}[7d])", "datasource": { "type": "prometheus", "uid": "VictoriaMetrics" }, "format": "table", "instant": true, "refId": "B" }
+        {
+          "expr": "last_over_time(dlh_verdict_threshold_pass{dlh_workflow=\"$workflow\"}[7d])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "last_over_time(dlh_verdict_threshold_value{dlh_workflow=\"$workflow\"}[7d])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        }
       ],
       "transformations": [
         {
           "id": "joinByField",
-          "options": { "byField": "name", "mode": "outer" }
+          "options": {
+            "byField": "name",
+            "mode": "outer"
+          }
         },
         {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true, "Time 1": true, "Time 2": true,
-              "__name__": true, "__name__ 1": true, "__name__ 2": true,
-              "dlh_workflow": true, "dlh_workflow 1": true, "dlh_workflow 2": true,
-              "dlh_scenario": true, "dlh_scenario 1": true, "dlh_scenario 2": true
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "__name__": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "dlh_workflow": true,
+              "dlh_workflow 1": true,
+              "dlh_workflow 2": true,
+              "dlh_scenario": true,
+              "dlh_scenario 1": true,
+              "dlh_scenario 2": true
             },
             "renameByName": {
               "name": "threshold",
               "Value #A": "pass",
               "Value #B": "value"
             },
-            "indexByName": { "name": 0, "Value #A": 1, "Value #B": 2 }
+            "indexByName": {
+              "name": 0,
+              "Value #A": 1,
+              "Value #B": 2
+            }
           }
         }
       ],
@@ -137,15 +309,77 @@
         "defaults": {},
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "pass" },
+            "matcher": {
+              "id": "byName",
+              "options": "pass"
+            },
             "properties": [
-              { "id": "mappings", "value": [ { "type": "value", "options": { "0": { "text": "FAIL", "color": "red" }, "1": { "text": "PASS", "color": "green" } } } ] },
-              { "id": "custom.cellOptions", "value": { "type": "color-background" } }
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "FAIL",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "PASS",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
             ]
           }
         ]
       },
-      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 8 }
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 8
+      }
+    }
+  ],
+  "links": [
+    {
+      "title": "Open in MySQL",
+      "type": "dashboards",
+      "tags": [],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "url": "/d/dlh-mysql/",
+      "targetBlank": false
+    },
+    {
+      "title": "Open in Kafka",
+      "type": "dashboards",
+      "tags": [],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "url": "/d/dlh-kafka/",
+      "targetBlank": false
+    },
+    {
+      "title": "Open in Doris",
+      "type": "dashboards",
+      "tags": [],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "url": "/d/dlh-doris/",
+      "targetBlank": false
     }
   ]
 }
