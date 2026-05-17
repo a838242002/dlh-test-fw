@@ -1,43 +1,41 @@
 #!/usr/bin/env bash
 # Submit a scenario Workflow and wait for it to finish.
 #
-# Replaces the scenario's `metadata.generateName: <prefix>-` with an explicit
-# `metadata.name: <prefix>-YYYYMMDD-HHMMSS` so the run name is sortable + easy
-# to recognise in `kubectl get workflow` and the Grafana workflow dropdown.
-# The timestamp is UTC, all lowercase + digits + dashes (DNS-1123-safe).
+# Replaces metadata.generateName: <prefix>- with metadata.name: <prefix>-YYYYMMDD-HHMMSS
+# so the run is sortable + easy to find in `kubectl get workflow` and Grafana.
 #
-# Usage: scripts/run-scenario.sh scenarios/<name>.yaml [override-name]
+# Usage:
+#   scripts/run-scenario.sh scenarios/<name>.yaml [argo-submit-args...]
+#
+# Examples:
+#   scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml
+#   scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml -p vus=50 -p mysql_op_mix=read:100
+#   scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml -p chaos_duration=120s
 set -euo pipefail
 
-if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "usage: $0 scenarios/<name>.yaml [override-name]" >&2
+if [[ $# -lt 1 ]]; then
+  echo "usage: $0 scenarios/<name>.yaml [argo-submit-args...]" >&2
   exit 2
 fi
 
-file=$1
+file=$1; shift
 
-# Derive a workflow name. Default is "<prefix>-YYYYMMDD-HHMMSS"; an explicit
-# override can be passed as $2 (useful for tagged runs in CI / scripts).
-if [[ $# -eq 2 ]]; then
-  name=$2
-else
-  prefix=$(awk '/^[[:space:]]*generateName:/ { sub(/.*generateName: */, ""); sub(/-$/, ""); print; exit }' "$file")
-  if [[ -z "$prefix" ]]; then
-    echo "error: $file has no metadata.generateName line to derive a prefix from" >&2
-    exit 1
-  fi
-  ts=$(date -u +%Y%m%d-%H%M%S)
-  name="${prefix}-${ts}"
+prefix=$(awk '/^[[:space:]]*generateName:/ { sub(/.*generateName: */, ""); sub(/-$/, ""); print; exit }' "$file")
+if [[ -z "$prefix" ]]; then
+  echo "error: $file has no metadata.generateName line to derive a prefix from" >&2
+  exit 1
 fi
+ts=$(date -u +%Y%m%d-%H%M%S)
+name="${prefix}-${ts}"
 
-# Inline-edit: drop generateName, inject explicit name. sed is fine here since
-# each scenario yaml has exactly one generateName line.
-created=$(sed "s|^\([[:space:]]*\)generateName:.*|\1name: ${name}|" "$file" \
-            | kubectl create -f - -o jsonpath='{.metadata.name}')
-echo "Submitted workflow: $created"
-argo wait -n dlh-test-fw "$created" || true
-status=$(kubectl -n dlh-test-fw get workflow "$created" -o jsonpath='{.status.phase}')
+rendered=$(mktemp)
+trap 'rm -f "$rendered"' EXIT
+sed "s|^\([[:space:]]*\)generateName:.*|\1name: ${name}|" "$file" > "$rendered"
+
+echo "Submitting workflow: $name"
+argo submit -n dlh-test-fw "$rendered" --wait "$@" || true
+status=$(kubectl -n dlh-test-fw get workflow "$name" -o jsonpath='{.status.phase}')
 echo "Final phase: $status"
-echo "Report artifact: argo get -n dlh-test-fw $created  # shows the MinIO key in the artifact section, or:"
-echo "                 kubectl -n dlh-test-fw exec deploy/dlh-minio -- mc cat \"local/artifacts/${created}-main-*/verdict/report.json\" | jq ."
+echo "Report artifact: argo get -n dlh-test-fw $name  # see artifact section, or:"
+echo "                 kubectl -n dlh-test-fw exec deploy/dlh-minio -- mc cat \"local/artifacts/${name}/${name}-main-*/verdict/report.json\" | jq ."
 [[ "$status" == "Succeeded" ]]

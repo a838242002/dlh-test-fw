@@ -421,3 +421,36 @@ preserved for archaeology; `git log --first-parent` stays clean.
 - Kafka scenario: dashboard panels populated, verdict PASS.
 - Doris dashboard: provisioned via sidecar, panels render "No data"
   state correctly (no errors in the Grafana JS console).
+
+## Plan 9 — Scenario optimization (2026-05-18)
+
+- SLO templates live in a single ConfigMap `dlh-slos` keyed by filename
+  (`pod-delete.yaml`, `network-loss.yaml`). util-write-slo reads the entry by
+  `slo_name` parameter, applies `${VAR}` substitutions from a `slo_vars`
+  multi-line KEY=VAL block, and writes `dlh-slo-<workflow.name>`.
+- Two-layer substitution: `${VAR}` is filled by a bash sed loop; `{{workflow.name}}`
+  is substituted at runtime via printf-octal LHS so Argo's template engine
+  doesn't render it away at workflow-source render time (the spec's "Argo
+  already rendered it" claim was wrong — TPL is loaded from the CM at runtime,
+  not embedded in the script's `source:`).
+- Fail-fast guards: `slo_vars` values must not contain `|`, `&`, or `\`
+  (sed-unsafe metacharacters). Unresolved `${VAR}` markers (regex
+  `\${[A-Z0-9_]+}`) after substitution also fail-fast. Both verified live.
+- `dlh-slo-<wf>` CM gets `ownerReferences` pointing at the Workflow (uid from
+  `{{workflow.uid}}` builtin), so k8s GC reclaims the CM on workflow deletion.
+  Verified by deleting the test workflow and watching the CM disappear.
+- `scripts/run-scenario.sh` now forwards extra args to `argo submit`, so any
+  scenario parameter is overridable at submit time: `-p vus=50`,
+  `-p chaos_duration=120s`, even `-p slo_vars=<multi-line>`. argo CLI v4.0.5
+  accepts embedded literal newlines in `-p key=value` argv elements without
+  needing a parameter file.
+- The optional second-positional `override-name` arg of the old
+  `run-scenario.sh` is removed; nothing in-tree used it.
+- Switched from `kubectl create -f - | argo wait` to `argo submit --wait`.
+  Confirmed exit code 0 on Succeeded and clean blocking semantics on v4.0.5.
+- Doris scenario YAML is rewritten to the new shape but still deferred (NO-GO
+  target — no live run).
+- Pitfall logged: when picking "the latest scenario workflow" via lexical sort,
+  filter to timestamped names with `grep -E '<prefix>-[0-9]{8}-[0-9]{6}$'`
+  before `sort | tail -1` — otherwise stray Phase-2 UUID-suffixed workflows
+  sort after timestamped ones (letters > digits).

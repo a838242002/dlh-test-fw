@@ -10,22 +10,41 @@ spec:
   entrypoint: main
   arguments:
     parameters:
+    # ===== scenario identity =====
+    - { name: scenario_label,    value: doris-be-network-loss }
+    # ===== SLO =====
+    - { name: slo_name,          value: network-loss }
+    - name: slo_vars
+      value: |
+        LATENCY_METRIC=k6_http_req_duration
+        OPS_COUNTER=k6_http_reqs_total
+        ERR_KIND_PATTERN=doris.*
+        P95_LT=3.0
+        ERR_LT=0.10
+    # ===== load shape =====
+    - { name: vus,               value: "5" }
     - { name: load_duration,     value: 180s }
+    # ===== chaos shape =====
     - { name: chaos_start_after, value: 30s }
     - { name: chaos_duration,    value: 60s }
-    - { name: scenario_label,    value: doris-be-network-loss }
+    - { name: loss_percent,      value: "50" }
+
   templates:
   - name: main
     steps:
     - - name: prep-slo
-        template: write-slo
+        templateRef: { name: util-write-slo, template: main }
+        arguments:
+          parameters:
+          - { name: slo_name, value: "{{workflow.parameters.slo_name}}" }
+          - { name: slo_vars, value: "{{workflow.parameters.slo_vars}}" }
     - - name: load-fixture
         templateRef: { name: fixture-minio-load-doris, template: main }
         arguments:
           parameters:
-          - { name: uri,                             value: "s3://fixtures/doris-rows.csv" }
-          - { name: fe_host,                         value: "doris-fe-0.doris-fe.doris-sys.svc.cluster.local:8030" }
-          - { name: stream_load_credentials_secret,  value: "doris-creds" }
+          - { name: uri,                            value: "s3://fixtures/doris-rows.csv" }
+          - { name: fe_host,                        value: "doris-fe-0.doris-fe.doris-sys.svc.cluster.local:8030" }
+          - { name: stream_load_credentials_secret, value: "doris-creds" }
     - - name: chaos
         templateRef: { name: chaos-network-loss, template: main }
         continueOn: { failed: true }
@@ -33,22 +52,22 @@ spec:
           parameters:
           - { name: target_namespace,    value: "doris-sys" }
           - { name: target_pod_selector, value: "app=doris-be" }
-          - { name: loss_percent,        value: "50" }
+          - { name: loss_percent,        value: "{{workflow.parameters.loss_percent}}" }
           - { name: duration,            value: "{{workflow.parameters.chaos_duration}}" }
       - name: load
         templateRef: { name: load-k6-run, template: main }
         arguments:
           parameters:
-          - { name: script_configmap, value: "k6-script-doris-be-network-loss" }
-          - { name: vus,              value: "5" }
-          - { name: duration,         value: "{{workflow.parameters.load_duration}}" }
-          - { name: env_map,          value: "{}" }
-          - { name: scenario_label,   value: "{{workflow.parameters.scenario_label}}" }
+          - { name: script_path,    value: "/scripts/runners/doris.js" }
+          - { name: vus,            value: "{{workflow.parameters.vus}}" }
+          - { name: duration,       value: "{{workflow.parameters.load_duration}}" }
+          - { name: scenario_label, value: "{{workflow.parameters.scenario_label}}" }
+          - { name: env_map,        value: "" }
     - - name: verdict
         templateRef: { name: verdict-slo-eval, template: main }
         arguments:
           parameters:
-          - { name: slo_yaml,          value: "(unused)" }
+          - { name: slo_yaml,          value: "(unused — read from CM)" }
           - { name: chaos_result_name, value: "{{steps.chaos.outputs.parameters.chaos_result_name}}-pod-network-loss" }
           - { name: load_start_ts,     value: "{{steps.load.startedAt}}" }
           - { name: chaos_start_after, value: "{{workflow.parameters.chaos_start_after}}" }
@@ -56,20 +75,3 @@ spec:
           - { name: load_duration,     value: "{{workflow.parameters.load_duration}}" }
           - { name: metrics_namespace, value: "{{workflow.parameters.scenario_label}}" }
           - { name: workflow_name,     value: "{{workflow.name}}" }
-
-  - name: write-slo
-    serviceAccountName: argo-workflow
-    script:
-      image: alpine/k8s:1.30.0
-      command: [bash]
-      source: |
-        set -euo pipefail
-        cat > /tmp/slo.yaml <<'EOF'
-        thresholds:
-        - metric: p95-latency-chaos
-          query: avg(k6_http_req_duration_p95{dlh_scenario="doris-be-network-loss"})
-          lt: 3.0
-          window: chaos
-        EOF
-        kubectl -n dlh-test-fw create configmap dlh-slo-{{workflow.name}} \
-          --from-file=slo.yaml=/tmp/slo.yaml --dry-run=client -o yaml | kubectl apply -f -

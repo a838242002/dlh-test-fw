@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: util-ensure-mysql-table
+  labels:
+    dlh.category: util
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: db_host
+      - name: db
+      - name: user
+      - name: password
+      - name: table
+      - name: schema_sql       # full column definition, e.g. "id BIGINT AUTO_INCREMENT PRIMARY KEY, ts DATETIME NOT NULL"
+    script:
+      image: mysql:8.0
+      command: [bash]
+      source: |
+        set -euo pipefail
+        mysql -h {{`{{inputs.parameters.db_host}}`}} -P 3306 \
+          -u {{`{{inputs.parameters.user}}`}} -p{{`{{inputs.parameters.password}}`}} \
+          {{`{{inputs.parameters.db}}`}} -e "
+            CREATE TABLE IF NOT EXISTS {{`{{inputs.parameters.table}}`}} (
+              {{`{{inputs.parameters.schema_sql}}`}}
+            ) ENGINE=InnoDB;"
