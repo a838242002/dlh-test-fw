@@ -3,7 +3,7 @@
 # delivered via a per-workflow ConfigMap that step 1 writes from the `env_map`
 # input parameter (multi-line KEY=VALUE format).
 #
-# Per spikes/k6-vm-remote-write/FINDINGS.md:
+# Per docs/FINDINGS.md:
 # - dlh_scenario tag (not k6's reserved `scenario` label).
 # - Plan 7 confirmed `_p95` gauges are emitted for custom Trend metrics, BUT
 #   k6 prom-rw prefixes every metric name with `k6_` and appends `_total` to

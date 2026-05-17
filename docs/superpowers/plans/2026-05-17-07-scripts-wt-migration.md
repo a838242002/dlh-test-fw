@@ -46,7 +46,7 @@ targets/
 
 Makefile                         ← MODIFIED: add `run-kafka` (and `run-doris` if Task 4 = GO) targets
 
-spikes/k6-vm-remote-write/FINDINGS.md  ← APPENDED: Plan 7 outcomes for Plan 8 consumption
+docs/FINDINGS.md  ← APPENDED: Plan 7 outcomes for Plan 8 consumption
 ```
 
 Responsibilities at a glance:
@@ -185,7 +185,7 @@ If you only see `dlh_probe_duration_seconds_count` and `dlh_probe_duration_secon
 
 - [ ] **Step 4: Record the outcome in FINDINGS.md (committed)**
 
-Open `spikes/k6-vm-remote-write/FINDINGS.md` and append after the last section:
+Open `docs/FINDINGS.md` and append after the last section:
 
 If HYPOTHESIS YES:
 
@@ -225,7 +225,7 @@ kubectl -n dlh-test-fw delete cm trend-stat-probe --ignore-not-found
 
 ```bash
 cd /Users/allen/repo/dlh-test-fw-phase2
-git add spikes/k6-vm-remote-write/FINDINGS.md
+git add docs/FINDINGS.md
 git commit -m "findings: Plan 7 task 1 — k6 custom-Trend prom-rw emits _p95 (verified)"
 ```
 
@@ -514,7 +514,7 @@ cat > helm/dlh-test-fw/files/workflowtemplates/load/k6-run.yaml <<'YAML'
 # delivered via a per-workflow ConfigMap that step 1 writes from the `env_map`
 # input parameter (multi-line KEY=VALUE format).
 #
-# Per spikes/k6-vm-remote-write/FINDINGS.md:
+# Per docs/FINDINGS.md:
 # - dlh_scenario tag (not k6's reserved `scenario` label).
 # - Plan 7 confirmed `_p95` gauges are emitted for custom Trend metrics
 #   (`dlh_<type>_*` series produced by /scripts/lib/{mysql,kafka,doris}.js).
@@ -1256,13 +1256,13 @@ Expected: a line containing **DEFERRED**.
 ## Task 14: FINDINGS append for Plan 8 consumption
 
 **Files:**
-- Modify: `spikes/k6-vm-remote-write/FINDINGS.md` (append a section)
+- Modify: `docs/FINDINGS.md` (append a section)
 
 Plan 8 (dashboards) reads FINDINGS to know which metric series are actually emitted, with which labels, and which scenarios are live.
 
 - [ ] **Step 1: Append**
 
-Open `spikes/k6-vm-remote-write/FINDINGS.md` and append at the end:
+Open `docs/FINDINGS.md` and append at the end:
 
 ```markdown
 
@@ -1305,7 +1305,7 @@ Replace each `<fill>` with the actual PASS/FAIL from the verification runs.
 
 ```bash
 cd /Users/allen/repo/dlh-test-fw-phase2
-git add spikes/k6-vm-remote-write/FINDINGS.md
+git add docs/FINDINGS.md
 git commit -m "findings: Plan 7 outcomes — live scenarios + emitted metric series for Plan 8"
 ```
 
@@ -1321,9 +1321,9 @@ git commit -m "findings: Plan 7 outcomes — live scenarios + emitted metric ser
 - [ ] `make run-kafka` runs end-to-end against real Kafka and produces a verdict.
 - [ ] Doris: either `make run-doris` succeeds (GO branch) OR `scenarios/README.md` documents the deferred state with a NO-GO reason in `targets/doris/README.md`.
 - [ ] `dlh_<type>_*` series are present in VictoriaMetrics for the workflows of every live scenario.
-- [ ] `spikes/k6-vm-remote-write/FINDINGS.md` has a "Plan 7 outcome" section with the verdict-pass-rate of each scenario and the implications for Plan 8.
+- [ ] `docs/FINDINGS.md` has a "Plan 7 outcome" section with the verdict-pass-rate of each scenario and the implications for Plan 8.
 - [ ] Every task is its own atomic commit on `feat/phase-2-scripts-dashboards`.
-- [ ] No changes to `dashboards/grafana/*.json`, no changes to `verdict-job/`, no changes outside `helm/dlh-test-fw/files/workflowtemplates/load/`, `scenarios/`, `targets/`, `Makefile`, `spikes/k6-vm-remote-write/FINDINGS.md`.
+- [ ] No changes to `dashboards/grafana/*.json`, no changes to `verdict-job/`, no changes outside `helm/dlh-test-fw/files/workflowtemplates/load/`, `scenarios/`, `targets/`, `Makefile`, `docs/FINDINGS.md`.
 
 ---
 

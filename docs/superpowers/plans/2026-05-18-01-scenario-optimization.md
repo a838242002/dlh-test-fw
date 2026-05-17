@@ -1026,7 +1026,7 @@ git commit -m "feat(scripts): forward extra args from run-scenario.sh to argo su
 ## Task 9: Merge to main + FINDINGS update
 
 **Files:**
-- Modify: `spikes/k6-vm-remote-write/FINDINGS.md` (append a section)
+- Modify: `docs/FINDINGS.md` (append a section)
 
 - [ ] **Step 1: Append a Plan 9 section to FINDINGS.md**
 
@@ -1066,7 +1066,7 @@ Expected: both runs `Succeeded`; verify-templates `PASS: all 11 WorkflowTemplate
 - [ ] **Step 3: Commit FINDINGS update**
 
 ```bash
-git add spikes/k6-vm-remote-write/FINDINGS.md
+git add docs/FINDINGS.md
 git commit -m "docs(findings): record Plan 9 scenario optimization (util WTs + slo_vars + run-scenario -p)"
 ```
 

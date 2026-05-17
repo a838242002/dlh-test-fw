@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 
 # Pre-flight: minikube must be Ready.
 if ! kubectl get nodes 2>/dev/null | grep -q ' Ready '; then
-  echo "minikube not Ready. Run: ./spikes/k6-vm-remote-write/scripts/minikube-up.sh" >&2
+  echo "minikube not Ready. Run: ./scripts/minikube-up.sh" >&2
   exit 1
 fi
 

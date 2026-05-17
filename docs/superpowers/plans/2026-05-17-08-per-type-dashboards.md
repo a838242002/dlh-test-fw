@@ -60,7 +60,7 @@ helm/dlh-test-fw/files/dashboards/
 ├── dlh-run-detail.json               ← MIRRORED after Task 8 edit
 └── dlh-history.json                  ← unchanged
 
-spikes/k6-vm-remote-write/FINDINGS.md ← APPENDED: Plan 8 wrap-up + Phase 2 milestone summary
+docs/FINDINGS.md ← APPENDED: Plan 8 wrap-up + Phase 2 milestone summary
 ```
 
 The chart's `templates/dashboards-configmaps.yaml` (Phase 1) does `Files.Glob "files/dashboards/*.json"` already — no template change needed. Adding a JSON there = new ConfigMap on `helm upgrade` = sidecar auto-imports = dashboard appears in Grafana.
@@ -868,7 +868,7 @@ For `http://localhost:3000/d/dlh-run/` (existing Run Detail):
 ## Task 10: FINDINGS append + Phase 2 milestone wrap-up
 
 **Files:**
-- Modify: `spikes/k6-vm-remote-write/FINDINGS.md` (append a section)
+- Modify: `docs/FINDINGS.md` (append a section)
 
 Document the Phase 2 finish state for future sessions. Mirrors the Phase 1 "Post-Phase-1 amendments" pattern.
 
@@ -935,7 +935,7 @@ preserved for archaeology; `git log --first-parent` stays clean.
 
 ```bash
 cd /Users/allen/repo/dlh-test-fw-phase2
-git add spikes/k6-vm-remote-write/FINDINGS.md
+git add docs/FINDINGS.md
 git commit -m "findings: Plan 8 + Phase 2 wrap-up — three per-type dashboards live"
 ```
 
@@ -972,10 +972,10 @@ Expected: tag appears in the list; `git log -3` shows the recent commits.
 - [ ] For the latest mysql + kafka workflows, the per-type dashboards' key queries return ≥1 series each.
 - [ ] `dlh-doris` dashboard registers and renders panels (no JS console errors); panels show "No data" — expected and correct.
 - [ ] `dlh-run-detail` has 3 cross-link buttons to the new per-type dashboards; visible via `/api/dashboards/uid/dlh-run` `links` field.
-- [ ] `spikes/k6-vm-remote-write/FINDINGS.md` has a "Plan 8 + Phase 2 milestone wrap-up" section.
+- [ ] `docs/FINDINGS.md` has a "Plan 8 + Phase 2 milestone wrap-up" section.
 - [ ] Git tag `phase-2-mvp` exists.
 - [ ] Each task is its own atomic commit on `feat/phase-2-scripts-dashboards`.
-- [ ] No files changed outside `dashboards/grafana/`, `helm/dlh-test-fw/files/dashboards/`, `spikes/k6-vm-remote-write/FINDINGS.md`.
+- [ ] No files changed outside `dashboards/grafana/`, `helm/dlh-test-fw/files/dashboards/`, `docs/FINDINGS.md`.
 
 ---
 

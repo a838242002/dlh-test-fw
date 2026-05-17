@@ -15,13 +15,13 @@ fixture-images/                  Per-target build helpers (mysql, kafka, doris, 
 scenarios/                       Argo Workflow YAMLs (one per chaos+load+verdict scenario)
 targets/                         Minimal target deploys (mysql, kafka, doris) for scenarios
 dashboards/grafana/              Dashboard source-of-truth JSONs
-scripts/                         platform-up / down / verify / run-scenario / verify-templates
-spikes/k6-vm-remote-write/       Plan 1 spike — KEEP `FINDINGS.md` and `scripts/minikube-up.sh`
+scripts/                         platform-up / down / verify / run-scenario / minikube-up / verify-templates
+docs/FINDINGS.md                 Authoritative cross-plan gotchas
 docs/superpowers/specs/          YYYY-MM-DD-<topic>-design.md  (output of brainstorming)
 docs/superpowers/plans/          YYYY-MM-DD-NN-<feature>.md    (output of writing-plans)
 ```
 
-**Authoritative cross-plan reference: `spikes/k6-vm-remote-write/FINDINGS.md`.** Every plan reads it; every plan that hits an unrelated drift appends to it. When a future session asks "is this still the right approach?", the answer is usually in FINDINGS first.
+**Authoritative cross-plan reference: `docs/FINDINGS.md`.** Every plan reads it; every plan that hits an unrelated drift appends to it. When a future session asks "is this still the right approach?", the answer is usually in FINDINGS first.
 
 ---
 
@@ -168,6 +168,6 @@ Plan 7 switches `load/k6-run` WorkflowTemplate's `runner.image` from `grafana/k6
 
 - Don't commit on `main` if a feature branch + worktree already exists for that line of work. Use the worktree.
 - Don't `helm upgrade` from a worktree branch unless you intend to (the live cluster persists state across worktrees, so one worktree's upgrade affects the other's `kubectl get`). If you do upgrade for testing, mention in the commit message.
-- Don't delete `spikes/k6-vm-remote-write/FINDINGS.md` — it's load-bearing for every plan.
+- Don't delete `docs/FINDINGS.md` — it's load-bearing for every plan.
 - Don't introduce a new `bitnami/*` subchart without verifying the image is actually pullable on arm64 (it usually isn't, post-2025).
 - Don't `kubectl apply` ChaosEngine without first verifying the matching ChaosExperiment CR exists in the namespace (Plan 5 caught this — chart doesn't install them).

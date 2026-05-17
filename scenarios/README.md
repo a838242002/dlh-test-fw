@@ -38,7 +38,7 @@ in `_total`. So `dlh_mysql_queries_total` surfaces in VM as
 this doubled form, not by a Trend `_count` suffix (Trend prom-rw never
 emits `_count` or `_sum`; only the configured stat suffixes
 `_p95`/`_p99`/`_avg`/`_min`/`_max`). See
-`spikes/k6-vm-remote-write/FINDINGS.md` for the full write-up.
+`docs/FINDINGS.md` for the full write-up.
 
 ## k6 scripts are baked into the dlh-k6 image
 

@@ -10,13 +10,13 @@
 
 **Goal:** Produce an installable umbrella Helm chart `helm/dlh-test-fw/` that, with one `helm install`, brings up Argo Workflows + Litmus + k6-operator + MinIO + VictoriaMetrics + Grafana on the local minikube created in Plan 1, exposes the three UIs via ingress, and provisions the RBAC, MinIO buckets, and secrets needed by later plans.
 
-**Architecture:** Umbrella chart pattern — `helm/dlh-test-fw/Chart.yaml` declares six pinned subchart dependencies; `helm/dlh-test-fw/values.yaml` sets overrides under each subchart's key namespace. Our own resources (ingress, `cluster-admin-lite` ClusterRole + binding, MinIO bucket-init Job, `dlh-result-*` ConfigMap RBAC for the verdict job, secrets, an empty `WorkflowTemplate` shell that Plan 4 fills) live under `helm/dlh-test-fw/templates/`. Reuses pinned versions and env vars discovered in `spikes/k6-vm-remote-write/FINDINGS.md`.
+**Architecture:** Umbrella chart pattern — `helm/dlh-test-fw/Chart.yaml` declares six pinned subchart dependencies; `helm/dlh-test-fw/values.yaml` sets overrides under each subchart's key namespace. Our own resources (ingress, `cluster-admin-lite` ClusterRole + binding, MinIO bucket-init Job, `dlh-result-*` ConfigMap RBAC for the verdict job, secrets, an empty `WorkflowTemplate` shell that Plan 4 fills) live under `helm/dlh-test-fw/templates/`. Reuses pinned versions and env vars discovered in `docs/FINDINGS.md`.
 
 **Tech Stack:** Helm v3, Kubernetes v1.30, Bitnami / official charts for each component, kubectl, bash, jq, optional `kube-score` / `helm lint` for static checks.
 
 **Prerequisites:**
-- Plan 1 complete; `spikes/k6-vm-remote-write/FINDINGS.md` filled in.
-- Minikube is up (Plan 1's `make up` left it running) or can be brought up by reusing `spikes/k6-vm-remote-write/scripts/minikube-up.sh`.
+- Plan 1 complete; `docs/FINDINGS.md` filled in.
+- Minikube is up (Plan 1's `make up` left it running) or can be brought up by reusing `scripts/minikube-up.sh`.
 - **Plan 1 already installed `k6-operator` and `victoria-metrics-single` releases into the `dlh-test-fw` namespace.** Before running this plan's `helm install dlh ...`, either (a) `helm uninstall -n dlh-test-fw vm k6-operator` so the umbrella release can own those resources, or (b) reuse the same release names by setting `argo-workflows.enabled` etc. and disabling the two already-installed subcharts. Recommended: uninstall the standalone releases first — Plan 1's purpose was to prove the wiring, not to be the production install.
 - **Orphaned k6 cluster-scoped resources gotcha (from FINDINGS):** if the cluster has ever had k6-operator installed in a different namespace, helm install will fail to adopt the pre-existing `testruns.k6.io` / `privateloadzones.k6.io` CRDs and the `k6-operator-*` ClusterRoles/Bindings. Fix by re-annotating each with `meta.helm.sh/release-namespace=dlh-test-fw` and `meta.helm.sh/release-name=dlh` (this plan's release name), or `kubectl delete` them with no in-flight TestRun resources.
 
@@ -66,7 +66,7 @@ Responsibilities:
 
 ## Pinned Subchart Versions
 
-These must match `spikes/k6-vm-remote-write/FINDINGS.md` for `victoria-metrics-single` and `k6-operator`. The other four are pinned here for the first time; the engineer should `helm search repo --versions` to confirm availability before locking.
+These must match `docs/FINDINGS.md` for `victoria-metrics-single` and `k6-operator`. The other four are pinned here for the first time; the engineer should `helm search repo --versions` to confirm availability before locking.
 
 | Subchart | Helm repo | Version (target) | Notes |
 |---|---|---|---|
@@ -894,7 +894,7 @@ cd "$(dirname "$0")/.."
 
 # Pre-flight: minikube must be Ready.
 if ! kubectl get nodes 2>/dev/null | grep -q ' Ready '; then
-  echo "minikube not Ready. Run: ./spikes/k6-vm-remote-write/scripts/minikube-up.sh" >&2
+  echo "minikube not Ready. Run: ./scripts/minikube-up.sh" >&2
   exit 1
 fi
 
@@ -1043,7 +1043,7 @@ Compare against names referenced in `templates/ingress.yaml`, `templates/platfor
 ## Task 13: Update FINDINGS with chart-wide observations
 
 **Files:**
-- Modify: `spikes/k6-vm-remote-write/FINDINGS.md` (append a section)
+- Modify: `docs/FINDINGS.md` (append a section)
 
 - [ ] **Step 1: Append to FINDINGS.md**
 
@@ -1064,7 +1064,7 @@ Compare against names referenced in `templates/ingress.yaml`, `templates/platfor
 - [ ] **Step 2: Commit**
 
 ```bash
-git add spikes/k6-vm-remote-write/FINDINGS.md
+git add docs/FINDINGS.md
 git commit -m "findings: append platform chart deploy observations"
 ```
 
@@ -1073,7 +1073,7 @@ git commit -m "findings: append platform chart deploy observations"
 ## Definition of Done
 
 - [ ] `helm lint helm/dlh-test-fw` passes.
-- [ ] `make platform-up && make platform-verify` succeeds from a fresh `make down && spikes/k6-vm-remote-write/scripts/minikube-up.sh`.
+- [ ] `make platform-up && make platform-verify` succeeds from a fresh `make down && scripts/minikube-up.sh`.
 - [ ] `kubectl -n dlh-test-fw get pods` shows every pod Ready.
 - [ ] MinIO contains `fixtures` and `artifacts` buckets (visible in console).
 - [ ] Argo's `artifact-repositories` ConfigMap references those buckets.

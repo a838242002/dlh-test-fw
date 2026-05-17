@@ -1023,7 +1023,7 @@ git commit -m "wt: verify-templates script asserts all 9 WTs registered"
 - [ ] `make verify-templates` passes.
 - [ ] Each WorkflowTemplate's `inputs.parameters` matches the corresponding row of the spec's "WorkflowTemplate 函式庫" table.
 - [ ] `verdict-slo-eval` references `dlh-verdict:0.1.0` (matches Plan 3's tag).
-- [ ] `load-k6-run` references the exact env vars from `spikes/k6-vm-remote-write/FINDINGS.md`.
+- [ ] `load-k6-run` references the exact env vars from `docs/FINDINGS.md`.
 
 ---
 

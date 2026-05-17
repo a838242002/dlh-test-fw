@@ -1,6 +1,6 @@
 # Plan 1 — Spike: k6 → VictoriaMetrics Remote-Write Implementation Plan
 
-> **Post-MVP note (2026-05-17):** This plan is historical — it documents the intent at planning time. Real execution diverged in places, captured in `spikes/k6-vm-remote-write/FINDINGS.md` and the spec's "Post-Phase-1 amendments" section. Most relevant deviation here: the `scenario` PromQL label is reserved by k6 — we use `dlh_scenario` everywhere instead.
+> **Post-MVP note (2026-05-17):** This plan is historical — it documents the intent at planning time. Real execution diverged in places, captured in `docs/FINDINGS.md` and the spec's "Post-Phase-1 amendments" section. Most relevant deviation here: the `scenario` PromQL label is reserved by k6 — we use `dlh_scenario` everywhere instead.
 
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -158,7 +158,7 @@ git commit -m "spike(k6-vm): scaffold spike directory with README and Makefile"
 ## Task 2: minikube bootstrap script
 
 **Files:**
-- Create: `spikes/k6-vm-remote-write/scripts/minikube-up.sh`
+- Create: `scripts/minikube-up.sh`
 
 - [ ] **Step 1: Write the failing verifier first (will live in Task 3, but we sketch it here as the bootstrap success criterion)**
 
@@ -199,7 +199,7 @@ exit 1
 - [ ] **Step 3: Make executable**
 
 ```bash
-chmod +x spikes/k6-vm-remote-write/scripts/minikube-up.sh
+chmod +x scripts/minikube-up.sh
 ```
 
 - [ ] **Step 4: Run it to verify**
@@ -215,7 +215,7 @@ Expected: ends with `minikube Ready.` and exit code 0. `kubectl get nodes` shows
 
 ```bash
 cd /Users/allen/repo/dlh-test-fw
-git add spikes/k6-vm-remote-write/scripts/minikube-up.sh
+git add scripts/minikube-up.sh
 git commit -m "spike(k6-vm): add minikube bootstrap script"
 ```
 
@@ -620,7 +620,7 @@ If it fails:
 ## Task 9: Document findings
 
 **Files:**
-- Create: `spikes/k6-vm-remote-write/FINDINGS.md`
+- Create: `docs/FINDINGS.md`
 
 This is the **deliverable** that feeds Plan 2 and Plan 4. Write it last so it reflects what actually worked, not what we expected.
 
@@ -679,7 +679,7 @@ apiVersion: <fill>
 
 ```bash
 cd /Users/allen/repo/dlh-test-fw
-git add spikes/k6-vm-remote-write/FINDINGS.md
+git add docs/FINDINGS.md
 git commit -m "spike(k6-vm): document findings (chart versions, env vars, gotchas)"
 ```
 
