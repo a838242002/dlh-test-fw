@@ -118,6 +118,12 @@ spec:
               value: "5s"
             - name: K6_PROMETHEUS_RW_TREND_STATS
               value: "p(95),p(99),min,max,avg"
+            # Required so the initializer's `k6 archive` step sees env_map
+            # values delivered via envFrom (k6-operator 4.4.1 does not expand
+            # envFrom into explicit -e flags; without this, runners with init-
+            # time env validation throw at archive time). See FINDINGS Plan 7.
+            - name: K6_INCLUDE_SYSTEM_ENV_VARS
+              value: "true"
             - name: SCENARIO_LABEL
               value: {{`"{{inputs.parameters.scenario_label}}"`}}
             - name: VUS
