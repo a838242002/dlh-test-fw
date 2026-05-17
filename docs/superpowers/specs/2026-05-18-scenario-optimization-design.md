@@ -410,3 +410,23 @@ echo "         kubectl -n dlh-test-fw exec deploy/dlh-minio -- mc cat \"local/ar
 - **`{{...}}` template syntax inside the SLO file vs Argo's template substitution.** The SLO file is read at runtime from a ConfigMap, so Argo never sees its `{{workflow.name}}`. The bash step substitutes it explicitly. Verify: util-write-slo renders correctly when the SLO template contains literal `{{workflow.name}}` strings.
 - **Per-workflow CM proliferation**. Both `dlh-slo-<wf>` and `dlh-k6-env-<wf>` get ownerReferences pointing at the Workflow, so k8s GC reclaims them on workflow deletion. Verify in plan.
 - **`load_table_schema` value contains commas**. The schema fragment `id BIGINT, ts DATETIME` is passed as a single workflow parameter and substituted into a SQL `CREATE TABLE` body — commas are fine because the substitution is whole-string (not CSV-split). Verify in plan task that the rendered SQL is valid.
+
+## Post-Plan-9 amendments (2026-05-18, after live merge `4d68ea3`)
+
+Two corrections to the verbatim `util-write-slo` script in the "util-write-slo" section above — both surfaced during Plan 9 implementation and verified live:
+
+1. **Step 3 — `{{workflow.name}}` LHS must be built at runtime, not written as a literal.** The spec's claim that "Argo's templating already substituted `{{workflow.name}}` when it rendered `source:`" is correct for the *script body* but wrong for the **SLO template body**: `TPL` is loaded from the `dlh-slos` ConfigMap at runtime via `kubectl get cm`, so Argo never sees its `{{workflow.name}}` literal. A naive `sed "s|{{workflow.name}}|{{workflow.name}}|g"` is a no-op because Argo renders both sides identically to the actual workflow name. Fix: construct the LHS at bash runtime via octal so Argo can't see the `{{...}}` token in `source:`:
+   ```bash
+   WF_LIT=$(printf '\173\173workflow.name\175\175')
+   RENDERED=$(printf '%s' "$RENDERED" | sed "s|${WF_LIT}|{{`{{workflow.name}}`}}|g")
+   ```
+
+2. **Step 4 — unresolved-marker regex must include digits.** Spec wrote `\${[A-Z_]+}` which never matches `${P95_LT}` (contains `9`). Use `\${[A-Z0-9_]+}`. Without this fix the fail-fast guard silently passes on missing numeric-threshold vars.
+
+3. **`slo_vars` value guard widened.** Spec rejects `|` (sed separator). Plan 9 also rejects `&` and `\` because sed treats them specially in the replacement string (`&` = whole match; `\` starts back-references / escapes). Single error message: `"slo_vars value for $K contains a sed-unsafe character (|, &, or \\)"`.
+
+4. **`dlh-slo-<wf>` `ownerReferences` set via `{{workflow.uid}}` + jq, matching Plan 7's `load/k6-run` env-CM pattern** (not via separate `kubectl patch`). RBAC unchanged — `argo-workflow` SA already had `create/get/update/patch configmaps`. Cascade GC verified end-to-end: deleting the Workflow auto-reclaims the SLO CM.
+
+5. **`argo submit --wait` on CLI v4.0.5 accepts multi-line `-p key=value` values verbatim** (embedded literal newlines from quoted bash arg). No parameter-file workaround needed for `-p slo_vars=<multi-line>`.
+
+6. **Pitfall logged in FINDINGS:** when picking "the latest scenario workflow" via lexical `sort`, filter to timestamped names with `grep -E '<prefix>-[0-9]{8}-[0-9]{6}$'` first — otherwise stray Phase-2 UUID-suffixed workflows sort after timestamped ones (letters > digits in ASCII).
