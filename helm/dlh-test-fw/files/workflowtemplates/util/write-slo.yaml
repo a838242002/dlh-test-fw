@@ -1,0 +1,64 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: util-write-slo
+  labels:
+    dlh.category: util
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+  templates:
+  - name: main
+    inputs:
+      parameters:
+      - name: slo_name        # SLO library entry, e.g. "pod-delete" — resolves to dlh-slos[slo_name + ".yaml"]
+      - name: slo_vars        # multi-line KEY=VAL block, one per ${VAR} the template references
+    script:
+      image: alpine/k8s:1.30.0
+      command: [bash]
+      source: |
+        set -euo pipefail
+
+        # 1. Read SLO template from chart-provisioned dlh-slos CM.
+        TPL=$(kubectl -n {{`{{workflow.namespace}}`}} get cm dlh-slos \
+                -o jsonpath="{.data.{{`{{inputs.parameters.slo_name}}`}}\.yaml}")
+        if [[ -z "$TPL" ]]; then
+          echo "ERROR: SLO library entry '{{`{{inputs.parameters.slo_name}}`}}.yaml' not in dlh-slos CM" >&2
+          kubectl -n {{`{{workflow.namespace}}`}} get cm dlh-slos -o jsonpath='{.data}' | jq 'keys' >&2 || true
+          exit 1
+        fi
+
+        # 2. Apply scenario-supplied ${VAR} → VAL substitutions.
+        VARS=$(cat <<'EOF'
+        {{`{{inputs.parameters.slo_vars}}`}}
+        EOF
+        )
+        RENDERED="$TPL"
+        while IFS='=' read -r K V; do
+          [[ -z "$K" || "$K" =~ ^# ]] && continue
+          K=$(printf '%s' "$K" | tr -d '[:space:]')
+          [[ -z "$K" ]] && continue
+          if [[ "$V" == *'|'* ]]; then
+            echo "ERROR: slo_vars value for $K contains '|' which conflicts with sed separator" >&2
+            exit 1
+          fi
+          RENDERED=$(printf '%s' "$RENDERED" | sed "s|\${$K}|$V|g")
+        done <<< "$VARS"
+
+        # 3. Substitute literal {{`{{workflow.name}}`}} in the SLO template body (read from the
+        # dlh-slos CM at runtime, so Argo never saw it) with the actual workflow name. We build the
+        # LHS pattern via printf octal so Argo's templating doesn't resolve it inside source:.
+        WF_LIT=$(printf '\173\173workflow.name\175\175')
+        RENDERED=$(printf '%s' "$RENDERED" | sed "s|${WF_LIT}|{{`{{workflow.name}}`}}|g")
+
+        # 4. Fail-fast on any unresolved ${VAR} markers.
+        if printf '%s' "$RENDERED" | grep -qE '\$\{[A-Z0-9_]+\}'; then
+          echo "ERROR: unresolved variables in rendered SLO:" >&2
+          printf '%s' "$RENDERED" | grep -E '\$\{[A-Z0-9_]+\}' >&2
+          exit 1
+        fi
+
+        # 5. Write the per-workflow CM (verdict-slo-eval mounts this).
+        kubectl -n {{`{{workflow.namespace}}`}} create configmap dlh-slo-{{`{{workflow.name}}`}} \
+          --from-literal=slo.yaml="$RENDERED" \
+          --dry-run=client -o yaml | kubectl apply -f -
