@@ -38,8 +38,8 @@ spec:
           [[ -z "$K" || "$K" =~ ^# ]] && continue
           K=$(printf '%s' "$K" | tr -d '[:space:]')
           [[ -z "$K" ]] && continue
-          if [[ "$V" == *'|'* ]]; then
-            echo "ERROR: slo_vars value for $K contains '|' which conflicts with sed separator" >&2
+          if [[ "$V" == *'|'* || "$V" == *'&'* || "$V" == *'\'* ]]; then
+            echo "ERROR: slo_vars value for $K contains a sed-unsafe character (|, &, or \\)" >&2
             exit 1
           fi
           RENDERED=$(printf '%s' "$RENDERED" | sed "s|\${$K}|$V|g")
@@ -58,7 +58,20 @@ spec:
           exit 1
         fi
 
-        # 5. Write the per-workflow CM (verdict-slo-eval mounts this).
+        # 5. Write the per-workflow CM (verdict-slo-eval mounts this) with
+        # ownerReferences so k8s GC reclaims it on workflow deletion. Pattern
+        # mirrors load/k6-run write-env-cm (uses workflow.uid built-in, no
+        # extra RBAC needed).
         kubectl -n {{`{{workflow.namespace}}`}} create configmap dlh-slo-{{`{{workflow.name}}`}} \
           --from-literal=slo.yaml="$RENDERED" \
-          --dry-run=client -o yaml | kubectl apply -f -
+          --dry-run=client -o json \
+          | jq --arg uid '{{`{{workflow.uid}}`}}' --arg name '{{`{{workflow.name}}`}}' '
+              .metadata.ownerReferences = [{
+                apiVersion: "argoproj.io/v1alpha1",
+                kind: "Workflow",
+                name: $name,
+                uid: $uid,
+                controller: true,
+                blockOwnerDeletion: false
+              }]' \
+          | kubectl apply -f -
