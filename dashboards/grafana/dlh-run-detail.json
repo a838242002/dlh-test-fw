@@ -112,8 +112,27 @@
       ],
       "transformations": [
         { "id": "merge" },
-        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "dlh_workflow": true, "dlh_scenario": true } } }
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "Time 1": true, "Time 2": true, "__name__": true, "__name__ 1": true, "__name__ 2": true, "dlh_workflow": true, "dlh_scenario": true },
+            "renameByName": { "name": "threshold", "Value #A": "pass", "Value #B": "value" },
+            "indexByName": { "name": 0, "Value #A": 1, "Value #B": 2 }
+          }
+        }
       ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "pass" },
+            "properties": [
+              { "id": "mappings", "value": [ { "type": "value", "options": { "0": { "text": "FAIL", "color": "red" }, "1": { "text": "PASS", "color": "green" } } } ] },
+              { "id": "custom.cellOptions", "value": { "type": "color-background" } }
+            ]
+          }
+        ]
+      },
       "gridPos": { "x": 12, "y": 12, "w": 12, "h": 4 }
     }
   ]
