@@ -13,7 +13,8 @@
   "links": [
     {
       "title": "Open in Run Detail",
-      "type": "dashboards",
+      "type": "link",
+      "icon": "external link",
       "tags": [],
       "asDropdown": false,
       "includeVars": true,

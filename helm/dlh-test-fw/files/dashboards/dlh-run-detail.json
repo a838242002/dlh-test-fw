@@ -353,7 +353,8 @@
   "links": [
     {
       "title": "Open in MySQL",
-      "type": "dashboards",
+      "type": "link",
+      "icon": "external link",
       "tags": [],
       "asDropdown": false,
       "includeVars": true,
@@ -363,7 +364,8 @@
     },
     {
       "title": "Open in Kafka",
-      "type": "dashboards",
+      "type": "link",
+      "icon": "external link",
       "tags": [],
       "asDropdown": false,
       "includeVars": true,
@@ -373,7 +375,8 @@
     },
     {
       "title": "Open in Doris",
-      "type": "dashboards",
+      "type": "link",
+      "icon": "external link",
       "tags": [],
       "asDropdown": false,
       "includeVars": true,
