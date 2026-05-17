@@ -17,13 +17,8 @@ spec:
     steps:
     - - name: prep-slo
         template: write-slo
-    - - name: load-fixture
-        templateRef: { name: fixture-kafka-topic-seed, template: main }
-        arguments:
-          parameters:
-          - { name: bootstrap, value: "kafka.kafka-sys.svc.cluster.local:9092" }
-          - { name: topic,     value: "events" }
-          - { name: seed_uri,  value: "s3://fixtures/kafka-events.jsonl" }
+    # Topic creation is implicit: kafka.js's Writer has autoCreateTopic=true and
+    # the apache/kafka target accepts auto-create. No fixture step needed.
     - - name: chaos
         templateRef: { name: chaos-kafka-broker-partition, template: main }
         continueOn: { failed: true }
@@ -36,23 +31,28 @@ spec:
         templateRef: { name: load-k6-run, template: main }
         arguments:
           parameters:
-          - { name: script_configmap, value: "k6-script-kafka-broker-partition" }
-          - { name: vus,              value: "5" }
-          - { name: duration,         value: "{{workflow.parameters.load_duration}}" }
-          - { name: env_map,          value: "{}" }
-          - { name: scenario_label,   value: "{{workflow.parameters.scenario_label}}" }
+          - { name: script_path,    value: "/scripts/runners/kafka.js" }
+          - { name: vus,            value: "5" }
+          - { name: duration,       value: "{{workflow.parameters.load_duration}}" }
+          - { name: scenario_label, value: "{{workflow.parameters.scenario_label}}" }
+          - name: env_map
+            value: |
+              KAFKA_BOOTSTRAP=kafka.kafka-sys.svc.cluster.local:9092
+              KAFKA_TOPIC=dlh-load
+              KAFKA_OP=produce
+              KAFKA_MESSAGE_SIZE=256
     - - name: verdict
         templateRef: { name: verdict-slo-eval, template: main }
         arguments:
           parameters:
-          - { name: slo_yaml,          value: "(unused)" }
-          - { name: chaos_result_name, value: "{{steps.chaos.outputs.parameters.chaos_result_name}}-pod-network-partition" }
-          - { name: load_start_ts,     value: "{{steps.load.startedAt}}" }
-          - { name: chaos_start_after, value: "{{workflow.parameters.chaos_start_after}}" }
-          - { name: chaos_duration,    value: "{{workflow.parameters.chaos_duration}}" }
-          - { name: load_duration,     value: "{{workflow.parameters.load_duration}}" }
-          - { name: metrics_namespace, value: "{{workflow.parameters.scenario_label}}" }
-          - { name: workflow_name,     value: "{{workflow.name}}" }
+          - { name: slo_yaml,           value: "(unused — passed via ConfigMap)" }
+          - { name: chaos_result_name,  value: "{{steps.chaos.outputs.parameters.chaos_result_name}}-pod-network-partition" }
+          - { name: load_start_ts,      value: "{{steps.load.startedAt}}" }
+          - { name: chaos_start_after,  value: "{{workflow.parameters.chaos_start_after}}" }
+          - { name: chaos_duration,     value: "{{workflow.parameters.chaos_duration}}" }
+          - { name: load_duration,      value: "{{workflow.parameters.load_duration}}" }
+          - { name: metrics_namespace,  value: "{{workflow.parameters.scenario_label}}" }
+          - { name: workflow_name,      value: "{{workflow.name}}" }
 
   - name: write-slo
     serviceAccountName: argo-workflow
@@ -63,10 +63,14 @@ spec:
         set -euo pipefail
         cat > /tmp/slo.yaml <<'EOF'
         thresholds:
-        - metric: p95-latency-chaos
-          query: avg(k6_http_req_duration_p95{dlh_scenario="kafka-broker-partition"})
+        - metric: p95-produce-latency-chaos
+          query: avg(k6_dlh_kafka_produce_duration_seconds_p95{dlh_workflow="{{workflow.name}}"})
           lt: 2.0
           window: chaos
+        - metric: produce-error-rate-recovery
+          query: sum(rate(k6_dlh_app_errors_total{kind="kafka-produce",dlh_workflow="{{workflow.name}}"}[30s])) / clamp_min(sum(rate(k6_dlh_kafka_messages_produced_total{dlh_workflow="{{workflow.name}}"}[30s])), 1e-9)
+          lt: 0.10
+          window: recovery
         EOF
         kubectl -n dlh-test-fw create configmap dlh-slo-{{workflow.name}} \
           --from-file=slo.yaml=/tmp/slo.yaml --dry-run=client -o yaml | kubectl apply -f -
