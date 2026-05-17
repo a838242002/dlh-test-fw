@@ -68,7 +68,7 @@ spec:
           lt: 2.0
           window: chaos
         - metric: produce-error-rate-recovery
-          query: sum(rate(k6_dlh_app_errors_total{kind="kafka-produce",dlh_workflow="{{workflow.name}}"}[30s])) / clamp_min(sum(rate(k6_dlh_kafka_messages_produced_total{dlh_workflow="{{workflow.name}}"}[30s])), 1e-9)
+          query: sum(rate(k6_dlh_app_errors_total_total{kind="kafka-produce",dlh_workflow="{{workflow.name}}"}[30s])) / clamp_min(sum(rate(k6_dlh_kafka_messages_produced_total_total{dlh_workflow="{{workflow.name}}"}[30s])), 1e-9)
           lt: 0.10
           window: recovery
         EOF
