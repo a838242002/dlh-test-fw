@@ -24,6 +24,8 @@ spec:
           - { name: uri,                value: "s3://fixtures/mysql-users.sql" }
           - { name: db_host,            value: "mysql.mysql-sys.svc.cluster.local" }
           - { name: credentials_secret, value: "mysql-creds" }
+    - - name: prep-table
+        template: ensure-load-table
     - - name: chaos
         templateRef: { name: chaos-pod-delete, template: main }
         continueOn: { failed: true }
@@ -82,3 +84,22 @@ spec:
         EOF
         kubectl -n dlh-test-fw create configmap dlh-slo-{{workflow.name}} \
           --from-file=slo.yaml=/tmp/slo.yaml --dry-run=client -o yaml | kubectl apply -f -
+
+  - name: ensure-load-table
+    serviceAccountName: argo-workflow
+    script:
+      image: mysql:8.0
+      command: [bash]
+      source: |
+        set -euo pipefail
+        # The dlh-test-fw fixture only loads mysql-users.sql; the load runner's
+        # default MYSQL_WRITE_SQL inserts into dlh_load(ts). Create the table
+        # here so the writes succeed instead of failing at SQL parse with
+        # "table dlh_load doesn't exist" (which would manifest as a constant
+        # ~30% error rate independent of chaos — exactly the failure mode we
+        # want to AVOID measuring as chaos impact).
+        mysql -hmysql.mysql-sys.svc.cluster.local -P3306 -uroot -pdlh-mysql-dev dlh -e "
+          CREATE TABLE IF NOT EXISTS dlh_load (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            ts DATETIME NOT NULL
+          ) ENGINE=InnoDB;"
