@@ -1,12 +1,15 @@
+# load/k6-run — runs a k6 TestRun using the dlh-k6 image (Plan 6) and one of
+# the baked-in /scripts/runners/<type>.js scripts. Per-scenario env vars are
+# delivered via a per-workflow ConfigMap that step 1 writes from the `env_map`
+# input parameter (multi-line KEY=VALUE format).
+#
 # Per spikes/k6-vm-remote-write/FINDINGS.md:
-# - k6 reserves the `scenario` label in its prometheus-rw output (always set to
-#   the k6 internal scenario name). We tag our application-level scenario as
-#   `dlh_scenario` so PromQL filters in dashboards / verdict use that.
-# - Runner image is pinned to grafana/k6:0.50.0 — older images may not have the
-#   experimental-prometheus-rw output.
-# - env_map is reserved for future dynamic env injection; k6-operator 4.x does
-#   not yet support arbitrary JSON-string env mapping cleanly, so this template
-#   accepts the param but doesn't yet wire it through.
+# - dlh_scenario tag (not k6's reserved `scenario` label).
+# - Plan 7 confirmed `_p95` gauges are emitted for custom Trend metrics, BUT
+#   k6 prom-rw prefixes every metric name with `k6_` and appends `_total` to
+#   Counters. So a runner that defines `new Trend('dlh_mysql_query_duration_seconds')`
+#   surfaces in VM as `k6_dlh_mysql_query_duration_seconds_p95`. SLO queries
+#   and dashboards must use that form.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -17,18 +20,74 @@ spec:
   entrypoint: main
   serviceAccountName: argo-workflow
   templates:
+  # ---------------------------------------------------------------
+  # main — two ordered steps
+  # ---------------------------------------------------------------
   - name: main
     inputs:
       parameters:
-      - name: script_configmap        # name of ConfigMap containing script.js
+      - name: script_path             # e.g. /scripts/runners/mysql.js
       - name: vus
       - name: duration                # e.g. "180s"
-      - name: env_map                 # JSON string of extra env vars (may be "{}") — see header note
+      - name: env_map                 # multi-line "KEY=VALUE\nKEY=VALUE" (may be empty)
       - name: scenario_label          # used as dlh_scenario= tag on prom-rw output
     outputs:
       parameters:
       - name: metrics_namespace
-        value: "{{`{{inputs.parameters.scenario_label}}`}}"
+        value: {{`"{{inputs.parameters.scenario_label}}"`}}
+    steps:
+    - - name: write-env
+        template: write-env-cm
+        arguments:
+          parameters:
+          - { name: env_map, value: {{`"{{inputs.parameters.env_map}}"`}} }
+    - - name: run-testrun
+        template: run-testrun
+        arguments:
+          parameters:
+          - { name: script_path,    value: {{`"{{inputs.parameters.script_path}}"`}} }
+          - { name: vus,            value: {{`"{{inputs.parameters.vus}}"`}} }
+          - { name: duration,       value: {{`"{{inputs.parameters.duration}}"`}} }
+          - { name: scenario_label, value: {{`"{{inputs.parameters.scenario_label}}"`}} }
+  # ---------------------------------------------------------------
+  # write-env-cm — creates dlh-k6-env-<workflow> from env_map
+  # ---------------------------------------------------------------
+  - name: write-env-cm
+    inputs:
+      parameters:
+      - name: env_map
+    script:
+      image: alpine/k8s:1.30.0
+      command: [bash]
+      source: |
+        set -euo pipefail
+        ENV_CONTENT=$(cat <<'EOF'
+        {{`{{inputs.parameters.env_map}}`}}
+        EOF
+        )
+        # Strip blank lines and lines that don't look like KEY=VALUE.
+        FILTERED=$(printf '%s\n' "$ENV_CONTENT" | grep -E '^[A-Z_][A-Z0-9_]*=' || true)
+        # Render --from-literal flags safely (preserves = and special chars in VALUE).
+        ARGS=()
+        while IFS= read -r line; do
+          [[ -z "$line" ]] && continue
+          KEY="${line%%=*}"
+          VAL="${line#*=}"
+          ARGS+=( "--from-literal=${KEY}=${VAL}" )
+        done <<< "$FILTERED"
+        kubectl -n {{`{{workflow.namespace}}`}} create configmap \
+          dlh-k6-env-{{`{{workflow.name}}`}} "${ARGS[@]}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+  # ---------------------------------------------------------------
+  # run-testrun — creates the TestRun pointing at the baked-in script
+  # ---------------------------------------------------------------
+  - name: run-testrun
+    inputs:
+      parameters:
+      - name: script_path
+      - name: vus
+      - name: duration
+      - name: scenario_label
     resource:
       action: create
       successCondition: status.stage = finished
@@ -44,15 +103,14 @@ spec:
         spec:
           parallelism: 1
           script:
-            configMap:
-              name: {{`{{inputs.parameters.script_configmap}}`}}
-              file: script.js
+            localFile: {{`{{inputs.parameters.script_path}}`}}
           arguments: >-
             --tag dlh_scenario={{`{{inputs.parameters.scenario_label}}`}}
             --tag dlh_workflow={{`{{workflow.name}}`}}
             --out experimental-prometheus-rw
           runner:
-            image: grafana/k6:0.50.0
+            image: ghcr.io/dlh/dlh-k6:0.1.0
+            imagePullPolicy: Never
             env:
             - name: K6_PROMETHEUS_RW_SERVER_URL
               value: {{ .Values.platform.vm.remoteWriteUrl }}
@@ -60,7 +118,12 @@ spec:
               value: "5s"
             - name: K6_PROMETHEUS_RW_TREND_STATS
               value: "p(95),p(99),min,max,avg"
+            - name: SCENARIO_LABEL
+              value: {{`"{{inputs.parameters.scenario_label}}"`}}
             - name: VUS
               value: {{`"{{inputs.parameters.vus}}"`}}
             - name: DURATION
               value: {{`"{{inputs.parameters.duration}}"`}}
+            envFrom:
+            - configMapRef:
+                name: dlh-k6-env-{{`{{workflow.name}}`}}
