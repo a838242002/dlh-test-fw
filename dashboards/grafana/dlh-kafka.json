@@ -1,6 +1,6 @@
 {
-  "title": "DLH — Run Detail",
-  "uid": "dlh-run",
+  "title": "DLH — Kafka",
+  "uid": "dlh-kafka",
   "schemaVersion": 39,
   "tags": [
     "dlh"
@@ -10,18 +10,31 @@
     "from": "now-7d",
     "to": "now"
   },
+  "links": [
+    {
+      "title": "Open in Run Detail",
+      "type": "link",
+      "icon": "external link",
+      "tags": [],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "url": "/d/dlh-run/",
+      "targetBlank": false
+    }
+  ],
   "templating": {
     "list": [
       {
         "name": "scenario",
-        "label": "Scenario label",
+        "label": "Scenario",
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "VictoriaMetrics"
         },
         "query": {
-          "query": "label_values(k6_http_reqs_total, dlh_scenario)",
+          "query": "label_values(k6_dlh_kafka_messages_produced_total_total, dlh_scenario)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -38,7 +51,7 @@
           "uid": "VictoriaMetrics"
         },
         "query": {
-          "query": "label_values(k6_http_reqs_total{dlh_scenario=\"$scenario\"}, dlh_workflow)",
+          "query": "label_values(k6_dlh_kafka_messages_produced_total_total{dlh_scenario=\"$scenario\"}, dlh_workflow)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -51,16 +64,23 @@
   "panels": [
     {
       "type": "timeseries",
-      "title": "k6 HTTP req rate",
+      "title": "Produce rate by topic",
+      "description": "Messages produced per second, tagged by topic.",
       "targets": [
         {
-          "expr": "sum by (status) (rate(k6_http_reqs_total{dlh_scenario=\"$scenario\"}[30s]))",
+          "expr": "sum by (topic) (rate(k6_dlh_kafka_messages_produced_total_total{dlh_scenario=\"$scenario\",dlh_workflow=\"$workflow\"}[30s]))",
           "datasource": {
             "type": "prometheus",
             "uid": "VictoriaMetrics"
-          }
+          },
+          "legendFormat": "{{topic}}"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mps"
+        }
+      },
       "gridPos": {
         "x": 0,
         "y": 0,
@@ -70,16 +90,23 @@
     },
     {
       "type": "timeseries",
-      "title": "k6 p95 latency",
+      "title": "Produce p95 latency",
+      "description": "Per-topic p95 produce latency from lib/kafka.js Trend.",
       "targets": [
         {
-          "expr": "avg(k6_http_req_duration_p95{dlh_scenario=\"$scenario\"})",
+          "expr": "k6_dlh_kafka_produce_duration_seconds_p95{dlh_scenario=\"$scenario\",dlh_workflow=\"$workflow\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "VictoriaMetrics"
-          }
+          },
+          "legendFormat": "{{topic}}"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
       "gridPos": {
         "x": 8,
         "y": 0,
@@ -89,16 +116,23 @@
     },
     {
       "type": "timeseries",
-      "title": "k6 error rate (non-2xx)",
+      "title": "Errors by kind",
+      "description": "App-level errors filtered to kafka-* kinds.",
       "targets": [
         {
-          "expr": "sum(rate(k6_http_reqs_total{dlh_scenario=\"$scenario\",status!~\"2..\"}[30s])) / clamp_min(sum(rate(k6_http_reqs_total{dlh_scenario=\"$scenario\"}[30s])), 1e-9)",
+          "expr": "sum by (kind) (rate(k6_dlh_app_errors_total_total{kind=~\"kafka.*\",dlh_workflow=\"$workflow\"}[30s]))",
           "datasource": {
             "type": "prometheus",
             "uid": "VictoriaMetrics"
-          }
+          },
+          "legendFormat": "{{kind}}"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
       "gridPos": {
         "x": 16,
         "y": 0,
@@ -109,7 +143,6 @@
     {
       "type": "stat",
       "title": "Verdict — overall",
-      "description": "1 = pass, 0 = fail. Pushed by verdict-job to VictoriaMetrics under labels dlh_workflow + dlh_scenario.",
       "targets": [
         {
           "expr": "last_over_time(dlh_verdict_overall{dlh_workflow=\"$workflow\"}[7d])",
@@ -244,7 +277,6 @@
     {
       "type": "table",
       "title": "Verdict — SLO thresholds",
-      "description": "One row per threshold defined in the scenario's SLO YAML; pass = 1 means the threshold was met.",
       "targets": [
         {
           "expr": "last_over_time(dlh_verdict_threshold_pass{dlh_workflow=\"$workflow\"}[7d])",
@@ -348,41 +380,6 @@
         "w": 24,
         "h": 8
       }
-    }
-  ],
-  "links": [
-    {
-      "title": "Open in MySQL",
-      "type": "link",
-      "icon": "external link",
-      "tags": [],
-      "asDropdown": false,
-      "includeVars": true,
-      "keepTime": true,
-      "url": "/d/dlh-mysql/",
-      "targetBlank": false
-    },
-    {
-      "title": "Open in Kafka",
-      "type": "link",
-      "icon": "external link",
-      "tags": [],
-      "asDropdown": false,
-      "includeVars": true,
-      "keepTime": true,
-      "url": "/d/dlh-kafka/",
-      "targetBlank": false
-    },
-    {
-      "title": "Open in Doris",
-      "type": "link",
-      "icon": "external link",
-      "tags": [],
-      "asDropdown": false,
-      "includeVars": true,
-      "keepTime": true,
-      "url": "/d/dlh-doris/",
-      "targetBlank": false
     }
   ]
 }

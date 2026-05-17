@@ -257,3 +257,167 @@ Reversed the Plan 2 decision to disable Litmus.
   use `make -C fixture-images/k6 reload-minikube` to force kubelet to pick up the new image
   (it caches by image ID; bare `make k6-image` + `minikube image load` is not enough
   if pods already have the previous version of the same tag).
+
+## Plan 7 Task 1: k6 custom-Trend prom-rw emits `_p95` gauges — WITH `k6_` PREFIX (2026-05-17)
+
+Verified empirically on `dlh-k6:0.1.0` (k6 v1.6.1) with
+`K6_PROMETHEUS_RW_TREND_STATS=p(95),p(99),min,max,avg`. A custom
+`new Trend('dlh_probe_duration_seconds', true)` produced the full
+gauge family in VM:
+
+    k6_dlh_probe_duration_seconds_p95
+    k6_dlh_probe_duration_seconds_p99
+    k6_dlh_probe_duration_seconds_avg
+    k6_dlh_probe_duration_seconds_min
+    k6_dlh_probe_duration_seconds_max
+    k6_dlh_probe_ops_total_total
+
+**Critical drift from spec:** k6's prometheus-rw output unconditionally
+prefixes EVERY metric name with `k6_` (and appends `_total` to Counters).
+Our custom metrics `dlh_<type>_<thing>` thus surface in VM as
+`k6_dlh_<type>_<thing>_p95` etc.
+
+**Implication:** Plan 7 SLO queries and Plan 8 dashboards use
+`k6_dlh_<type>_*` (NOT `dlh_<type>_*`). The hypothesis on `_p95` gauge
+form is otherwise confirmed — no `histogram_quantile()` and no
+`rate(_sum)/rate(_count)` fallback needed.
+
+## Plan 7 outcome — scripts + WT migration (2026-05-17)
+
+`load/k6-run` is now a two-step template (write-env CM → run TestRun on
+`dlh-k6:0.1.0`). Scenarios pass `script_path` + `env_map` (multi-line
+KEY=VALUE) instead of `script_configmap`. Three `*-k6-script.yaml` files
+deleted.
+
+### Live scenarios and the metric series they emit
+
+| Scenario | Runner | Metrics actually in VM | Verdict overall |
+|---|---|---|---|
+| `mysql-pod-delete` | `runners/mysql.js` | `k6_dlh_mysql_query_duration_seconds_{p95,p99,avg,min,max}` (tagged `op`); `k6_dlh_mysql_queries_total_total{op}` (Counter, added post-review); `k6_dlh_app_errors_total_total{kind=~"mysql.*"}` | PASS pre-fix (zero errors masked broken denominator); post-fix exposes real recovery-window write errors |
+| `kafka-broker-partition` | `runners/kafka.js` | `k6_dlh_kafka_produce_duration_seconds_{p95,...}` (tagged `topic`); `k6_dlh_kafka_messages_produced_total_total{topic}`; `k6_dlh_app_errors_total_total{kind="kafka-produce"}` | PASS (dlh_verdict_overall=1) |
+| `doris-be-network-loss` | deferred (Plan 7 spike NO-GO) | none — scenario YAML is the Phase 1 stub; deferred in `scenarios/README.md`. Future work: revive with `apache/doris.fe-ubuntu` + `apache/doris.be-ubuntu` separated images on a VM with `vm.max_map_count=2000000` tunable. | N/A |
+
+### Critical drifts from spec (relevant to Plan 8)
+
+1. **`k6_` name prefix unconditional.** k6's prometheus-rw output prefixes
+   every metric name with `k6_`, no setting to disable. Custom Trend
+   `dlh_mysql_query_duration_seconds` → VM series
+   `k6_dlh_mysql_query_duration_seconds_p95` etc.
+
+2. **Counters get DOUBLE `_total`.** A k6 Counter named
+   `dlh_kafka_messages_produced_total` surfaces in VM as
+   `k6_dlh_kafka_messages_produced_total_total` (k6 prom-rw appends
+   `_total` even to already-suffixed names). Same for
+   `k6_dlh_app_errors_total_total`. SLO queries and dashboards must use
+   the doubled form.
+
+3. **`K6_INCLUDE_SYSTEM_ENV_VARS=true` required.** k6-operator 4.4.1
+   wires `runner.envFrom` onto both the initializer and runner pods,
+   but the initializer's `k6 archive` command only forwards
+   `runner.env` entries as `-e` flags — envFrom values aren't seen by
+   k6 unless `K6_INCLUDE_SYSTEM_ENV_VARS=true` is set in `runner.env`
+   (which IS passed via `-e`). The two-step `load/k6-run` WT now
+   includes this env var; without it, runners that validate required
+   env at init-time (e.g. `MYSQL_DSN`) throw at archive time.
+
+4. **Steps templates can't use static `value` for outputs.** The plan's
+   `main.outputs.metrics_namespace` with `value:` was rejected by Argo
+   ("output parameters must have a valueFrom specified"). Removed —
+   no caller consumed it; verdict reads `scenario_label` from workflow
+   parameters directly.
+
+### Implications for Plan 8
+
+- Type-specific dashboard PromQL uses the gauge form
+  `k6_dlh_<type>_*_p95` directly. Counter rates use the doubled
+  `*_total_total` form.
+- Variable cascade: `$scenario` from `label_values(<marker_metric>, dlh_scenario)`
+  where marker is `k6_dlh_mysql_query_duration_seconds_count` for mysql,
+  `k6_dlh_kafka_messages_produced_total_total` for kafka.
+- `$workflow` from `label_values(<marker_metric>{dlh_scenario="$scenario"}, dlh_workflow)`.
+- Existing `dlh-run-detail` dashboard's k6 panels still reference
+  `k6_http_*` series — those are NO LONGER EMITTED by the new runners
+  (real protocol tests, not HTTP). Plan 8 either drops those k6 panels
+  from `dlh-run-detail` or replaces them with per-target equivalents.
+- Doris dashboard ships as a placeholder with no live data path until
+  Doris BE comes up in a future phase.
+
+### Trend prom-rw NEVER emits `_count` or `_sum` — Counter pairing is mandatory for ratio SLOs (post-review fix)
+
+Plan 7 spec compliance review caught a false-positive SLO: the
+mysql `error-rate-recovery` query divided by
+`k6_dlh_mysql_query_duration_seconds_count`, a series that does not
+exist. k6's prometheus-rw output exports a Trend ONLY as its configured
+stat suffixes (`_p95`, `_p99`, `_avg`, `_min`, `_max` — controlled by
+`K6_PROMETHEUS_RW_TREND_STATS`). It NEVER emits `_count` or `_sum`
+companions, unlike the native Prometheus client. Verified via VM
+`/api/v1/label/__name__/values`: only the five stat-suffix series
+appear; no `_count`/`_sum`.
+
+With the bogus denominator missing, `clamp_min(..., 1e-9)` floored the
+ratio to `errors * 1e9`. The original PASS only worked because the run
+genuinely produced zero `kind="mysql.*"` errors during the recovery
+window (and the prior numerator `k6_dlh_app_errors_total` — single
+`_total` — also missed the doubled-`_total` Counter series, so both
+numerator and denominator were empty → 0/clamp = 0 → pass).
+
+**Rule:** every ratio-style SLO over a Trend metric MUST have a paired
+Counter (e.g. `dlh_mysql_queries_total` → VM
+`k6_dlh_mysql_queries_total_total`) incremented at the same call site,
+and the SLO query must divide by the Counter's `rate(...)`. The Kafka
+scenario already followed this pattern via
+`dlh_kafka_messages_produced_total`; the mysql lib has been brought in
+line. Doris (when revived) and any future Trend-backed SLO must do the
+same.
+
+## Plan 8 + Phase 2 milestone wrap-up (2026-05-17)
+
+Phase 2 (`feat/phase-2-scripts-dashboards`) lands the custom `dlh-k6:0.1.0`
+image (Plan 6), real-protocol scenarios via env-driven runners (Plan 7),
+and three per-type dashboards (Plan 8). MySQL + Kafka scenarios run
+end-to-end with real protocols and produce real verdicts; Doris is
+deferred (target unavailable on this minikube).
+
+### Dashboards now in Grafana
+
+| UID | Title | Driven by |
+|---|---|---|
+| `dlh-run-detail` | DLH — Run Detail (generic k6 + verdict view; Phase 1) | `k6_*` built-ins + `dlh_verdict_*` |
+| `dlh-history` | DLH — History (cross-scenario; Phase 1) | `k6_*` + `dlh_verdict_*` |
+| `dlh-mysql` | DLH — MySQL | `k6_dlh_mysql_*`, `k6_dlh_app_errors_*`, `dlh_verdict_*` |
+| `dlh-kafka` | DLH — Kafka | `k6_dlh_kafka_*`, `k6_dlh_app_errors_*`, `dlh_verdict_*` |
+| `dlh-doris` | DLH — Doris | `k6_dlh_doris_*` (empty until Doris is up), `dlh_verdict_*` |
+
+All five dashboards share `datasource.uid = VictoriaMetrics`. Cross-links
+from Run Detail to the three per-type dashboards (and back via the
+`Open in Run Detail` link on each).
+
+### Out-of-the-box-broken caveats
+
+- `dlh-doris` shows "No data" — Doris target deploy was NO-GO on this
+  workstation (apache/doris all-in-one image entrypoint exits before
+  BE registers). Re-enable after a working `targets/doris/deploy.yaml`
+  lands; dashboards will populate without any JSON change.
+- `dlh-run-detail`'s k6 panels still reference `k6_http_*` series. Those
+  series are NO LONGER EMITTED by the new runners (real protocol tests,
+  not HTTP). The dashboard's k6 panels go blank for any post-Plan-7
+  workflow. Fixing them requires either:
+    1. Adding HTTP-mode synthetic workloads back, OR
+    2. Rewriting Run Detail's k6 panels to use the new `k6_dlh_<type>_*`
+       gauges (per-target view defeats the "generic" purpose).
+  Cleanest follow-up: replace Run Detail's k6 panels with a per-active-
+  scenario summary (top-N error kinds, total ops/sec) — Phase 3.
+
+### Phase 2 git boundary
+
+When merged to main, Phase 2 will appear as one `--no-ff` merge commit
+matching the Phase 1 convention. The 23+ atomic commits beneath are
+preserved for archaeology; `git log --first-parent` stays clean.
+
+### Verified end-to-end (Plan 8 task 9)
+
+- MySQL scenario: dashboard panels populated, verdict PASS after the
+  Plan 7 fixes (table prep + reconnect logic).
+- Kafka scenario: dashboard panels populated, verdict PASS.
+- Doris dashboard: provisioned via sidecar, panels render "No data"
+  state correctly (no errors in the Grafana JS console).

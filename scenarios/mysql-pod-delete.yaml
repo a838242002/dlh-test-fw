@@ -8,29 +8,24 @@ spec:
   entrypoint: main
   arguments:
     parameters:
-    - name: load_duration
-      value: 180s
-    - name: chaos_start_after
-      value: 30s
-    - name: chaos_duration
-      value: 60s
-    - name: scenario_label
-      value: mysql-pod-delete
+    - { name: load_duration,     value: 180s }
+    - { name: chaos_start_after, value: 30s }
+    - { name: chaos_duration,    value: 60s }
+    - { name: scenario_label,    value: mysql-pod-delete }
   templates:
   - name: main
     steps:
-    # Stage 0 — materialise SLO ConfigMap (consumed by verdict-slo-eval).
     - - name: prep-slo
         template: write-slo
-    # Stage 1 — fixture must complete before chaos+load (fail-fast).
     - - name: load-fixture
         templateRef: { name: fixture-minio-load-mysql, template: main }
         arguments:
           parameters:
-          - { name: uri,                 value: "s3://fixtures/mysql-users.sql" }
-          - { name: db_host,             value: "mysql.mysql-sys.svc.cluster.local" }
-          - { name: credentials_secret,  value: "mysql-creds" }
-    # Stage 2 — chaos and load run in parallel; chaos failure does NOT abort load.
+          - { name: uri,                value: "s3://fixtures/mysql-users.sql" }
+          - { name: db_host,            value: "mysql.mysql-sys.svc.cluster.local" }
+          - { name: credentials_secret, value: "mysql-creds" }
+    - - name: prep-table
+        template: ensure-load-table
     - - name: chaos
         templateRef: { name: chaos-pod-delete, template: main }
         continueOn: { failed: true }
@@ -45,12 +40,17 @@ spec:
         templateRef: { name: load-k6-run, template: main }
         arguments:
           parameters:
-          - { name: script_configmap, value: "k6-script-mysql-pod-delete" }
-          - { name: vus,              value: "10" }
-          - { name: duration,         value: "{{workflow.parameters.load_duration}}" }
-          - { name: env_map,          value: "{}" }
-          - { name: scenario_label,   value: "{{workflow.parameters.scenario_label}}" }
-    # Stage 3 — verdict (waits for stage 2 to finish).
+          - { name: script_path,    value: "/scripts/runners/mysql.js" }
+          - { name: vus,            value: "10" }
+          - { name: duration,       value: "{{workflow.parameters.load_duration}}" }
+          - { name: scenario_label, value: "{{workflow.parameters.scenario_label}}" }
+          - name: env_map
+            value: |
+              MYSQL_DSN=root:dlh-mysql-dev@tcp(mysql.mysql-sys.svc.cluster.local:3306)/dlh
+              MYSQL_OP_MIX=read:70,write:30
+              MYSQL_READ_SQL=SELECT NOW()
+              MYSQL_WRITE_SQL=INSERT INTO dlh_load(ts) VALUES(NOW())
+              MYSQL_SLEEP_MS=50
     - - name: verdict
         templateRef: { name: verdict-slo-eval, template: main }
         arguments:
@@ -73,14 +73,33 @@ spec:
         set -euo pipefail
         cat > /tmp/slo.yaml <<'EOF'
         thresholds:
-        - metric: p95-latency-chaos
-          query: avg(k6_http_req_duration_p95{dlh_scenario="mysql-pod-delete"})
+        - metric: p95-query-latency-chaos
+          query: avg(k6_dlh_mysql_query_duration_seconds_p95{dlh_workflow="{{workflow.name}}"})
           lt: 1.0
           window: chaos
         - metric: error-rate-recovery
-          query: sum(rate(k6_http_reqs_total{dlh_scenario="mysql-pod-delete",status!~"2.."}[30s])) / sum(rate(k6_http_reqs_total{dlh_scenario="mysql-pod-delete"}[30s]))
+          query: sum(rate(k6_dlh_app_errors_total_total{kind=~"mysql.*",dlh_workflow="{{workflow.name}}"}[30s])) / clamp_min(sum(rate(k6_dlh_mysql_queries_total_total{dlh_workflow="{{workflow.name}}"}[30s])), 1e-9)
           lt: 0.05
           window: recovery
         EOF
         kubectl -n dlh-test-fw create configmap dlh-slo-{{workflow.name}} \
           --from-file=slo.yaml=/tmp/slo.yaml --dry-run=client -o yaml | kubectl apply -f -
+
+  - name: ensure-load-table
+    serviceAccountName: argo-workflow
+    script:
+      image: mysql:8.0
+      command: [bash]
+      source: |
+        set -euo pipefail
+        # The dlh-test-fw fixture only loads mysql-users.sql; the load runner's
+        # default MYSQL_WRITE_SQL inserts into dlh_load(ts). Create the table
+        # here so the writes succeed instead of failing at SQL parse with
+        # "table dlh_load doesn't exist" (which would manifest as a constant
+        # ~30% error rate independent of chaos — exactly the failure mode we
+        # want to AVOID measuring as chaos impact).
+        mysql -hmysql.mysql-sys.svc.cluster.local -P3306 -uroot -pdlh-mysql-dev dlh -e "
+          CREATE TABLE IF NOT EXISTS dlh_load (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            ts DATETIME NOT NULL
+          ) ENGINE=InnoDB;"

@@ -6,10 +6,11 @@
 
 import sql from 'k6/x/sql';
 import driver from 'k6/x/sql/driver/mysql';
-import { Trend } from 'k6/metrics';
+import { Trend, Counter } from 'k6/metrics';
 import { nowSec } from '/scripts/lib/common.js';
 
 const queryDuration = new Trend('dlh_mysql_query_duration_seconds', true);
+const queriesTotal = new Counter('dlh_mysql_queries_total');
 
 /** Open a MySQL connection. dsn shape: "user:pass@tcp(host:3306)/db". */
 export function openConn(dsn) {
@@ -23,6 +24,7 @@ export function exec(db, statement, ...args) {
     return db.exec(statement, ...args);
   } finally {
     queryDuration.add(nowSec() - t0, { op: 'exec' });
+    queriesTotal.add(1, { op: 'exec' });
   }
 }
 
@@ -33,5 +35,6 @@ export function query(db, q, ...args) {
     return db.query(q, ...args);
   } finally {
     queryDuration.add(nowSec() - t0, { op: 'query' });
+    queriesTotal.add(1, { op: 'query' });
   }
 }

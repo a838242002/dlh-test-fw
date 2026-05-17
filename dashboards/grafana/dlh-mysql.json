@@ -1,6 +1,6 @@
 {
-  "title": "DLH — Run Detail",
-  "uid": "dlh-run",
+  "title": "DLH — MySQL",
+  "uid": "dlh-mysql",
   "schemaVersion": 39,
   "tags": [
     "dlh"
@@ -10,18 +10,31 @@
     "from": "now-7d",
     "to": "now"
   },
+  "links": [
+    {
+      "title": "Open in Run Detail",
+      "type": "link",
+      "icon": "external link",
+      "tags": [],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true,
+      "url": "/d/dlh-run/",
+      "targetBlank": false
+    }
+  ],
   "templating": {
     "list": [
       {
         "name": "scenario",
-        "label": "Scenario label",
+        "label": "Scenario",
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "VictoriaMetrics"
         },
         "query": {
-          "query": "label_values(k6_http_reqs_total, dlh_scenario)",
+          "query": "label_values(k6_dlh_mysql_queries_total_total, dlh_scenario)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -38,7 +51,7 @@
           "uid": "VictoriaMetrics"
         },
         "query": {
-          "query": "label_values(k6_http_reqs_total{dlh_scenario=\"$scenario\"}, dlh_workflow)",
+          "query": "label_values(k6_dlh_mysql_queries_total_total{dlh_scenario=\"$scenario\"}, dlh_workflow)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -51,16 +64,23 @@
   "panels": [
     {
       "type": "timeseries",
-      "title": "k6 HTTP req rate",
+      "title": "Query rate by op",
+      "description": "k6 issue rate per MySQL op (read/write/...) — series tagged `op` by lib/mysql.js.",
       "targets": [
         {
-          "expr": "sum by (status) (rate(k6_http_reqs_total{dlh_scenario=\"$scenario\"}[30s]))",
+          "expr": "sum by (op) (rate(k6_dlh_mysql_queries_total_total{dlh_scenario=\"$scenario\",dlh_workflow=\"$workflow\"}[30s]))",
           "datasource": {
             "type": "prometheus",
             "uid": "VictoriaMetrics"
-          }
+          },
+          "legendFormat": "{{op}}"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
       "gridPos": {
         "x": 0,
         "y": 0,
@@ -70,16 +90,23 @@
     },
     {
       "type": "timeseries",
-      "title": "k6 p95 latency",
+      "title": "Query p95 latency",
+      "description": "Per-op p95 latency, gauge emitted by k6 prom-rw from the lib/mysql.js Trend.",
       "targets": [
         {
-          "expr": "avg(k6_http_req_duration_p95{dlh_scenario=\"$scenario\"})",
+          "expr": "k6_dlh_mysql_query_duration_seconds_p95{dlh_scenario=\"$scenario\",dlh_workflow=\"$workflow\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "VictoriaMetrics"
-          }
+          },
+          "legendFormat": "{{op}}"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
       "gridPos": {
         "x": 8,
         "y": 0,
@@ -89,16 +116,23 @@
     },
     {
       "type": "timeseries",
-      "title": "k6 error rate (non-2xx)",
+      "title": "Errors by kind",
+      "description": "App-level errors from common.js dlh_app_errors_total, filtered to mysql-* kinds.",
       "targets": [
         {
-          "expr": "sum(rate(k6_http_reqs_total{dlh_scenario=\"$scenario\",status!~\"2..\"}[30s])) / clamp_min(sum(rate(k6_http_reqs_total{dlh_scenario=\"$scenario\"}[30s])), 1e-9)",
+          "expr": "sum by (kind) (rate(k6_dlh_app_errors_total_total{kind=~\"mysql.*\",dlh_workflow=\"$workflow\"}[30s]))",
           "datasource": {
             "type": "prometheus",
             "uid": "VictoriaMetrics"
-          }
+          },
+          "legendFormat": "{{kind}}"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
       "gridPos": {
         "x": 16,
         "y": 0,
@@ -109,7 +143,7 @@
     {
       "type": "stat",
       "title": "Verdict — overall",
-      "description": "1 = pass, 0 = fail. Pushed by verdict-job to VictoriaMetrics under labels dlh_workflow + dlh_scenario.",
+      "description": "Pushed by verdict-job at end-of-run. Survives 5min VM lookback-delta via last_over_time(...[7d]).",
       "targets": [
         {
           "expr": "last_over_time(dlh_verdict_overall{dlh_workflow=\"$workflow\"}[7d])",
@@ -244,7 +278,7 @@
     {
       "type": "table",
       "title": "Verdict — SLO thresholds",
-      "description": "One row per threshold defined in the scenario's SLO YAML; pass = 1 means the threshold was met.",
+      "description": "Per-threshold pass/fail + measured value, joined by threshold name.",
       "targets": [
         {
           "expr": "last_over_time(dlh_verdict_threshold_pass{dlh_workflow=\"$workflow\"}[7d])",
@@ -348,41 +382,6 @@
         "w": 24,
         "h": 8
       }
-    }
-  ],
-  "links": [
-    {
-      "title": "Open in MySQL",
-      "type": "link",
-      "icon": "external link",
-      "tags": [],
-      "asDropdown": false,
-      "includeVars": true,
-      "keepTime": true,
-      "url": "/d/dlh-mysql/",
-      "targetBlank": false
-    },
-    {
-      "title": "Open in Kafka",
-      "type": "link",
-      "icon": "external link",
-      "tags": [],
-      "asDropdown": false,
-      "includeVars": true,
-      "keepTime": true,
-      "url": "/d/dlh-kafka/",
-      "targetBlank": false
-    },
-    {
-      "title": "Open in Doris",
-      "type": "link",
-      "icon": "external link",
-      "tags": [],
-      "asDropdown": false,
-      "includeVars": true,
-      "keepTime": true,
-      "url": "/d/dlh-doris/",
-      "targetBlank": false
     }
   ]
 }

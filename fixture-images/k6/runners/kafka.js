@@ -46,6 +46,11 @@ export default function () {
       produce(writer, topic, [{ value: makePayload() }]);
     } catch (e) {
       errCounter.add(1, { kind: 'kafka-produce' });
+      // Drop the writer so the next iteration reconnects — same logic as
+      // mysql runner. Network-partition chaos leaves the broker socket in a
+      // half-open state; reopening recovers cleanly once the partition heals.
+      try { writer && writer.close(); } catch (_) { /* shutdown */ }
+      writer = null;
     }
   }
   if (op === 'consume' || op === 'both') {
@@ -54,6 +59,8 @@ export default function () {
       readN(reader, 1);
     } catch (e) {
       errCounter.add(1, { kind: 'kafka-consume' });
+      try { reader && reader.close(); } catch (_) { /* shutdown */ }
+      reader = null;
     }
   }
 }

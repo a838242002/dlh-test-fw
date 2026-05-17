@@ -52,6 +52,12 @@ export default function () {
     }
   } catch (e) {
     errCounter.add(1, { kind: `mysql-${op}` });
+    // Connection is likely dead after a pod-delete or network blip; drop the
+    // handle so the next iteration re-opens. Without this, every iteration in
+    // the recovery window keeps erroring on the same dead socket — turning a
+    // transient outage into a permanent error rate.
+    try { db && db.close(); } catch (_) { /* shutdown */ }
+    db = null;
   }
   if (sleepMs > 0) sleep(sleepMs / 1000);
 }
