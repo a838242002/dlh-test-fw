@@ -27,3 +27,12 @@ platform-down:
 
 platform-verify:
 	./scripts/platform-verify.sh
+
+# --- k6 image (Plan 6) ---
+.PHONY: k6-image k6-smoke
+
+k6-image:
+	$(MAKE) -C fixture-images/k6 image
+
+k6-smoke:
+	$(MAKE) -C fixture-images/k6 smoke
