@@ -71,9 +71,21 @@ spec:
           VAL="${line#*=}"
           ARGS+=( "--from-literal=${KEY}=${VAL}" )
         done <<< "$FILTERED"
+        # workflow.uid is an Argo built-in template variable — no kubectl get needed,
+        # avoiding extra RBAC for `workflows` get on the argo-workflow ServiceAccount.
         kubectl -n {{`{{workflow.namespace}}`}} create configmap \
           dlh-k6-env-{{`{{workflow.name}}`}} "${ARGS[@]}" \
-          --dry-run=client -o yaml | kubectl apply -f -
+          --dry-run=client -o json \
+          | jq --arg uid '{{`{{workflow.uid}}`}}' --arg name '{{`{{workflow.name}}`}}' '
+              .metadata.ownerReferences = [{
+                apiVersion: "argoproj.io/v1alpha1",
+                kind: "Workflow",
+                name: $name,
+                uid: $uid,
+                controller: true,
+                blockOwnerDeletion: false
+              }]' \
+          | kubectl apply -f -
   # ---------------------------------------------------------------
   # run-testrun — creates the TestRun pointing at the baked-in script
   # ---------------------------------------------------------------
