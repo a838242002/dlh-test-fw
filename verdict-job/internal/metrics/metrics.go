@@ -5,7 +5,6 @@
 // Emits these series under labels `dlh_workflow` + `dlh_scenario`:
 //
 //	dlh_verdict_overall                   0 or 1
-//	dlh_verdict_chaos_pass                0 or 1
 //	dlh_verdict_threshold_pass{name=...}  0 or 1, one per SLO threshold
 //	dlh_verdict_threshold_value{name=...} the measured PromQL value
 //
@@ -64,7 +63,6 @@ func build(workflow, scenario string, r *eval.Result) []byte {
 	var b strings.Builder
 	base := fmt.Sprintf(`dlh_workflow=%q,dlh_scenario=%q`, workflow, scenario)
 	fmt.Fprintf(&b, "dlh_verdict_overall{%s} %d\n", base, boolToInt(r.Overall))
-	fmt.Fprintf(&b, "dlh_verdict_chaos_pass{%s} %d\n", base, boolToInt(r.ChaosVerdict == "Pass"))
 	for _, t := range r.Thresholds {
 		labels := fmt.Sprintf(`%s,name=%q`, base, t.Metric)
 		fmt.Fprintf(&b, "dlh_verdict_threshold_pass{%s} %d\n", labels, boolToInt(t.Passed))

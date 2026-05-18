@@ -17,8 +17,7 @@ func sampleView() View {
 	lt := 0.5
 	return View{
 		Result: &eval.Result{
-			Overall:      true,
-			ChaosVerdict: "Pass",
+			Overall: true,
 			Thresholds: []eval.ThresholdResult{{
 				Metric: "p95-latency", Query: "Q1", Window: "chaos",
 				WindowStart: "2026-05-16T10:00:30Z", WindowEnd: "2026-05-16T10:01:00Z",
@@ -59,7 +58,7 @@ func TestRenderJSONShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := buf.String()
-	for _, want := range []string{`"overall": true`, `"chaos_verdict": "Pass"`, `"metric": "p95-latency"`} {
+	for _, want := range []string{`"overall": true`, `"metric": "p95-latency"`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("JSON missing %q.\n%s", want, s)
 		}

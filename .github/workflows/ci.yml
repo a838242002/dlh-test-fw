@@ -85,16 +85,18 @@ jobs:
       - name: helm template
         run: helm template dlh helm/dlh-test-fw > /tmp/rendered.yaml
       # -skip CustomResourceDefinition: Datree catalog has no meta-schema for CRD-of-CRD.
-      # -skip ChaosExperiment: litmuschaos.io v1alpha1 ChaosExperiment not in Datree catalog.
+      # (Plan 12: Litmus ChaosExperiment skip removed — Litmus gone. Chaos Mesh
+      # PodChaos/NetworkChaos/Schedule are present in Datree's catalog, no skip needed.)
       - name: Validate rendered chart
         run: |
-          kubeconform -skip CustomResourceDefinition,ChaosExperiment -strict -summary \
+          kubeconform -skip CustomResourceDefinition -strict -summary \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             /tmp/rendered.yaml
+      # Same skip rationale as above.
       - name: Validate scenarios/*.yaml
         run: |
-          kubeconform -skip CustomResourceDefinition,ChaosExperiment -strict -summary \
+          kubeconform -skip CustomResourceDefinition -strict -summary \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             scenarios/*.yaml

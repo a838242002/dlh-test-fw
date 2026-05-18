@@ -16,7 +16,6 @@ spec:
     inputs:
       parameters:
       - name: slo_yaml                  # full YAML string (informational; runtime reads /etc/slo/slo.yaml)
-      - name: chaos_result_name         # output from chaos step
       - name: load_start_ts             # steps.load.startedAt from caller
       - name: chaos_start_after         # e.g. "30s"
       - name: chaos_duration            # e.g. "60s"
@@ -39,7 +38,6 @@ spec:
       command: ["/verdict"]
       args:
       - -slo-yaml=/etc/slo/slo.yaml
-      - -chaos-result-name={{`{{inputs.parameters.chaos_result_name}}`}}
       - -load-start-ts={{`{{inputs.parameters.load_start_ts}}`}}
       - -chaos-start-after={{`{{inputs.parameters.chaos_start_after}}`}}
       - -chaos-duration={{`{{inputs.parameters.chaos_duration}}`}}

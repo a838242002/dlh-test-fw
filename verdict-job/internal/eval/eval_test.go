@@ -28,7 +28,7 @@ func TestEvaluatePassAllGreen(t *testing.T) {
 		ChaosDuration:   30 * time.Second,
 		LoadDuration:    120 * time.Second,
 	}
-	r, err := Evaluate(context.Background(), s, fake, p, "Pass")
+	r, err := Evaluate(context.Background(), s, fake, p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,9 +43,6 @@ func TestEvaluatePassAllGreen(t *testing.T) {
 	if !r.RawPromQLPass {
 		t.Error("rawPromQL should pass")
 	}
-	if r.ChaosVerdict != "Pass" {
-		t.Error("chaos verdict")
-	}
 }
 
 func TestEvaluateFailWhenThresholdExceeded(t *testing.T) {
@@ -59,32 +56,12 @@ func TestEvaluateFailWhenThresholdExceeded(t *testing.T) {
 		ChaosDuration:   30 * time.Second,
 		LoadDuration:    120 * time.Second,
 	}
-	r, err := Evaluate(context.Background(), s, fake, p, "Pass")
+	r, err := Evaluate(context.Background(), s, fake, p)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.Overall {
 		t.Fatalf("expected Fail, got Pass: %+v", r)
-	}
-}
-
-func TestEvaluateFailWhenChaosVerdictNotPass(t *testing.T) {
-	s := &slo.SLO{Thresholds: []slo.Threshold{
-		{Metric: "lat", Query: "Q1", LT: ptr(0.5), Window: slo.WindowChaos},
-	}}
-	fake := &prom.Fake{Values: map[string]float64{"Q1": 0.1}}
-	p := window.Params{
-		LoadStart:       time.Now(),
-		ChaosStartAfter: 10 * time.Second,
-		ChaosDuration:   30 * time.Second,
-		LoadDuration:    120 * time.Second,
-	}
-	r, err := Evaluate(context.Background(), s, fake, p, "Fail")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.Overall {
-		t.Fatal("chaos Fail must force Overall Fail")
 	}
 }
 
@@ -96,7 +73,7 @@ func TestEvaluateGTBound(t *testing.T) {
 	p := window.Params{
 		LoadStart: time.Now(), ChaosStartAfter: 10 * time.Second, ChaosDuration: 30 * time.Second, LoadDuration: 120 * time.Second,
 	}
-	r, _ := Evaluate(context.Background(), s, fake, p, "Pass")
+	r, _ := Evaluate(context.Background(), s, fake, p)
 	if r.Overall {
 		t.Fatal("50 > 100 is false, should fail")
 	}

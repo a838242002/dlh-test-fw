@@ -1,3 +1,4 @@
+# Plan 12: NetworkChaos action=partition isolates a specific kafka broker pod.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -11,36 +12,48 @@ spec:
   - name: main
     inputs:
       parameters:
-      - name: kafka_namespace
-      - name: broker_id
-      - name: duration
-    outputs:
-      parameters:
-      - name: chaos_result_name
-        valueFrom:
-          jsonPath: '{.metadata.name}'
-    resource:
-      action: create
-      successCondition: status.engineStatus == completed
-      failureCondition: status.engineStatus == stopped
-      manifest: |
-        apiVersion: litmuschaos.io/v1alpha1
-        kind: ChaosEngine
+      - name: kafka_namespace          # e.g. "kafka-sys"
+      - name: broker_id                # e.g. "0" — translates to label selector
+      - name: duration                 # e.g. "60s"
+    script:
+      image: alpine/k8s:1.30.0
+      command: [bash]
+      source: |
+        set -euo pipefail
+        BID='{{`{{inputs.parameters.broker_id}}`}}'
+
+        NAME=$(cat <<EOF | kubectl create -f - -o jsonpath='{.metadata.name}'
+        apiVersion: chaos-mesh.org/v1alpha1
+        kind: NetworkChaos
         metadata:
           generateName: dlh-kafka-partition-
           namespace: {{`{{workflow.namespace}}`}}
         spec:
-          appinfo:
-            appns: {{`{{inputs.parameters.kafka_namespace}}`}}
-            applabel: "kafka.broker.id={{`{{inputs.parameters.broker_id}}`}}"
-            appkind: statefulset
-          chaosServiceAccount: litmus
-          experiments:
-          - name: pod-network-partition
-            spec:
-              components:
-                env:
-                - name: TOTAL_CHAOS_DURATION
-                  value: {{`"{{inputs.parameters.duration}}"`}}
-                - name: POLICY_TYPES
-                  value: "all"
+          action: partition
+          duration: '{{`{{inputs.parameters.duration}}`}}'
+          mode: all
+          selector:
+            namespaces:
+            - {{`{{inputs.parameters.kafka_namespace}}`}}
+            labelSelectors:
+              app: kafka
+              "kafka.broker.id": "$BID"
+          direction: to
+        EOF
+        )
+        echo "NetworkChaos partition created: $NAME"
+
+        D='{{`{{inputs.parameters.duration}}`}}'
+        DEADLINE=$(( $(date +%s) + ${D%s} + 30 ))
+        while (( $(date +%s) < DEADLINE )); do
+          phase=$(kubectl -n {{`{{workflow.namespace}}`}} get networkchaos "$NAME" \
+                    -o jsonpath='{.status.experiment.containerRecords[0].phase}' 2>/dev/null || echo "")
+          echo "[$(date +%H:%M:%S)] phase=$phase"
+          if [[ "$phase" == "Recovered" || "$phase" == "Not Injected" ]]; then
+            echo "Reached terminal phase: $phase"
+            break
+          fi
+          sleep 3
+        done
+
+        kubectl -n {{`{{workflow.namespace}}`}} delete networkchaos "$NAME" 2>/dev/null || true

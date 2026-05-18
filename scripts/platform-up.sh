@@ -9,7 +9,6 @@ if ! kubectl get nodes 2>/dev/null | grep -q ' Ready '; then
 fi
 
 helm repo add argo https://argoproj.github.io/argo-helm || true
-helm repo add litmuschaos https://litmuschaos.github.io/litmus-helm/ || true
 helm repo add grafana https://grafana.github.io/helm-charts || true
 helm repo add bitnami https://charts.bitnami.com/bitnami || true
 helm repo add victoria-metrics https://victoriametrics.github.io/helm-charts/ || true

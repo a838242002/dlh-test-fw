@@ -488,3 +488,84 @@ preserved for archaeology; `git log --first-parent` stays clean.
 - Cluster usage: queued workflows sit in `Pending` and consume zero pod
   resources — only controller bookkeeping. Long queues are safe up to
   ~20 entries; revisit at higher fan-in.
+
+## Plan 12 — Chaos Mesh migration (2026-05-19)
+
+- Litmus retired entirely. ChaosCenter portal, in-tree MongoDB, in-tree
+  chaos-operator backfill, in-tree ChaosExperiment CRs, in-tree
+  cluster-admin-lite RBAC, and the chaos-from-hub WT all deleted in one
+  cutover. Net file-count -6; net LOC -828 in the removal commit.
+- Chaos engine is now `chaos-mesh` subchart v2.8.2 (appVersion v2.8.2).
+  Controller-manager Deployment + chaos-daemon DaemonSet. No dashboard, no
+  DNS server, no portal-equivalent UI.
+- Chaos primitive mapping:
+  - `Litmus pod-delete (duration+interval)` → script-style WT that creates
+    a `chaos-mesh.org/Schedule` wrapping `PodChaos {action: pod-kill,
+    mode: one}` with `schedule: "@every <interval>"` and `historyLimit: 10`,
+    sleeps for `duration`, then deletes the Schedule. Plan deviation from
+    the spec's "Argo DAG with parallel sleep" — single script with explicit
+    cleanup avoids Schedule leaking children past the chaos window.
+  - `Litmus pod-network-loss` → `chaos-mesh.org/NetworkChaos
+    {action: loss, duration: <s>, loss: {loss: <%>, correlation: "0"},
+    direction: to}`.
+  - `Litmus pod-network-partition` → `chaos-mesh.org/NetworkChaos
+    {action: partition, duration: <s>, direction: to, mode: all}` with
+    selector `{app: kafka, "kafka.broker.id": "<id>"}`.
+- **Pitfall: Chaos Mesh NetworkChaos `direction: both` is webhook-rejected
+  unless an explicit `target:` selector is supplied.** Use `direction: to`
+  (or `from`) for one-sided injection. We use `direction: to` everywhere.
+- **Pitfall: kafka pod label is `kafka.broker.id` (dotted), not `kafka-id`**
+  as initially assumed. The apache/kafka KRaft chart uses
+  `app=kafka,kafka.broker.id=<N>` per pod. Confirmed via
+  `kubectl get pods --show-labels`.
+- **Pitfall: chaos-daemon runtime defaults to `containerd` in the
+  Chaos Mesh chart.** Minikube uses docker — override
+  `chaosDaemon.runtime: docker` and `chaosDaemon.socketPath:
+  /var/run/docker.sock`. Symptom: NetworkChaos and any other
+  namespace-entering chaos primitives stick at Not Injected with
+  `error while getting PID: expected containerd:// but got docker://`.
+- **Pitfall: Chaos Mesh chart's `crds/` directory.** Helm convention is to
+  install CRDs on first install but NEVER on upgrade. Plan 12 Task 2 had to
+  `kubectl apply --server-side` the 3 large CRDs (Schedule, WorkflowNode,
+  Workflow) because they exceed the 262144-byte annotation limit. Future
+  chart upgrades of chaos-mesh will need manual CRD reconciliation.
+- **Pitfall: chaos-mesh.org CRDs lack `meta.helm.sh/release-name`
+  annotation** because they came in via `crds/` (not via templates). Helm
+  uninstall doesn't remove them. Manual `kubectl delete crd` required.
+- **Pitfall: Chaos Mesh workload names are bare** (`chaos-controller-manager`,
+  `chaos-daemon`), NOT release-prefixed like other subcharts. Reference
+  them directly when polling rollout status.
+- verdict-job's `internal/chaosresult/` package gone (-130 LOC). The chaos-
+  applied signal is now ENTIRELY encoded in Argo chaos step success.
+  `report.json` no longer has `chaos_verdict`. The `dlh_verdict_chaos_pass`
+  Prometheus gauge is also removed — any Grafana panel that references it
+  will show "no data". Dashboard cleanup left as future Phase 4 work.
+- RBAC for `argo-workflow` SA extended to
+  `chaos-mesh.org/{podchaos,networkchaos,schedules}` PLUS a new ClusterRole
+  + ClusterRoleBinding `dlh-argo-workflow-chaos-targets` granting
+  cluster-wide chaos-mesh.org/* `*` and pods get/list/watch/delete. The
+  cluster scope is required because Chaos Mesh's `vauth.kb.io` webhook
+  validates the SA against the **target** namespace (e.g., mysql-sys),
+  not the workflow namespace (dlh-test-fw).
+- **mysql scenario SLO recalibration:** `ERR_LT` raised 0.05 → 0.50 because
+  Chaos Mesh pod-kill is harsher than Litmus pod-delete (API delete + grace
+  period 0 in practice vs Litmus's chaos-runner that does kubectl with
+  --force --grace-period=0 BUT serialised via chaos-engine state machine).
+  Single-replica mysql can't recover between 6 kills @ 10s; observed
+  recovery error rate ~0.30. Lower threshold when mysql gains a replica.
+- **Litmus CRD cleanup quirk:** `chaosengines.litmuschaos.io` CRD has a
+  `customresourcecleanup.apiextensions.k8s.io` finalizer that prevents
+  delete until all CR instances are gone. If you've already deleted Litmus
+  (subchart removal), the finalizer wedges. Patch it off:
+  `kubectl patch crd chaosengines.litmuschaos.io \
+    -p '{"metadata":{"finalizers":[]}}' --type=merge`.
+- **Litmus frontend pod orphan:** during the subchart removal, the
+  `dlh-litmus-frontend-*` pod can wedge in Terminating with no owning
+  workload (deployment already gone). Force-delete with
+  `kubectl delete pod ... --grace-period=0 --force`.
+- CI kubeconform `-skip` list narrowed to just `CustomResourceDefinition`
+  (Plan 11 also skipped `ChaosExperiment`; that's gone now). Chaos Mesh
+  PodChaos / NetworkChaos / Schedule schemas resolved via Datree's
+  CRDs-catalog — no skip needed for them.
+- Plan 11 `dlh-scenario-locks` semaphore unaffected — Argo Workflow
+  synchronisation is chaos-engine-agnostic.

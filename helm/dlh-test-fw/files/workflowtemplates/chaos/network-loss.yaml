@@ -1,3 +1,5 @@
+# Plan 12 (2026-05-19): rewritten to use Chaos Mesh NetworkChaos.
+# NetworkChaos has a native duration field, so no Schedule wrapper.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -12,36 +14,53 @@ spec:
     inputs:
       parameters:
       - name: target_namespace
-      - name: target_pod_selector
-      - name: loss_percent
-      - name: duration
-    outputs:
-      parameters:
-      - name: chaos_result_name
-        valueFrom:
-          jsonPath: '{.metadata.name}'
-    resource:
-      action: create
-      successCondition: status.engineStatus == completed
-      failureCondition: status.engineStatus == stopped
-      manifest: |
-        apiVersion: litmuschaos.io/v1alpha1
-        kind: ChaosEngine
+      - name: target_pod_selector      # "key=value" form
+      - name: loss_percent             # e.g. "50"
+      - name: duration                 # e.g. "60s"
+    script:
+      image: alpine/k8s:1.30.0
+      command: [bash]
+      source: |
+        set -euo pipefail
+        SEL='{{`{{inputs.parameters.target_pod_selector}}`}}'
+        KEY="${SEL%%=*}"
+        VAL="${SEL#*=}"
+
+        NAME=$(cat <<EOF | kubectl create -f - -o jsonpath='{.metadata.name}'
+        apiVersion: chaos-mesh.org/v1alpha1
+        kind: NetworkChaos
         metadata:
           generateName: dlh-network-loss-
           namespace: {{`{{workflow.namespace}}`}}
         spec:
-          appinfo:
-            appns: {{`{{inputs.parameters.target_namespace}}`}}
-            applabel: {{`{{inputs.parameters.target_pod_selector}}`}}
-            appkind: deployment
-          chaosServiceAccount: litmus
-          experiments:
-          - name: pod-network-loss
-            spec:
-              components:
-                env:
-                - name: TOTAL_CHAOS_DURATION
-                  value: {{`"{{inputs.parameters.duration}}"`}}
-                - name: NETWORK_PACKET_LOSS_PERCENTAGE
-                  value: {{`"{{inputs.parameters.loss_percent}}"`}}
+          action: loss
+          duration: '{{`{{inputs.parameters.duration}}`}}'
+          mode: one
+          selector:
+            namespaces:
+            - {{`{{inputs.parameters.target_namespace}}`}}
+            labelSelectors:
+              $KEY: $VAL
+          loss:
+            loss: '{{`{{inputs.parameters.loss_percent}}`}}'
+            correlation: '0'
+          direction: to
+        EOF
+        )
+        echo "NetworkChaos created: $NAME"
+
+        D='{{`{{inputs.parameters.duration}}`}}'
+        DEADLINE=$(( $(date +%s) + ${D%s} + 30 ))
+        while (( $(date +%s) < DEADLINE )); do
+          phase=$(kubectl -n {{`{{workflow.namespace}}`}} get networkchaos "$NAME" \
+                    -o jsonpath='{.status.experiment.containerRecords[0].phase}' 2>/dev/null || echo "")
+          echo "[$(date +%H:%M:%S)] phase=$phase"
+          if [[ "$phase" == "Recovered" || "$phase" == "Not Injected" ]]; then
+            echo "Reached terminal phase: $phase"
+            break
+          fi
+          sleep 3
+        done
+
+        # Cleanup
+        kubectl -n {{`{{workflow.namespace}}`}} delete networkchaos "$NAME" 2>/dev/null || true
