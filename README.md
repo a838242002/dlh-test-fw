@@ -81,13 +81,23 @@ make run-mysql             # mysql-pod-delete
 make run-kafka             # kafka-broker-partition
 ```
 
-`make run-{mysql,kafka}` wrap `scripts/run-scenario.sh`, which uses
-`argo submit --wait` and forwards extra args. Override any scenario
-parameter at submit time:
+`make run-{mysql,kafka}` wrap `scripts/run-scenario.sh`, which submits via
+`argo submit` then blocks on `argo wait`, and forwards extra args. Override
+any scenario parameter at submit time:
 
 ```bash
 scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml \
     -p vus=50 -p chaos_duration=120s -p mysql_op_mix=read:100
+```
+
+Submissions to the same target serialise via Argo `synchronization.semaphores`
+(per-target keys in `dlh-scenario-locks`). Submissions to different targets run
+in parallel. Within a queue, higher `spec.priority` wins; override at submit time
+via `argo submit --priority N`:
+
+```bash
+scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml --priority 200
+# Prints "Queued: waiting for semaphore .../mysql (priority 200)" if blocked.
 ```
 
 To tear down: `make platform-down` (helm uninstall) and `minikube delete`.
@@ -106,7 +116,8 @@ scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml -p vus=20 -p load_durati
 
 The script:
 - timestamps `metadata.generateName` into `metadata.name: <prefix>-YYYYMMDD-HHMMSS`
-- `argo submit --wait`s
+- `argo submit`s, then probes once for queue state, then `argo wait`s
+- prints `Queued: waiting for semaphore <name> (priority N)` if the workflow is held back by a per-target semaphore
 - exits 0 iff phase is `Succeeded`
 
 ### Read the verdict
@@ -287,8 +298,9 @@ Out of scope (deferred): image publish to GHCR, KinD-based E2E scenario runs.
 | `phase-2-mvp` | Custom dlh-k6 image (xk6-sql + xk6-kafka), real-protocol scenarios with per-target metric series, three per-type Grafana dashboards (mysql / kafka / doris) |
 | `plan9-scenario-optimization` | Inline `write-slo` + `ensure-load-table` heredocs lifted into `util-write-slo` + `util-ensure-mysql-table` WorkflowTemplates; chart-managed SLO template library (`dlh-slos` CM); submit-time `-p` overrides via `run-scenario.sh` |
 | `plan10-github-actions-ci` | PR guardrails CI in `.github/workflows/ci.yml`: parallel `helm` (lint + template smoke), `go` (vet + test on `verdict-job`), `shellcheck`, and `kubeconform` (rendered chart + scenarios). ~1 min wall-clock on a warm cache. No image publish, no E2E. |
+| `plan11-scenario-queue` | Per-target serialisation + priority via Argo native `spec.synchronization.semaphores` (ConfigMap `dlh-scenario-locks`, keys mysql/kafka/doris, count=1 each). Same-target scenarios queue; different-target run in parallel. `--priority N` override at submit time. `scripts/run-scenario.sh` prints a `Queued: ...` line when blocked. Argo controller bumped to v3.6.10 (subchart `argo-workflows` 0.45.20). |
 
-**Working end-to-end (as of `plan10-github-actions-ci`):**
+**Working end-to-end (as of `plan11-scenario-queue`):**
 - `mysql-pod-delete` and `kafka-broker-partition` scenarios run real
   protocol load (xk6-sql, xk6-kafka) against the in-cluster targets,
   inject Litmus chaos in parallel, and produce a verdict in both MinIO
@@ -329,6 +341,7 @@ grep-able in `git log --first-parent`.
 | Plans 6 + 7 + 8 (Phase 2) | `a8dbc7b` | Custom dlh-k6 image, real-protocol scenarios, per-type dashboards |
 | Plan 9 | `4d68ea3` | util-write-slo + util-ensure-mysql-table; `dlh-slos` CM; `run-scenario.sh -p` overrides |
 | Plan 10 | `e6c11e2` | GitHub Actions CI (`helm` + `go` + `shellcheck` + `kubeconform`) |
+| Plan 11 | `9c292a7` | Per-target scenario semaphores + priority (Argo v3.6.10); `dlh-scenario-locks` CM; queued-message UX in `run-scenario.sh` |
 
 Each plan's source-of-truth document lives under
 `docs/superpowers/plans/` and the deviations from those plans are noted
