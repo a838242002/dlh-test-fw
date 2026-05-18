@@ -1,0 +1,19 @@
+# Per-target scenario semaphore counts. Each key's value is the maximum
+# number of concurrent workflows allowed for that target. count=1 means
+# strict serialisation; future per-target tuning is a one-line edit.
+#
+# Scenarios reference this CM via:
+#   spec.synchronization.semaphore.configMapKeyRef:
+#     name: dlh-scenario-locks
+#     key:  mysql          # or kafka, doris, ...
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlh-scenario-locks
+  namespace: {{ include "dlh.namespace" . }}
+  labels:
+    {{- include "dlh.labels" . | nindent 4 }}
+data:
+  mysql: "1"
+  kafka: "1"
+  doris: "1"

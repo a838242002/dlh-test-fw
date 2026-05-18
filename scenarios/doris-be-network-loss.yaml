@@ -7,6 +7,12 @@ metadata:
   namespace: dlh-test-fw
 spec:
   serviceAccountName: argo-workflow
+  priority: 100
+  synchronization:
+    semaphores:
+    - configMapKeyRef:
+        name: dlh-scenario-locks
+        key: doris
   entrypoint: main
   arguments:
     parameters:
