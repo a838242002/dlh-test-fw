@@ -73,6 +73,18 @@ litmus:
     # Disabled — we ship our own. See templates/mongodb.yaml.
     enabled: false
 
+chaos-mesh:
+  controllerManager:
+    replicaCount: 1
+  chaosDaemon:
+    # DaemonSet; injects network chaos via hostNetwork.
+    runtime: containerd
+    socketPath: /run/containerd/containerd.sock
+  dashboard:
+    create: false              # No UI; same logic as Litmus portal removal.
+  dnsServer:
+    create: false              # We don't use DNSChaos.
+
 k6-operator:
   # NOTE: chart 4.4.1's strict JSON schema rejects an `enabled` key here.
   # See Chart.yaml comment. Subchart is always installed.
