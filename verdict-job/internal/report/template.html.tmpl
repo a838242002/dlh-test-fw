@@ -13,7 +13,7 @@ th{background:#f3f4f6}
 <div class="banner {{if .Overall}}pass{{else}}fail{{end}}">
   {{if .Overall}}PASS{{else}}FAIL{{end}} — {{.ScenarioName}}
   <div style="font-size:.9rem;font-weight:400;margin-top:.25rem">
-    chaos verdict: {{.ChaosVerdict}} · duration: {{.LoadDurationSec}}s
+    duration: {{.LoadDurationSec}}s
   </div>
 </div>
 <h2>Thresholds</h2>

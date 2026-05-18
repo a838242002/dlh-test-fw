@@ -27,8 +27,7 @@ func TestPushSerializesAndPOSTs(t *testing.T) {
 	defer srv.Close()
 
 	r := &eval.Result{
-		Overall:      false,
-		ChaosVerdict: "Pass",
+		Overall: false,
 		Thresholds: []eval.ThresholdResult{
 			{Metric: "http_5xx_rate", Value: 0, Passed: true},
 			{Metric: "p95_latency_ms", Value: 12.5, Passed: false},
@@ -41,7 +40,6 @@ func TestPushSerializesAndPOSTs(t *testing.T) {
 
 	wantLines := []string{
 		`dlh_verdict_overall{dlh_workflow="wf-123",dlh_scenario="mysql-pod-delete"} 0`,
-		`dlh_verdict_chaos_pass{dlh_workflow="wf-123",dlh_scenario="mysql-pod-delete"} 1`,
 		`dlh_verdict_threshold_pass{dlh_workflow="wf-123",dlh_scenario="mysql-pod-delete",name="http_5xx_rate"} 1`,
 		`dlh_verdict_threshold_value{dlh_workflow="wf-123",dlh_scenario="mysql-pod-delete",name="http_5xx_rate"} 0`,
 		`dlh_verdict_threshold_pass{dlh_workflow="wf-123",dlh_scenario="mysql-pod-delete",name="p95_latency_ms"} 0`,

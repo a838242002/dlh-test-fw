@@ -1,4 +1,4 @@
-// Package eval combines threshold checks, raw PromQL, and chaos verdict into an overall result.
+// Package eval combines threshold checks and raw PromQL into an overall result.
 package eval
 
 import (
@@ -27,11 +27,10 @@ type Result struct {
 	RawPromQL      string            `json:"raw_promql,omitempty"`
 	RawPromQLValue float64           `json:"raw_promql_value,omitempty"`
 	RawPromQLPass  bool              `json:"raw_promql_pass,omitempty"`
-	ChaosVerdict   string            `json:"chaos_verdict"`
 }
 
-func Evaluate(ctx context.Context, s *slo.SLO, p prom.API, win window.Params, chaosVerdict string) (*Result, error) {
-	r := &Result{ChaosVerdict: chaosVerdict, Overall: true}
+func Evaluate(ctx context.Context, s *slo.SLO, p prom.API, win window.Params) (*Result, error) {
+	r := &Result{Overall: true}
 
 	for _, t := range s.Thresholds {
 		w, err := window.Compute(win, t.Window)
@@ -77,8 +76,5 @@ func Evaluate(ctx context.Context, s *slo.SLO, p prom.API, win window.Params, ch
 		}
 	}
 
-	if chaosVerdict != "Pass" {
-		r.Overall = false
-	}
 	return r, nil
 }

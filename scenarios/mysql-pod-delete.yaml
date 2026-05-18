@@ -99,7 +99,6 @@ spec:
         arguments:
           parameters:
           - { name: slo_yaml,           value: "(unused — read from CM)" }
-          - { name: chaos_result_name,  value: "{{steps.chaos.outputs.parameters.chaos_result_name}}-pod-delete" }
           - { name: load_start_ts,      value: "{{steps.load.startedAt}}" }
           - { name: chaos_start_after,  value: "{{workflow.parameters.chaos_start_after}}" }
           - { name: chaos_duration,     value: "{{workflow.parameters.chaos_duration}}" }
