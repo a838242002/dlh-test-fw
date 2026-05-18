@@ -31,8 +31,7 @@ spec:
     # ===== chaos shape =====
     - { name: chaos_start_after, value: 30s }
     - { name: chaos_duration,    value: 60s }
-    - { name: chaos_interval,    value: "10" }
-    - { name: chaos_force,       value: "true" }
+    - { name: chaos_interval,    value: "10s" }
     # ===== workload (mysql-specific) =====
     - { name: mysql_dsn,         value: "root:dlh-mysql-dev@tcp(mysql.mysql-sys.svc.cluster.local:3306)/dlh" }
     - { name: mysql_op_mix,      value: "read:70,write:30" }
@@ -78,7 +77,6 @@ spec:
           - { name: target_pod_selector, value: "app=mysql" }
           - { name: duration,            value: "{{workflow.parameters.chaos_duration}}" }
           - { name: interval,            value: "{{workflow.parameters.chaos_interval}}" }
-          - { name: force,               value: "{{workflow.parameters.chaos_force}}" }
       - name: load
         templateRef: { name: load-k6-run, template: main }
         arguments:

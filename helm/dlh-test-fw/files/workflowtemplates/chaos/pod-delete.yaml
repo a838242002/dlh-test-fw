@@ -1,6 +1,11 @@
-# Naming convention: Litmus names ChaosResult as "<engine-name>-<experiment>".
-# This template outputs the ChaosEngine name via jsonPath; callers (verdict
-# template / Plan 5 scenarios) append "-pod-delete" to get the ChaosResult name.
+# Plan 12 (2026-05-19): rewritten to use Chaos Mesh Schedule + PodChaos
+# instead of Litmus ChaosEngine. A single script step:
+#   1. creates a Schedule CR (re-applies pod-kill every `interval`),
+#   2. sleeps for `duration`,
+#   3. deletes the Schedule so it stops producing children.
+# This bounds chaos cleanly within the chaos window — without explicit
+# delete the Schedule would keep killing target pods past the window
+# and torpedo the recovery-phase SLO.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -15,42 +20,50 @@ spec:
     inputs:
       parameters:
       - name: target_namespace
-      - name: target_pod_selector       # e.g. app=mysql
-      - name: duration                  # seconds, e.g. "60"
-      - name: interval                  # seconds between kills, e.g. "10"
-      - name: force                     # "true" / "false"
-    outputs:
-      parameters:
-      - name: chaos_result_name
-        valueFrom:
-          jsonPath: '{.metadata.name}'
-    resource:
-      action: create
-      # Litmus 3.x reports verdict at .status.experiments[0].verdict, not
-      # .status.experimentStatus (which was the 1.x path). Plan 5 corrects
-      # this so the Argo step actually returns when chaos completes.
-      successCondition: status.engineStatus == completed
-      failureCondition: status.engineStatus == stopped
-      manifest: |
-        apiVersion: litmuschaos.io/v1alpha1
-        kind: ChaosEngine
+      - name: target_pod_selector      # "key=value" form (Litmus convention preserved)
+      - name: duration                 # e.g. "60s"
+      - name: interval                 # e.g. "10s"
+    script:
+      image: alpine/k8s:1.30.0
+      command: [bash]
+      source: |
+        set -euo pipefail
+        # Parse "key=value" selector into the labelSelectors map form.
+        SEL='{{`{{inputs.parameters.target_pod_selector}}`}}'
+        KEY="${SEL%%=*}"
+        VAL="${SEL#*=}"
+        DURATION='{{`{{inputs.parameters.duration}}`}}'
+        # Strip trailing "s" for sleep(1) — input is duration like "60s".
+        SLEEP_SECS="${DURATION%s}"
+
+        SCHED_NAME=$(kubectl create -f - -o jsonpath='{.metadata.name}' <<EOF
+        apiVersion: chaos-mesh.org/v1alpha1
+        kind: Schedule
         metadata:
-          generateName: dlh-pod-delete-
+          generateName: dlh-pod-kill-
           namespace: {{`{{workflow.namespace}}`}}
+          labels:
+            dlh.workflow: {{`{{workflow.name}}`}}
         spec:
-          appinfo:
-            appns: {{`{{inputs.parameters.target_namespace}}`}}
-            applabel: {{`{{inputs.parameters.target_pod_selector}}`}}
-            appkind: deployment
-          chaosServiceAccount: litmus
-          experiments:
-          - name: pod-delete
-            spec:
-              components:
-                env:
-                - name: TOTAL_CHAOS_DURATION
-                  value: {{`"{{inputs.parameters.duration}}"`}}
-                - name: CHAOS_INTERVAL
-                  value: {{`"{{inputs.parameters.interval}}"`}}
-                - name: FORCE
-                  value: {{`"{{inputs.parameters.force}}"`}}
+          schedule: '@every {{`{{inputs.parameters.interval}}`}}'
+          historyLimit: 10
+          concurrencyPolicy: Forbid
+          type: PodChaos
+          podChaos:
+            action: pod-kill
+            mode: one
+            # gracePeriod 30 lets the pod terminate gracefully (matches
+            # Litmus pod-delete semantics) rather than Chaos Mesh's
+            # default gracePeriod=0 SIGKILL.
+            gracePeriod: 30
+            selector:
+              namespaces:
+              - {{`{{inputs.parameters.target_namespace}}`}}
+              labelSelectors:
+                $KEY: $VAL
+        EOF
+        )
+        echo "created schedule/$SCHED_NAME; sleeping ${SLEEP_SECS}s"
+        sleep "$SLEEP_SECS"
+        echo "chaos window elapsed; deleting schedule/$SCHED_NAME"
+        kubectl delete schedule "$SCHED_NAME" -n {{`{{workflow.namespace}}`}} --wait=false || true

@@ -18,6 +18,9 @@ rules:
 - apiGroups: ["litmuschaos.io"]
   resources: ["chaosengines", "chaosresults"]
   verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+- apiGroups: ["chaos-mesh.org"]
+  resources: ["podchaos", "networkchaos", "schedules"]
+  verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
 - apiGroups: ["k6.io"]
   resources: ["testruns"]
   verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
@@ -36,6 +39,50 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: dlh-argo-workflow-scenarios
+subjects:
+- kind: ServiceAccount
+  name: argo-workflow
+  namespace: {{ include "dlh.namespace" . }}
+---
+# Plan 12: Chaos Mesh's vauth.kb.io admission webhook validates that the
+# subject creating a chaos CR (Schedule/PodChaos/NetworkChaos/...) has
+# the underlying k8s verbs on the *target* namespace's pods. Grant the
+# argo-workflow SA cluster-wide pod read + delete so scenario workflows
+# can target mysql-sys/kafka-sys/doris-sys without per-namespace bindings.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dlh-argo-workflow-chaos-targets
+  labels:
+    {{- include "dlh.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "delete"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
+# Chaos Mesh's vauth.kb.io webhook (SECURITY_MODE=true) performs a
+# SubjectAccessReview where the *verb* is the chaos action name
+# (e.g., "pod-kill", "delay", "loss") and the resource is the kind
+# (e.g., "podchaos"). The target namespace is what the chaos resource
+# selects, not where it lives. Grant `*` on chaos-mesh.org so any
+# present or future action name we use (and the standard CRUD verbs
+# needed to create the wrapper CR itself) is covered.
+- apiGroups: ["chaos-mesh.org"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dlh-argo-workflow-chaos-targets
+  labels:
+    {{- include "dlh.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dlh-argo-workflow-chaos-targets
 subjects:
 - kind: ServiceAccount
   name: argo-workflow
