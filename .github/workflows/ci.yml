@@ -36,3 +36,21 @@ jobs:
           test -s /tmp/rendered.yaml
           grep -q 'kind: WorkflowTemplate' /tmp/rendered.yaml
           grep -q 'name: dlh-slos' /tmp/rendered.yaml
+
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: verdict-job
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: verdict-job/go.mod
+          cache: true
+          cache-dependency-path: verdict-job/go.sum
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./...
