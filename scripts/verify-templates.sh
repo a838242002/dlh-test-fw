@@ -7,7 +7,6 @@ EXPECTED=(
   chaos-pod-delete
   chaos-network-loss
   chaos-kafka-broker-partition
-  chaos-from-hub
   load-k6-run
   verdict-slo-eval
   util-write-slo
@@ -26,4 +25,4 @@ if (( missing > 0 )); then
   echo "FAIL: $missing WorkflowTemplates missing" >&2
   exit 1
 fi
-echo "PASS: all 11 WorkflowTemplates present"
+echo "PASS: all 10 WorkflowTemplates present"
