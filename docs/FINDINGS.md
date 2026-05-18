@@ -454,3 +454,37 @@ preserved for archaeology; `git log --first-parent` stays clean.
   filter to timestamped names with `grep -E '<prefix>-[0-9]{8}-[0-9]{6}$'`
   before `sort | tail -1` — otherwise stray Phase-2 UUID-suffixed workflows
   sort after timestamped ones (letters > digits).
+
+## Plan 11 — Scenario queue + priority (2026-05-19)
+
+- Per-target serialisation lives in ConfigMap `dlh-scenario-locks` with keys
+  `mysql`, `kafka`, `doris`, each value `"1"` (max concurrent workflows per
+  key). Raise counts in the CM if a target gains capacity; no scenario-side
+  change required.
+- Each scenario declares `spec.priority: 100` (default) and
+  `spec.synchronization.semaphores: [ { configMapKeyRef: ... } ]` against
+  its target's key. Note the **PLURAL `semaphores:` list form** — required
+  by Argo CLI v4+. The singular `semaphore:` object form was rejected by
+  v4 CLI strict-decode even though the older controller still accepts it.
+- Argo controller bumped from v3.5.12 → v3.6.10 (subchart 0.42.7 → 0.45.20)
+  because v3.5 only accepts the singular form and v4 CLI only emits the
+  plural form. v3.6 accepts both; v4 controller would also work.
+- Priority-aware acquisition order is (priority desc, creationTimestamp asc).
+  Verified live: A(100) → C(200) → B(50) order with B submitted before C.
+- Submit-time override via `argo submit --priority N`, forwarded by
+  `scripts/run-scenario.sh` through its `"$@"` (Plan 9 contract).
+  Example: `scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml --priority 200`.
+- `run-scenario.sh` split: `argo submit` + 2-second sleep + one-shot probe
+  + `argo wait`. The probe prints
+  `Queued: waiting for semaphore dlh-test-fw/ConfigMap/dlh-scenario-locks/<key> (priority N)`
+  exactly when the workflow is `Pending` with
+  `.status.synchronization.semaphore.waiting` populated. Silent otherwise.
+- Pitfall: the 2-second probe sleep is a heuristic for the controller's
+  annotation latency. v3.6.10 met it consistently; bump to 3s if observed
+  to be too short under load.
+- Pitfall: `.spec.synchronization` uses plural `semaphores`/`mutexes`
+  (list), but `.status.synchronization` uses singular `semaphore`/`mutex`
+  (object). Don't mix them when reading status programmatically.
+- Cluster usage: queued workflows sit in `Pending` and consume zero pod
+  resources — only controller bookkeeping. Long queues are safe up to
+  ~20 entries; revisit at higher fan-in.
