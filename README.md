@@ -1,5 +1,7 @@
 # dlh-test-fw
 
+[![CI](https://github.com/a838242002/dlh-test-fw/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/a838242002/dlh-test-fw/actions/workflows/ci.yml)
+
 Chaos + load test platform that runs on Kubernetes. Submit a `Workflow`
 that **prepares an SLO → loads a fixture → injects chaos in parallel with
 real-protocol load → evaluates the SLO**, get back a machine-readable
@@ -260,6 +262,23 @@ worked / didn't and why. **The high-impact items:**
 
 ---
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs four parallel jobs on every PR and on push to `main`. Cold cache wall-clock under 3 minutes; warm cache under 1 minute.
+
+| Job | What it checks | Local equivalent |
+|---|---|---|
+| `helm` | `helm lint` + `helm template` smoke (Files.Glob, helpers, `tpl` escapes, `dlh-slos` CM renders) | `helm lint helm/dlh-test-fw && helm template dlh helm/dlh-test-fw` |
+| `go` | `go vet ./...` + `go test ./...` in `verdict-job/` | `cd verdict-job && go vet ./... && go test ./...` |
+| `shellcheck` | `-S error` on `scripts/*.sh` | `shellcheck -S error scripts/*.sh` |
+| `kubeconform` | `-strict` against rendered chart + `scenarios/*.yaml`, Datree CRDs-catalog as schema source, `-skip CustomResourceDefinition,ChaosExperiment` | `helm template ... \| kubeconform -skip CustomResourceDefinition,ChaosExperiment -strict ...` |
+
+Pinned: Helm `v4.2.0`, kubeconform `v0.6.7`, `ludeeus/action-shellcheck@2.0.0`. `cancel-in-progress` is on, keyed per ref.
+
+Out of scope (deferred): image publish to GHCR, KinD-based E2E scenario runs.
+
+---
+
 ## Phase status
 
 | Tag | Scope |
@@ -267,8 +286,9 @@ worked / didn't and why. **The high-impact items:**
 | `phase-1-mvp` | First end-to-end run: chaos + k6 load + verdict, mysql + kafka scenarios |
 | `phase-2-mvp` | Custom dlh-k6 image (xk6-sql + xk6-kafka), real-protocol scenarios with per-target metric series, three per-type Grafana dashboards (mysql / kafka / doris) |
 | `plan9-scenario-optimization` | Inline `write-slo` + `ensure-load-table` heredocs lifted into `util-write-slo` + `util-ensure-mysql-table` WorkflowTemplates; chart-managed SLO template library (`dlh-slos` CM); submit-time `-p` overrides via `run-scenario.sh` |
+| `plan10-github-actions-ci` | PR guardrails CI in `.github/workflows/ci.yml`: parallel `helm` (lint + template smoke), `go` (vet + test on `verdict-job`), `shellcheck`, and `kubeconform` (rendered chart + scenarios). ~1 min wall-clock on a warm cache. No image publish, no E2E. |
 
-**Working end-to-end (as of `plan9-scenario-optimization`):**
+**Working end-to-end (as of `plan10-github-actions-ci`):**
 - `mysql-pod-delete` and `kafka-broker-partition` scenarios run real
   protocol load (xk6-sql, xk6-kafka) against the in-cluster targets,
   inject Litmus chaos in parallel, and produce a verdict in both MinIO
@@ -308,6 +328,7 @@ grep-able in `git log --first-parent`.
 | Plan 5 | `421c0ea` | Phase 1 scenarios + dashboards (+ Plan 4 backfills) |
 | Plans 6 + 7 + 8 (Phase 2) | `a8dbc7b` | Custom dlh-k6 image, real-protocol scenarios, per-type dashboards |
 | Plan 9 | `4d68ea3` | util-write-slo + util-ensure-mysql-table; `dlh-slos` CM; `run-scenario.sh -p` overrides |
+| Plan 10 | `e6c11e2` | GitHub Actions CI (`helm` + `go` + `shellcheck` + `kubeconform`) |
 
 Each plan's source-of-truth document lives under
 `docs/superpowers/plans/` and the deviations from those plans are noted
