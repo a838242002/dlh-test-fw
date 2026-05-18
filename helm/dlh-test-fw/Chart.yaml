@@ -1,6 +1,6 @@
 apiVersion: v2
 name: dlh-test-fw
-description: Chaos + Load Test Platform — umbrella chart (Argo + Litmus + k6 + MinIO + VM + Grafana)
+description: Chaos + Load Test Platform — umbrella chart (Argo + Chaos Mesh + k6 + MinIO + VM + Grafana)
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
@@ -10,10 +10,6 @@ dependencies:
   version: 0.45.20
   repository: https://argoproj.github.io/argo-helm
   condition: argo-workflows.enabled
-- name: litmus
-  version: 3.28.0
-  repository: https://litmuschaos.github.io/litmus-helm/
-  condition: litmus.enabled
 - name: chaos-mesh
   version: 2.8.2
   repository: https://charts.chaos-mesh.org
