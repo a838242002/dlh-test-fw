@@ -65,3 +65,36 @@ jobs:
           SHELLCHECK_OPTS: -S error
         with:
           scandir: scripts
+
+  kubeconform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.2.0
+      - name: Install kubeconform
+        run: |
+          curl -fsSL -o /tmp/kubeconform.tgz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          sudo tar -C /usr/local/bin -xzf /tmp/kubeconform.tgz kubeconform
+          kubeconform -v
+      - name: helm dependency update
+        run: helm dependency update helm/dlh-test-fw
+      - name: helm template
+        run: helm template dlh helm/dlh-test-fw > /tmp/rendered.yaml
+      # -skip CustomResourceDefinition: Datree catalog has no meta-schema for CRD-of-CRD.
+      # -skip ChaosExperiment: litmuschaos.io v1alpha1 ChaosExperiment not in Datree catalog.
+      - name: Validate rendered chart
+        run: |
+          kubeconform -skip CustomResourceDefinition,ChaosExperiment -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            /tmp/rendered.yaml
+      - name: Validate scenarios/*.yaml
+        run: |
+          kubeconform -skip CustomResourceDefinition,ChaosExperiment -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            scenarios/*.yaml
