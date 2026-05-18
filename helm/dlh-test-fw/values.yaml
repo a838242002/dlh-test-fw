@@ -77,9 +77,13 @@ chaos-mesh:
   controllerManager:
     replicaCount: 1
   chaosDaemon:
-    # DaemonSet; injects network chaos via hostNetwork.
-    runtime: containerd
-    socketPath: /run/containerd/containerd.sock
+    # Minikube docker driver — chaos-daemon enters pod namespaces via the
+    # docker socket, not containerd. (Plan 12 Task 3 found this the hard
+    # way: containerd-mode chaos-daemon can't resolve pod PIDs when the
+    # node runs docker, and NetworkChaos fails at the "unable to flush
+    # ip sets" step.)
+    runtime: docker
+    socketPath: /var/run/docker.sock
   dashboard:
     create: false              # No UI; same logic as Litmus portal removal.
   dnsServer:
