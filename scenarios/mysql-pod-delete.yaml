@@ -24,7 +24,13 @@ spec:
         OPS_COUNTER=k6_dlh_mysql_queries_total_total
         ERR_KIND_PATTERN=mysql.*
         P95_LT=1.0
-        ERR_LT=0.05
+        # ERR_LT was 0.05 under Litmus pod-delete; bumped to 0.50 in Plan 12
+        # because Chaos Mesh PodChaos pod-kill is harsher (API delete, no
+        # grace) and the single-replica mysql can't recover between 6 kills
+        # @ 10s intervals. Recovery-window error rate reaches ~0.30 in
+        # practice. Lower this when mysql gains a replica or chaos pacing
+        # changes.
+        ERR_LT=0.50
     # ===== load shape =====
     - { name: vus,               value: "10" }
     - { name: load_duration,     value: 180s }
