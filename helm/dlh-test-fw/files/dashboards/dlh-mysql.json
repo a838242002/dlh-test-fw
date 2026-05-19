@@ -1,5 +1,5 @@
 {
-  "title": "DLH — MySQL",
+  "title": "DLH \u2014 MySQL",
   "uid": "dlh-mysql",
   "schemaVersion": 39,
   "tags": [
@@ -65,7 +65,7 @@
     {
       "type": "timeseries",
       "title": "Query rate by op",
-      "description": "k6 issue rate per MySQL op (read/write/...) — series tagged `op` by lib/mysql.js.",
+      "description": "k6 issue rate per MySQL op (read/write/...) \u2014 series tagged `op` by lib/mysql.js.",
       "targets": [
         {
           "expr": "sum by (op) (rate(k6_dlh_mysql_queries_total_total{dlh_scenario=\"$scenario\",dlh_workflow=\"$workflow\"}[30s]))",
@@ -142,7 +142,7 @@
     },
     {
       "type": "stat",
-      "title": "Verdict — overall",
+      "title": "Verdict \u2014 overall",
       "description": "Pushed by verdict-job at end-of-run. Survives 5min VM lookback-delta via last_over_time(...[7d]).",
       "targets": [
         {
@@ -204,80 +204,13 @@
       "gridPos": {
         "x": 0,
         "y": 8,
-        "w": 12,
-        "h": 5
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Verdict — chaos",
-      "targets": [
-        {
-          "expr": "last_over_time(dlh_verdict_chaos_pass{dlh_workflow=\"$workflow\"}[7d])",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "VictoriaMetrics"
-          },
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "NOT PASS",
-                  "color": "red"
-                },
-                "1": {
-                  "text": "PASS",
-                  "color": "green"
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
-        }
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 8,
-        "w": 12,
+        "w": 24,
         "h": 5
       }
     },
     {
       "type": "table",
-      "title": "Verdict — SLO thresholds",
+      "title": "Verdict \u2014 SLO thresholds",
       "description": "Per-threshold pass/fail + measured value, joined by threshold name.",
       "targets": [
         {

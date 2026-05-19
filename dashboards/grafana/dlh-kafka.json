@@ -1,5 +1,5 @@
 {
-  "title": "DLH — Kafka",
+  "title": "DLH \u2014 Kafka",
   "uid": "dlh-kafka",
   "schemaVersion": 39,
   "tags": [
@@ -142,7 +142,7 @@
     },
     {
       "type": "stat",
-      "title": "Verdict — overall",
+      "title": "Verdict \u2014 overall",
       "targets": [
         {
           "expr": "last_over_time(dlh_verdict_overall{dlh_workflow=\"$workflow\"}[7d])",
@@ -203,80 +203,13 @@
       "gridPos": {
         "x": 0,
         "y": 8,
-        "w": 12,
-        "h": 5
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Verdict — chaos",
-      "targets": [
-        {
-          "expr": "last_over_time(dlh_verdict_chaos_pass{dlh_workflow=\"$workflow\"}[7d])",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "VictoriaMetrics"
-          },
-          "instant": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "NOT PASS",
-                  "color": "red"
-                },
-                "1": {
-                  "text": "PASS",
-                  "color": "green"
-                }
-              }
-            }
-          ],
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
-        }
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 8,
-        "w": 12,
+        "w": 24,
         "h": 5
       }
     },
     {
       "type": "table",
-      "title": "Verdict — SLO thresholds",
+      "title": "Verdict \u2014 SLO thresholds",
       "targets": [
         {
           "expr": "last_over_time(dlh_verdict_threshold_pass{dlh_workflow=\"$workflow\"}[7d])",
