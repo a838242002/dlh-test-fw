@@ -21,7 +21,7 @@
           "uid": "VictoriaMetrics"
         },
         "query": {
-          "query": "label_values(k6_http_reqs_total, dlh_scenario)",
+          "query": "label_values(dlh_verdict_overall, dlh_scenario)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -38,7 +38,7 @@
           "uid": "VictoriaMetrics"
         },
         "query": {
-          "query": "label_values(k6_http_reqs_total{dlh_scenario=\"$scenario\"}, dlh_workflow)",
+          "query": "label_values(dlh_verdict_overall{dlh_scenario=\"$scenario\"}, dlh_workflow)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -51,14 +51,16 @@
   "panels": [
     {
       "type": "timeseries",
-      "title": "k6 HTTP req rate",
+      "title": "k6 iteration rate",
+      "description": "Generic k6 throughput; counts completed iterations/sec regardless of protocol (HTTP, mysql, kafka, ...).",
       "targets": [
         {
-          "expr": "sum by (status) (rate(k6_http_reqs_total{dlh_scenario=\"$scenario\"}[30s]))",
+          "expr": "sum(rate(k6_iterations_total{dlh_workflow=\"$workflow\"}[30s]))",
           "datasource": {
             "type": "prometheus",
             "uid": "VictoriaMetrics"
-          }
+          },
+          "legendFormat": "iterations/s"
         }
       ],
       "gridPos": {
@@ -70,16 +72,23 @@
     },
     {
       "type": "timeseries",
-      "title": "k6 p95 latency",
+      "title": "k6 iteration p95",
+      "description": "Generic k6 latency p95 (per-iteration duration in ms, as k6 emits).",
       "targets": [
         {
-          "expr": "avg(k6_http_req_duration_p95{dlh_scenario=\"$scenario\"})",
+          "expr": "k6_iteration_duration_p95{dlh_workflow=\"$workflow\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "VictoriaMetrics"
-          }
+          },
+          "legendFormat": "p95"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      },
       "gridPos": {
         "x": 8,
         "y": 0,
@@ -89,14 +98,16 @@
     },
     {
       "type": "timeseries",
-      "title": "k6 error rate (non-2xx)",
+      "title": "k6 app errors by kind",
+      "description": "Protocol-aware error counter from our runners (mysql.*, kafka-*, ...).",
       "targets": [
         {
-          "expr": "sum(rate(k6_http_reqs_total{dlh_scenario=\"$scenario\",status!~\"2..\"}[30s])) / clamp_min(sum(rate(k6_http_reqs_total{dlh_scenario=\"$scenario\"}[30s])), 1e-9)",
+          "expr": "sum by (kind) (rate(k6_dlh_app_errors_total_total{dlh_workflow=\"$workflow\"}[30s]))",
           "datasource": {
             "type": "prometheus",
             "uid": "VictoriaMetrics"
-          }
+          },
+          "legendFormat": "{{kind}}"
         }
       ],
       "gridPos": {
