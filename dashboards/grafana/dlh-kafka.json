@@ -202,7 +202,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 8,
+        "y": 24,
         "w": 24,
         "h": 5
       }
@@ -309,8 +309,194 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 13,
+        "y": 29,
         "w": 24,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "VUs over time",
+      "description": "k6 virtual user count vs configured max.",
+      "targets": [
+        {
+          "expr": "k6_vus{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "current"
+        },
+        {
+          "expr": "k6_vus_max{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "max"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Iteration p95",
+      "description": "Generic k6 per-iteration latency. Includes the full kafka.js loop, not just produce. Unit: ms (k6 default).",
+      "targets": [
+        {
+          "expr": "k6_iteration_duration_p95{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "k6_iteration_duration_p99{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Data throughput",
+      "description": "k6 total bytes sent/received per second on the wire.",
+      "targets": [
+        {
+          "expr": "rate(k6_data_sent_total{dlh_workflow=\"$workflow\"}[30s])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "sent"
+        },
+        {
+          "expr": "rate(k6_data_received_total{dlh_workflow=\"$workflow\"}[30s])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "received"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Writer batch queue p95",
+      "description": "Time messages sit in xk6-kafka's writer batch queue before flush. High = client struggling to drain. Empty if kafka_op=consume (consume uses k6_kafka_reader_* metrics).",
+      "targets": [
+        {
+          "expr": "k6_kafka_writer_batch_queue_seconds_p95{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "k6_kafka_writer_batch_queue_seconds_p99{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Writer retries + errors",
+      "description": "xk6-kafka writer retry attempts and terminal error count. Non-zero during chaos is expected. Empty if kafka_op=consume.",
+      "targets": [
+        {
+          "expr": "rate(k6_kafka_writer_retries_count_total{dlh_workflow=\"$workflow\"}[30s])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "retries/s"
+        },
+        {
+          "expr": "rate(k6_kafka_writer_error_count_total{dlh_workflow=\"$workflow\"}[30s])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "errors/s"
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 16,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Writer batch bytes/sec",
+      "description": "Bytes/sec written by xk6-kafka writer (batched). Compare with overall data throughput. Empty if kafka_op=consume.",
+      "targets": [
+        {
+          "expr": "rate(k6_kafka_writer_batch_bytes_total{dlh_workflow=\"$workflow\"}[30s])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "batched"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 16,
+        "w": 8,
         "h": 8
       }
     }
