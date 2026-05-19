@@ -312,8 +312,9 @@ Out of scope (deferred): image publish to GHCR, KinD-based E2E scenario runs.
 | `plan10-github-actions-ci` | PR guardrails CI in `.github/workflows/ci.yml`: parallel `helm` (lint + template smoke), `go` (vet + test on `verdict-job`), `shellcheck`, and `kubeconform` (rendered chart + scenarios). ~1 min wall-clock on a warm cache. No image publish, no E2E. |
 | `plan11-scenario-queue` | Per-target serialisation + priority via Argo native `spec.synchronization.semaphores` (ConfigMap `dlh-scenario-locks`, keys mysql/kafka/doris, count=1 each). Same-target scenarios queue; different-target run in parallel. `--priority N` override at submit time. `scripts/run-scenario.sh` prints a `Queued: ...` line when blocked. Argo controller bumped to v3.6.10 (subchart `argo-workflows` 0.45.20). |
 | `plan12-chaos-mesh-migration` | Litmus retired; Chaos Mesh adopted (subchart `chaos-mesh` 2.8.2). 3 chaos WTs rewritten to script-style submit + poll/sleep + cleanup (Schedule wrapping PodChaos for pod-kill; NetworkChaos for loss/partition). `verdict-job/internal/chaosresult/` deleted (-130 LOC); chaos verdict signal is now Argo step success alone. MongoDB, ChaosCenter portal, in-tree Litmus backfills all gone. |
+| `plan13-dashboard-enrichment` | Per-target dashboards gain richer panels (mysql 5→8, kafka 5→11, doris 5→8) using k6 metrics already in VM — VUs, iteration p95, data throughput, latency percentile overlays, xk6-kafka writer internals. Chaos timeline overlay: verdict-job emits `dlh_chaos_window_{start,end}_unixtime` gauges; all 4 per-run dashboards get Grafana annotations with `useValueForTime:true` rendering orange/green vertical marks at chaos start/recovery. |
 
-**Working end-to-end (as of `plan12-chaos-mesh-migration`):**
+**Working end-to-end (as of `plan13-dashboard-enrichment`):**
 - `mysql-pod-delete` and `kafka-broker-partition` scenarios run real
   protocol load (xk6-sql, xk6-kafka) against the in-cluster targets,
   inject Chaos Mesh chaos in parallel, and produce a verdict in both
@@ -357,6 +358,7 @@ grep-able in `git log --first-parent`.
 | Plan 10 | `e6c11e2` | GitHub Actions CI (`helm` + `go` + `shellcheck` + `kubeconform`) |
 | Plan 11 | `9c292a7` | Per-target scenario semaphores + priority (Argo v3.6.10); `dlh-scenario-locks` CM; queued-message UX in `run-scenario.sh` |
 | Plan 12 | `a1a9af1` | Litmus → Chaos Mesh migration; verdict-job's `chaosresult` package removed; MongoDB + ChaosCenter retired |
+| Plan 13 | `438ecb1` | Per-target dashboard enrichment (+12 panels across mysql/kafka/doris) + chaos timeline overlay via `useValueForTime` annotations |
 
 Each plan's source-of-truth document lives under
 `docs/superpowers/plans/` and the deviations from those plans are noted
