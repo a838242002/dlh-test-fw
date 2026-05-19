@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/eval"
 )
@@ -32,6 +33,8 @@ func TestPushSerializesAndPOSTs(t *testing.T) {
 			{Metric: "http_5xx_rate", Value: 0, Passed: true},
 			{Metric: "p95_latency_ms", Value: 12.5, Passed: false},
 		},
+		ChaosWindowStart: time.Unix(1779210000, 0),
+		ChaosWindowEnd:   time.Unix(1779210060, 0),
 	}
 	p := New(srv.URL + "/api/v1/import/prometheus")
 	if err := p.Push(context.Background(), "wf-123", "mysql-pod-delete", r); err != nil {
@@ -44,6 +47,8 @@ func TestPushSerializesAndPOSTs(t *testing.T) {
 		`dlh_verdict_threshold_value{dlh_workflow="wf-123",dlh_scenario="mysql-pod-delete",name="http_5xx_rate"} 0`,
 		`dlh_verdict_threshold_pass{dlh_workflow="wf-123",dlh_scenario="mysql-pod-delete",name="p95_latency_ms"} 0`,
 		`dlh_verdict_threshold_value{dlh_workflow="wf-123",dlh_scenario="mysql-pod-delete",name="p95_latency_ms"} 12.5`,
+		`dlh_chaos_window_start_unixtime{dlh_workflow="wf-123",dlh_scenario="mysql-pod-delete"} 1779210000`,
+		`dlh_chaos_window_end_unixtime{dlh_workflow="wf-123",dlh_scenario="mysql-pod-delete"} 1779210060`,
 	}
 	for _, line := range wantLines {
 		if !strings.Contains(got, line) {
