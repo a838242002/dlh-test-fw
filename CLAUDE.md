@@ -141,9 +141,9 @@ Plan 7 switches `load/k6-run` WorkflowTemplate's `runner.image` from `grafana/k6
 
 3. **Verdict output is an Argo artifact, NOT a ConfigMap** — the original design used `dlh-result-<workflow>` ConfigMap + Grafana Infinity datasource. Switched in commit `e136e9a` to MinIO artifact + VM gauges (`dlh_verdict_*`). Dashboards query via PromQL only — no Infinity.
 
-4. **Bitnami's 2025 secure-images migration broke arm64** — MongoDB and MinIO Bitnami subcharts are unusable. We ship in-tree replacements at `helm/dlh-test-fw/templates/{mongodb,minio}.yaml`. Both are dev-grade (no auth on the wire, emptyDir-backed) — promote to keyFile/PVC before any shared deploy.
+4. **Bitnami's 2025 secure-images migration broke arm64** — the MinIO Bitnami subchart is unusable. We ship an in-tree replacement at `helm/dlh-test-fw/templates/minio.yaml` (dev-grade — no auth on the wire, emptyDir-backed; promote to keyFile/PVC before any shared deploy). The MongoDB in-tree workaround is gone — Plan 12 retired Litmus and with it the only consumer of MongoDB.
 
-5. **Litmus chart 3.x ships only the portal** — chaos-operator and per-namespace ChaosExperiment CRs are backfilled by `templates/litmus-chaos-{operator,experiments}.yaml`.
+5. **Chaos Mesh chaos-daemon runtime defaults to containerd** — minikube uses docker, so the chart values block must override `chaosDaemon.runtime: docker` + `chaosDaemon.socketPath: /var/run/docker.sock`. Symptom of the default: NetworkChaos sticks at NotInjected with `error while getting PID: expected containerd:// but got docker://`.
 
 6. **MinIO pinned to `RELEASE.2024-12-13T22-19-12Z`** — newer releases removed the admin console from the community edition. Keep the pin or accept losing the browser UI.
 
@@ -170,4 +170,4 @@ Plan 7 switches `load/k6-run` WorkflowTemplate's `runner.image` from `grafana/k6
 - Don't `helm upgrade` from a worktree branch unless you intend to (the live cluster persists state across worktrees, so one worktree's upgrade affects the other's `kubectl get`). If you do upgrade for testing, mention in the commit message.
 - Don't delete `docs/FINDINGS.md` — it's load-bearing for every plan.
 - Don't introduce a new `bitnami/*` subchart without verifying the image is actually pullable on arm64 (it usually isn't, post-2025).
-- Don't `kubectl apply` ChaosEngine without first verifying the matching ChaosExperiment CR exists in the namespace (Plan 5 caught this — chart doesn't install them).
+- Don't use `direction: both` on Chaos Mesh `NetworkChaos` without an explicit `target:` selector — webhook rejects it. Use `direction: to` (or `from`) for one-sided injection.

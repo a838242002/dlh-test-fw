@@ -6,9 +6,6 @@ platform:
     # Used by Plan 4's load/k6-run template. Matches FINDINGS.md service DNS.
     remoteWriteUrl: http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428/api/v1/write
     queryUrl: http://dlh-victoria-metrics-single-server.dlh-test-fw.svc.cluster.local:8428
-  chaosHub:
-    url: https://github.com/litmuschaos/chaos-charts.git
-    ref: master
   verdict:
     image: ghcr.io/dlh/dlh-verdict
     tag: 0.1.0
