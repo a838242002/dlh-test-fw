@@ -569,3 +569,53 @@ preserved for archaeology; `git log --first-parent` stays clean.
   CRDs-catalog — no skip needed for them.
 - Plan 11 `dlh-scenario-locks` semaphore unaffected — Argo Workflow
   synchronisation is chaos-engine-agnostic.
+
+## Plan 13 — Per-target dashboard enrichment + chaos overlay (2026-05-20)
+
+- Two new gauges from verdict-job:
+  `dlh_chaos_window_start_unixtime{dlh_workflow=...,dlh_scenario=...}` and
+  `dlh_chaos_window_end_unixtime{...}`. Values are unix-epoch seconds of the
+  chaos window's bounds. Source: `eval.Result.ChaosWindowStart/End`,
+  derived in `Evaluate` from `window.Params.LoadStart + ChaosStartAfter`
+  (and + ChaosDuration). Pushed via the existing VM text-import endpoint
+  in `metrics.build()` — no new client, no signature change to
+  `metrics.Push`.
+- Each per-run dashboard (`dlh-mysql`, `dlh-kafka`, `dlh-doris`,
+  `dlh-run-detail`) gains an `annotations.list` block with two Prometheus
+  annotation entries using `useValueForTime: true`. Grafana renders
+  vertical marks AT the gauge's value-as-timestamp (not at the metric's
+  sample timestamp). Orange = chaos start; green = chaos recovered.
+  Marks appear automatically on every timeseries panel of the dashboard.
+- **Annotation exprs MUST be wrapped in `last_over_time(...[7d])`** to
+  survive VM's 5-minute lookback-delta (gotcha #7 in this doc). Without
+  the wrapper, the chaos overlay only worked for ~5 minutes after a run.
+- Panel additions are pure JSON edits driven by small Python scripts that
+  shift existing y>=8 panels down by 8 (mysql/doris) or 16 (kafka) to
+  insert new rows at y=8 (and y=16 for kafka's row 3) without breaking
+  gridPos arithmetic.
+- New panel queries are all `{dlh_workflow="$workflow"}`-filtered to
+  match the per-run dashboard semantic. Latency-percentile panels overlay
+  the avg/p95/p99/max siblings of the existing `*_p95` series — they're
+  already pushed by k6, just unused before Plan 13.
+- Pitfall: `useValueForTime` is documented since Grafana 9.x. Chart
+  `grafana 8.15.0` bundles Grafana v11.6.1 — compatible. Confirmed via
+  Grafana HTTP API (`/api/dashboards/uid/dlh-run`) that the annotations
+  block round-trips with `useValueForTime: True`.
+- Pitfall: xk6-kafka writer metrics (`k6_kafka_writer_*`) exist only when
+  the runner does `kafka_op=produce`. The kafka panel-row-3 panels go
+  empty if a future scenario sets `kafka_op=consume` (which would emit
+  `_reader_*` metrics instead). Each panel's description text notes this.
+- Pitfall: k6 prom-rw push interval is sparse — `rate(...[30s])` over a
+  60s chaos window may have only 1-3 samples. Panels still render but
+  lines look chunky. Acceptable; same gotcha existed before Plan 13.
+- Pitfall: `verdict-job/Makefile`'s `load-image` target doesn't load
+  under the `ghcr.io/dlh/` prefix referenced by values.yaml, AND
+  minikube caches the previous tag even after `minikube image load`.
+  Recurs on every verdict image rebuild. Workaround:
+  ```
+  docker tag dlh-verdict:0.1.0 ghcr.io/dlh/dlh-verdict:0.1.0
+  minikube ssh -- "docker ps -aq --filter ancestor=ghcr.io/dlh/dlh-verdict:0.1.0 | xargs -r docker rm -f"
+  minikube ssh -- docker rmi -f ghcr.io/dlh/dlh-verdict:0.1.0 || true
+  minikube image load ghcr.io/dlh/dlh-verdict:0.1.0
+  ```
+  Future: mirror the `fixture-images/k6/Makefile reload-minikube` target.

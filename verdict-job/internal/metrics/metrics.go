@@ -68,6 +68,8 @@ func build(workflow, scenario string, r *eval.Result) []byte {
 		fmt.Fprintf(&b, "dlh_verdict_threshold_pass{%s} %d\n", labels, boolToInt(t.Passed))
 		fmt.Fprintf(&b, "dlh_verdict_threshold_value{%s} %g\n", labels, t.Value)
 	}
+	fmt.Fprintf(&b, "dlh_chaos_window_start_unixtime{%s} %d\n", base, r.ChaosWindowStart.Unix())
+	fmt.Fprintf(&b, "dlh_chaos_window_end_unixtime{%s} %d\n", base, r.ChaosWindowEnd.Unix())
 	return []byte(b.String())
 }
 

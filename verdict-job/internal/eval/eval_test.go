@@ -65,6 +65,31 @@ func TestEvaluateFailWhenThresholdExceeded(t *testing.T) {
 	}
 }
 
+func TestEvaluatePopulatesChaosWindow(t *testing.T) {
+	loadStart := time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
+	win := window.Params{
+		LoadStart:       loadStart,
+		ChaosStartAfter: 30 * time.Second,
+		ChaosDuration:   60 * time.Second,
+		LoadDuration:    180 * time.Second,
+	}
+	// Empty SLO — no thresholds, no raw PromQL. Evaluate should still
+	// populate ChaosWindowStart and ChaosWindowEnd derived from win.
+	s := &slo.SLO{}
+	r, err := Evaluate(context.Background(), s, &prom.Fake{}, win)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	wantStart := loadStart.Add(30 * time.Second)
+	wantEnd := wantStart.Add(60 * time.Second)
+	if !r.ChaosWindowStart.Equal(wantStart) {
+		t.Errorf("ChaosWindowStart = %v, want %v", r.ChaosWindowStart, wantStart)
+	}
+	if !r.ChaosWindowEnd.Equal(wantEnd) {
+		t.Errorf("ChaosWindowEnd = %v, want %v", r.ChaosWindowEnd, wantEnd)
+	}
+}
+
 func TestEvaluateGTBound(t *testing.T) {
 	s := &slo.SLO{Thresholds: []slo.Threshold{
 		{Metric: "throughput", Query: "Q1", GT: ptr(100), Window: slo.WindowChaos},
