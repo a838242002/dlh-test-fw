@@ -202,7 +202,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 8,
+        "y": 16,
         "w": 24,
         "h": 5
       }
@@ -309,8 +309,121 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 13,
+        "y": 21,
         "w": 24,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "VUs over time",
+      "description": "k6 virtual user count vs configured max.",
+      "targets": [
+        {
+          "expr": "k6_vus{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "current"
+        },
+        {
+          "expr": "k6_vus_max{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "max"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Stream Load latency percentiles",
+      "description": "Doris Stream Load duration distribution from the doris.js runner.",
+      "targets": [
+        {
+          "expr": "k6_dlh_doris_streamload_duration_seconds_avg{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "avg"
+        },
+        {
+          "expr": "k6_dlh_doris_streamload_duration_seconds_p95{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "k6_dlh_doris_streamload_duration_seconds_p99{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "p99"
+        },
+        {
+          "expr": "k6_dlh_doris_streamload_duration_seconds_max{dlh_workflow=\"$workflow\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "max"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Data throughput",
+      "description": "k6 total bytes sent/received per second on the wire.",
+      "targets": [
+        {
+          "expr": "rate(k6_data_sent_total{dlh_workflow=\"$workflow\"}[30s])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "sent"
+        },
+        {
+          "expr": "rate(k6_data_received_total{dlh_workflow=\"$workflow\"}[30s])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "legendFormat": "received"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
         "h": 8
       }
     }
