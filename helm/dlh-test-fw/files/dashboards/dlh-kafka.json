@@ -314,5 +314,35 @@
         "h": 8
       }
     }
-  ]
+  ],
+  "annotations": {
+    "list": [
+      {
+        "name": "chaos start",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "expr": "last_over_time(dlh_chaos_window_start_unixtime{dlh_workflow=\"$workflow\"}[7d])",
+        "useValueForTime": true,
+        "iconColor": "orange",
+        "tagKeys": "",
+        "titleFormat": "chaos start",
+        "enable": true
+      },
+      {
+        "name": "chaos recovered",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "expr": "last_over_time(dlh_chaos_window_end_unixtime{dlh_workflow=\"$workflow\"}[7d])",
+        "useValueForTime": true,
+        "iconColor": "green",
+        "tagKeys": "",
+        "titleFormat": "chaos recovered",
+        "enable": true
+      }
+    ]
+  }
 }
