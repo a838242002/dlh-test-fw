@@ -3,6 +3,7 @@ package eval
 
 import (
 	"context"
+	"time"
 
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/prom"
 	"github.com/dlh/dlh-test-fw/verdict-job/internal/slo"
@@ -22,15 +23,21 @@ type ThresholdResult struct {
 }
 
 type Result struct {
-	Overall        bool              `json:"overall"`
-	Thresholds     []ThresholdResult `json:"thresholds"`
-	RawPromQL      string            `json:"raw_promql,omitempty"`
-	RawPromQLValue float64           `json:"raw_promql_value,omitempty"`
-	RawPromQLPass  bool              `json:"raw_promql_pass,omitempty"`
+	Overall          bool              `json:"overall"`
+	Thresholds       []ThresholdResult `json:"thresholds"`
+	RawPromQL        string            `json:"raw_promql,omitempty"`
+	RawPromQLValue   float64           `json:"raw_promql_value,omitempty"`
+	RawPromQLPass    bool              `json:"raw_promql_pass,omitempty"`
+	ChaosWindowStart time.Time         `json:"chaos_window_start"`
+	ChaosWindowEnd   time.Time         `json:"chaos_window_end"`
 }
 
 func Evaluate(ctx context.Context, s *slo.SLO, p prom.API, win window.Params) (*Result, error) {
-	r := &Result{Overall: true}
+	r := &Result{
+		Overall:          true,
+		ChaosWindowStart: win.LoadStart.Add(win.ChaosStartAfter),
+		ChaosWindowEnd:   win.LoadStart.Add(win.ChaosStartAfter).Add(win.ChaosDuration),
+	}
 
 	for _, t := range s.Thresholds {
 		w, err := window.Compute(win, t.Window)
