@@ -359,7 +359,7 @@ grep-able in `git log --first-parent`.
 | Plan 11 | `9c292a7` | Per-target scenario semaphores + priority (Argo v3.6.10); `dlh-scenario-locks` CM; queued-message UX in `run-scenario.sh` |
 | Plan 12 | `a1a9af1` | Litmus → Chaos Mesh migration; verdict-job's `chaosresult` package removed; MongoDB + ChaosCenter retired |
 | Plan 13 | `438ecb1` | Per-target dashboard enrichment (+12 panels across mysql/kafka/doris) + chaos timeline overlay via `useValueForTime` annotations |
-| Plan 14 | `XXXXXXX` | Argo CD platform lifecycle — `argocd/` AppProject + ApplicationSet + chart Application + controlplane Application placeholder; production bootstrap doc; scripts annotated as local-dev only |
+| Plan 14 | `130a0c1` | Argo CD platform lifecycle — `argocd/` AppProject + ApplicationSet + chart Application + controlplane Application placeholder; production bootstrap doc; scripts annotated as local-dev only |
 
 Each plan's source-of-truth document lives under
 `docs/superpowers/plans/` and the deviations from those plans are noted
