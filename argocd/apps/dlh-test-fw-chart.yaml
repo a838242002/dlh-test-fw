@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dlh-test-fw-chart
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: dlh-test-fw
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: dlh-test-fw
+  source:
+    # Replace per-environment with the actual repo URL (must also be listed
+    # in argocd/appproject.yaml's sourceRepos).
+    repoURL: https://github.com/REPLACE-OWNER/dlh-test-fw.git
+    targetRevision: main
+    path: helm/dlh-test-fw
+    helm:
+      valueFiles:
+        - ../../argocd/values/framework/chart-values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dlh-test-fw
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10
