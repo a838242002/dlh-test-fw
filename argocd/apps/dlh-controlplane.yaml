@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dlh-controlplane
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: dlh-test-fw
+  # No resources-finalizer: the placeholder owns nothing yet, so finalization
+  # is unnecessary. The companion spec will add the finalizer when populating
+  # controlplane/deploy/.
+spec:
+  project: dlh-test-fw
+  source:
+    repoURL: https://github.com/REPLACE-OWNER/dlh-test-fw.git
+    targetRevision: main
+    # Placeholder path: directory contains only .gitkeep until the companion
+    # spec (2026-05-21-dlh-controlplane-design.md) populates it with the
+    # controlplane Deployment + Service + Ingress manifests.
+    path: controlplane/deploy
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dlh-test-fw
+  syncPolicy:
+    # NOT automated yet — the placeholder has no manifests to sync, so we
+    # leave sync manual until the companion spec gives it real content.
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10
