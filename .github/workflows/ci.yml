@@ -100,3 +100,21 @@ jobs:
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             scenarios/*.yaml
+      # New step — validates Argo CD AppProject / Application / ApplicationSet
+      # manifests. The Datree CRD catalog covers argoproj.io/v1alpha1.
+      - name: Validate argocd/ manifests
+        run: |
+          kubeconform -skip CustomResourceDefinition -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            $(find argocd -name '*.yaml' | sort | tr '\n' ' ')
+      - name: Validate chart render with framework values
+        run: |
+          helm template dlh helm/dlh-test-fw \
+            -f helm/dlh-test-fw/values.yaml \
+            -f argocd/values/framework/chart-values.yaml \
+            > /tmp/rendered-framework.yaml
+          kubeconform -skip CustomResourceDefinition -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            /tmp/rendered-framework.yaml
