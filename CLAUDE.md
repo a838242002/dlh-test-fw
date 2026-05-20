@@ -96,6 +96,48 @@ Plan 5's worktree did this and it was clean.
 
 ---
 
+## Operational model: GitOps vs local-dev
+
+After Plan 14, the framework cluster has two operational modes — pick
+the one that matches your environment.
+
+### Local-dev (laptop minikube)
+
+Use the existing shell scripts. They're annotated `# LOCAL-DEV ONLY` at
+the top:
+
+- `scripts/minikube-up.sh` — destructive cluster reset
+- `scripts/platform-up.sh` — `helm upgrade --install` the umbrella chart
+- `scripts/platform-down.sh` — `helm uninstall`
+- `scripts/platform-verify.sh` — `helm test` + ingress reachability
+- `scripts/verify-templates.sh` — WorkflowTemplate presence check
+
+`scripts/run-scenario.sh` is the local-dev scenario submission path.
+(The companion spec replaces it with `dlh` CLI + controlplane API.)
+
+### Production / shared cluster (GitOps via Argo CD)
+
+Use the manifests in `argocd/`:
+
+- `argocd/appproject.yaml` — `AppProject dlh-test-fw` (security scope).
+- `argocd/apps/dlh-test-fw-chart.yaml` — umbrella chart Application.
+- `argocd/apps/dlh-controlplane.yaml` — placeholder for the companion spec.
+- `argocd/appset/dlh-platform.yaml` — single-apply ApplicationSet (mutually
+  exclusive with the per-app manifests; pick one).
+- `argocd/values/framework/chart-values.yaml` — values overlay template
+  with `REPLACE-*` placeholders.
+
+Full procedure: `docs/operations/bootstrap-via-argocd.md`.
+
+### Which to use
+
+- Laptop development → local-dev.
+- Anything someone else shares with you (preprod / prod) → GitOps. The
+  scripts are not safe in shared environments because manual changes
+  get reverted by Argo CD's self-heal.
+- In any doubt → check whether Argo CD is installed in the target
+  cluster. If yes, GitOps. If no, scripts.
+
 ## Image build + minikube reload
 
 We have three local images (`dlh-verdict`, `dlh-k6`, plus the three fixture images). They live at `ghcr.io/dlh/*:<tag>` but are never pushed — they're built locally and `minikube image load`-ed.
