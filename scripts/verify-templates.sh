@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# ============================================================================
+# LOCAL-DEV ONLY. In a GitOps-managed cluster, WorkflowTemplate presence
+# is observable via Argo CD's sync status and (after the companion spec's
+# Phase B) via the controlplane's GET /api/scenarios endpoint.
+# ============================================================================
+
 EXPECTED=(
   fixture-minio-load-mysql
   fixture-minio-load-doris

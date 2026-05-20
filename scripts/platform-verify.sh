@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ============================================================================
+# LOCAL-DEV ONLY. Production verification is via Argo CD's sync/health
+# status; see docs/operations/bootstrap-via-argocd.md.
+# ============================================================================
+
 NS=dlh-test-fw
 
 # Step 1: every Helm-managed pod Ready.

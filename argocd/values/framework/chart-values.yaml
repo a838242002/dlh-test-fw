@@ -1,0 +1,63 @@
+# Framework-cluster Helm values overlay for the dlh-test-fw umbrella chart.
+#
+# This file is the production-shaped sibling of helm/dlh-test-fw/values-minikube.yaml.
+# Argo CD's dlh-test-fw-chart Application references it via spec.source.helm.valueFiles.
+#
+# Replace REPLACE-* placeholders before deploying to a real cluster. The
+# umbrella chart's defaults (helm/dlh-test-fw/values.yaml) are inherited;
+# only fields below override them.
+
+platform:
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      # Replace with real DNS for the framework cluster's ingress controller.
+      argo: argo.REPLACE-DOMAIN
+      grafana: grafana.REPLACE-DOMAIN
+      minio: minio.REPLACE-DOMAIN
+
+  secrets:
+    # Set to true and populate secretName fields below once a secret backend
+    # (sealed-secrets / external-secrets / SOPS) is chosen — see companion
+    # spec §5.6.
+    useExternal: false
+    minio:
+      user: REPLACE-MINIO-USER
+      password: REPLACE-MINIO-PASSWORD
+    grafana:
+      user: REPLACE-GRAFANA-USER
+      password: REPLACE-GRAFANA-PASSWORD
+
+# ---------- subchart resource allocations (production-shaped) ----------
+# values-minikube.yaml has dev-sized resource caps; production should
+# allocate enough headroom for the recorded workload. Tune per environment.
+
+victoria-metrics-single:
+  server:
+    persistentVolume:
+      enabled: true
+      storageClassName: REPLACE-STORAGE-CLASS
+      size: 50Gi
+    resources:
+      requests: { cpu: 500m, memory: 1Gi }
+      limits:   { cpu: 2,    memory: 4Gi }
+
+grafana:
+  persistence:
+    enabled: true
+    storageClassName: REPLACE-STORAGE-CLASS
+    size: 10Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+argo-workflows:
+  controller:
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+  server:
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 512Mi }

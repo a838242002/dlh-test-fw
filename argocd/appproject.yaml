@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: dlh-test-fw
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: dlh-test-fw
+spec:
+  description: dlh-test-fw chaos + load testing platform.
+  sourceRepos:
+    # Replace per-environment with the actual repo URL.
+    - https://github.com/REPLACE-OWNER/dlh-test-fw.git
+    # External Helm repos referenced by the umbrella chart's dependencies.
+    - https://argoproj.github.io/argo-helm
+    - https://charts.chaos-mesh.org
+    - https://grafana.github.io/helm-charts
+    - https://victoriametrics.github.io/helm-charts/
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: dlh-test-fw
+    - server: https://kubernetes.default.svc
+      namespace: chaos-mesh
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  orphanedResources:
+    warn: true

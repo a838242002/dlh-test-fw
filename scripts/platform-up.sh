@@ -2,6 +2,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# ============================================================================
+# LOCAL-DEV ONLY. Production cluster bootstrap is GitOps via Argo CD;
+# see docs/operations/bootstrap-via-argocd.md.
+# ============================================================================
+
 # Pre-flight: minikube must be Ready.
 if ! kubectl get nodes 2>/dev/null | grep -q ' Ready '; then
   echo "minikube not Ready. Run: ./scripts/minikube-up.sh" >&2

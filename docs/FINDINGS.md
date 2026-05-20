@@ -619,3 +619,30 @@ preserved for archaeology; `git log --first-parent` stays clean.
   Use `make -C verdict-job reload-minikube` after every verdict code
   change. `load-image` still works as a shortcut for the cold-start case
   (no previous image cached).
+
+---
+
+## Plan 14 — Argo CD platform lifecycle (2026-05-21)
+
+### What landed
+
+- `argocd/` directory: AppProject + two Applications (umbrella chart + controlplane placeholder) + ApplicationSet aggregator + framework values overlay template.
+- `docs/operations/bootstrap-via-argocd.md`: production bootstrap procedure.
+- Existing `scripts/platform-*.sh` annotated `# LOCAL-DEV ONLY`; CLAUDE.md gained a "GitOps vs local-dev" section.
+- CI extended: `kubeconform` job now validates `argocd/**.yaml` and the framework-values-overlaid chart render.
+
+### Operational pitfalls discovered (record so the next plan doesn't relearn)
+
+1. **`REPLACE-*` placeholders are easy to forget.** The shipped manifests contain repo URLs, domain names, storage classes, and credentials marked `REPLACE-`. A `grep -r REPLACE- argocd/` before applying is mandatory pre-flight. Consider a `make argocd-check` target in a future plan.
+
+2. **ApplicationSet vs pinned Applications are mutually exclusive.** Both shapes live in the repo so reviewers can choose, but applying both creates Application-name collisions. The bootstrap doc spells this out; the README mirrors it. Don't add a third path.
+
+3. **`dlh-controlplane` placeholder Application stays OutOfSync.** This is intentional — the companion spec populates it. Operators who haven't read both specs may flag it as a sync error; the placeholder's `controlplane/deploy/` directory contains only `.gitkeep`.
+
+4. **Argo CD self-heal masks broken manual edits.** Once Argo CD owns the chart, `kubectl edit` against the framework namespace is reverted within seconds. Operators used to the script-driven workflow ("just patch it live") need to learn the PR-driven workflow. CLAUDE.md's new section makes this explicit.
+
+5. **`secrets.useExternal: false` ships embedded credentials.** The framework values overlay defaults to embedded placeholders for MinIO / Grafana credentials. Any real environment must (a) flip `useExternal: true`, (b) wire a secret backend (sealed-secrets / external-secrets / SOPS) — decision deferred per spec §5.6, and (c) avoid committing real credentials to git via the substitution step.
+
+### Carry-forward for the companion spec
+
+The companion spec's Phase B will populate `controlplane/deploy/` and add a `resources-finalizer.argocd.argoproj.io` finalizer + auto-sync to the `dlh-controlplane` Application. Until then, the placeholder is dormant.
