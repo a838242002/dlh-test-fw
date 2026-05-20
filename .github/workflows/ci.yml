@@ -107,7 +107,7 @@ jobs:
           kubeconform -skip CustomResourceDefinition -strict -summary \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
-            $(find argocd -name '*.yaml' | sort | tr '\n' ' ')
+            $(find argocd -not -path '*/values/*' -name '*.yaml' | sort | tr '\n' ' ')
       - name: Validate chart render with framework values
         run: |
           helm template dlh helm/dlh-test-fw \
