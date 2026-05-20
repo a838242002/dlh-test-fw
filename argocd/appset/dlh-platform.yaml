@@ -1,0 +1,60 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: dlh-platform
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: dlh-test-fw
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    # Static list of the framework cluster's Applications. To extend to
+    # multiple clusters/environments later, swap this for a `clusters` or
+    # `git` generator without modifying the template body.
+    - list:
+        elements:
+          - appName: dlh-test-fw-chart
+            sourcePath: helm/dlh-test-fw
+            valueFile: argocd/values/framework/chart-values.yaml
+            destNamespace: dlh-test-fw
+            autoSync: "true"
+          - appName: dlh-controlplane
+            sourcePath: controlplane/deploy
+            valueFile: ""
+            destNamespace: dlh-test-fw
+            autoSync: "false"
+  template:
+    metadata:
+      name: '{{ .appName }}'
+      namespace: argocd
+      labels:
+        app.kubernetes.io/part-of: dlh-test-fw
+    spec:
+      project: dlh-test-fw
+      source:
+        repoURL: https://github.com/REPLACE-OWNER/dlh-test-fw.git
+        targetRevision: main
+        path: '{{ .sourcePath }}'
+        # The chart Application uses helm values; the placeholder uses a
+        # plain directory. ApplicationSet templating evaluates both blocks,
+        # so the chart entry leans on .valueFile while the placeholder
+        # uses an empty valueFile and the directory block kicks in via
+        # Argo CD's auto-detection of the source type.
+        helm:
+          valueFiles:
+            - '../../{{ .valueFile }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ .destNamespace }}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
