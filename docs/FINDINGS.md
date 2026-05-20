@@ -643,6 +643,8 @@ preserved for archaeology; `git log --first-parent` stays clean.
 
 5. **`secrets.useExternal: false` ships embedded credentials.** The framework values overlay defaults to embedded placeholders for MinIO / Grafana credentials. Any real environment must (a) flip `useExternal: true`, (b) wire a secret backend (sealed-secrets / external-secrets / SOPS) — decision deferred per spec §5.6, and (c) avoid committing real credentials to git via the substitution step.
 
+6. **`find argocd -name '*.yaml'` swept up Helm values files.** Plan 14's first CI run failed because the new `Validate argocd/ manifests` step ran kubeconform across every YAML under `argocd/`, including `argocd/values/framework/chart-values.yaml` — a Helm values file, not a k8s manifest. kubeconform correctly rejected it (no `kind:` field). Fix in commit `b19722c`: `find argocd -name '*.yaml' -not -path '*/values/*'`. Lesson: `argocd/values/` is structurally distinct from `argocd/apps/` / `argocd/appset/` / the top-level AppProject — never run k8s schema validation against `values/`. Any future glob over `argocd/` for manifest purposes must exclude that subtree.
+
 ### Carry-forward for the companion spec
 
 The companion spec's Phase B will populate `controlplane/deploy/` and add a `resources-finalizer.argocd.argoproj.io` finalizer + auto-sync to the `dlh-controlplane` Application. Until then, the placeholder is dormant.
