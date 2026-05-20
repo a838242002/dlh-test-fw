@@ -611,11 +611,11 @@ preserved for archaeology; `git log --first-parent` stays clean.
 - Pitfall: `verdict-job/Makefile`'s `load-image` target doesn't load
   under the `ghcr.io/dlh/` prefix referenced by values.yaml, AND
   minikube caches the previous tag even after `minikube image load`.
-  Recurs on every verdict image rebuild. Workaround:
-  ```
-  docker tag dlh-verdict:0.1.0 ghcr.io/dlh/dlh-verdict:0.1.0
-  minikube ssh -- "docker ps -aq --filter ancestor=ghcr.io/dlh/dlh-verdict:0.1.0 | xargs -r docker rm -f"
-  minikube ssh -- docker rmi -f ghcr.io/dlh/dlh-verdict:0.1.0 || true
-  minikube image load ghcr.io/dlh/dlh-verdict:0.1.0
-  ```
-  Future: mirror the `fixture-images/k6/Makefile reload-minikube` target.
+  Recurs on every verdict image rebuild. **Resolved post-Plan-13** by
+  rewriting `verdict-job/Makefile`: `IMG ?= ghcr.io/dlh/dlh-verdict:0.1.0`
+  (matching values.yaml), and adding a `reload-minikube` target that
+  mirrors `fixture-images/k6/Makefile reload-minikube` (rm running
+  containers + `docker rmi -f` + rebuild + `minikube image load`).
+  Use `make -C verdict-job reload-minikube` after every verdict code
+  change. `load-image` still works as a shortcut for the cold-start case
+  (no previous image cached).
