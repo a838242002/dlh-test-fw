@@ -1,0 +1,187 @@
+openapi: 3.1.0
+info:
+  title: dlh-controlplane
+  version: 0.1.0
+  description: |
+    Read-only Phase B API for dlh-test-fw. Submission endpoints (POST
+    /api/runs, DELETE /api/runs/{id}) are reserved for Phase C.
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      security: []
+      responses:
+        "200":
+          description: OK
+  /readyz:
+    get:
+      operationId: getReadyz
+      security: []
+      responses:
+        "200":
+          description: OK
+        "503":
+          description: Not ready
+  /api/scenarios:
+    get:
+      operationId: listScenarios
+      responses:
+        "200":
+          description: scenario catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Scenario"
+  /api/scenarios/{id}:
+    get:
+      operationId: getScenario
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: scenario detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Scenario" }
+        "404":
+          description: not found
+  /api/runs:
+    get:
+      operationId: listRuns
+      parameters:
+        - in: query
+          name: scenario
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        "200":
+          description: run history
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Run"
+  /api/runs/{id}:
+    get:
+      operationId: getRun
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: run detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunDetail" }
+        "404":
+          description: not found
+  /api/runs/{id}/events:
+    get:
+      operationId: streamRunEvents
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: server-sent events stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Scenario:
+      type: object
+      required: [id, displayName]
+      properties:
+        id:           { type: string }
+        displayName:  { type: string }
+        description:  { type: string }
+        targetType:   { type: string, description: "e.g. mysql, kafka, doris" }
+        parameters:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name:        { type: string }
+              default:     { type: string }
+              description: { type: string }
+    Run:
+      type: object
+      required: [id, scenario, status, startedAt]
+      properties:
+        id:         { type: string }
+        scenario:   { type: string }
+        status:     { type: string, enum: [Pending, Running, Succeeded, Failed, Error, Unknown] }
+        startedAt:  { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        score:      { type: number, format: double, nullable: true }
+        workflowName: { type: string }
+    RunDetail:
+      allOf:
+        - $ref: "#/components/schemas/Run"
+        - type: object
+          properties:
+            parameters:
+              type: object
+              additionalProperties: { type: string }
+            steps:
+              type: array
+              items:
+                type: object
+                required: [name, phase]
+                properties:
+                  name:      { type: string }
+                  phase:     { type: string }
+                  startedAt: { type: string, format: date-time }
+                  finishedAt: { type: string, format: date-time }
+                  message:   { type: string }
+            verdict:
+              type: object
+              nullable: true
+              description: "Decoded from MinIO report.json. Absent if no report yet."
+              additionalProperties: true
+            grafanaUrls:
+              type: array
+              items:
+                type: object
+                required: [label, url]
+                properties:
+                  label: { type: string }
+                  url:   { type: string }
+security:
+  - bearerAuth: []
