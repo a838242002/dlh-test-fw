@@ -1,0 +1,19 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dlh-controlplane
+  namespace: dlh-test-fw
+  labels:
+    app.kubernetes.io/name: dlh-controlplane
+    app.kubernetes.io/part-of: dlh-test-fw
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtemplates"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+    resourceNames: ["dlh-roles"]

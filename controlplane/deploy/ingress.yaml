@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dlh-controlplane
+  namespace: dlh-test-fw
+  annotations:
+    # Allow long-lived SSE connections.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: dlh.REPLACE-DOMAIN
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dlh-controlplane
+                port:
+                  number: 80

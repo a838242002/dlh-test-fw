@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dlh-controlplane
+  namespace: dlh-test-fw
+  labels:
+    app.kubernetes.io/name: dlh-controlplane
+    app.kubernetes.io/part-of: dlh-test-fw
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dlh-controlplane
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dlh-controlplane
+        app.kubernetes.io/part-of: dlh-test-fw
+    spec:
+      serviceAccountName: dlh-controlplane
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dlh-controlplane
+          image: ghcr.io/dlh/dlh-controlplane:0.1.0
+          imagePullPolicy: Never  # local minikube convention; flip for prod
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DLH_LISTEN_ADDR
+              value: ":8080"
+            - name: DLH_K8S_NAMESPACE
+              value: "dlh-test-fw"
+            - name: DLH_ROLES_NAMESPACE
+              value: "dlh-test-fw"
+            - name: DLH_ROLES_CONFIGMAP
+              value: "dlh-roles"
+            - name: DLH_MINIO_ENDPOINT
+              value: "dlh-minio.dlh-test-fw.svc.cluster.local:9000"
+            - name: DLH_MINIO_BUCKET
+              value: "artifacts"
+            - name: DLH_MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dlh-minio-credentials
+                  key: rootUser
+            - name: DLH_MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dlh-minio-credentials
+                  key: rootPassword
+            - name: DLH_OIDC_ISSUER_URL
+              value: "REPLACE-OIDC-ISSUER"
+            - name: DLH_OIDC_CLIENT_ID
+              value: "REPLACE-OIDC-CLIENT-ID"
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 500m, memory: 256Mi }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15

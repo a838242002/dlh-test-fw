@@ -58,6 +58,14 @@ sed -i "s|REPLACE-MINIO-PASSWORD|$MINIO_PASSWORD|g" argocd/values/framework/char
 sed -i "s|REPLACE-GRAFANA-USER|$GRAFANA_USER|g" argocd/values/framework/chart-values.yaml
 sed -i "s|REPLACE-GRAFANA-PASSWORD|$GRAFANA_PASSWORD|g" argocd/values/framework/chart-values.yaml
 
+# Controlplane manifests (Plan 15)
+sed -i "s|REPLACE-VIEWER-GROUP|dlh-viewers|g" controlplane/deploy/roles-configmap.yaml
+sed -i "s|REPLACE-RUNNER-GROUP|dlh-runners|g" controlplane/deploy/roles-configmap.yaml
+sed -i "s|REPLACE-ADMIN-GROUP|dlh-admins|g" controlplane/deploy/roles-configmap.yaml
+sed -i "s|REPLACE-OIDC-ISSUER|https://your-idp.example.com|g" controlplane/deploy/deployment.yaml
+sed -i "s|REPLACE-OIDC-CLIENT-ID|dlh-controlplane|g" controlplane/deploy/deployment.yaml
+sed -i "s|dlh.REPLACE-DOMAIN|dlh.$DOMAIN|g" controlplane/deploy/ingress.yaml
+
 git checkout -b bootstrap-substitutions
 git commit -am "bootstrap: substitute placeholders for $DOMAIN"
 git push -u origin bootstrap-substitutions

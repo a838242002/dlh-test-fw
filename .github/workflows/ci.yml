@@ -118,3 +118,42 @@ jobs:
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             /tmp/rendered-framework.yaml
+
+  controlplane:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: controlplane/go.mod
+          cache: true
+          cache-dependency-path: controlplane/go.sum
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: controlplane/web/pnpm-lock.yaml
+      - name: ui install
+        run: pnpm install --frozen-lockfile
+        working-directory: controlplane/web
+      - name: ui build (with openapi types)
+        run: pnpm openapi-typescript ../api/openapi.yaml -o src/api/gen.ts && pnpm build
+        working-directory: controlplane/web
+      - name: bootstrap dist for go:embed
+        run: |
+          rm -rf internal/api/dist
+          cp -R web/dist internal/api/dist
+        working-directory: controlplane
+      - name: go vet
+        run: go vet ./...
+        working-directory: controlplane
+      - name: go test
+        run: go test ./...
+        working-directory: controlplane
+      - name: go build
+        run: go build ./...
+        working-directory: controlplane

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlh-roles
+  namespace: dlh-test-fw
+  labels:
+    app.kubernetes.io/part-of: dlh-test-fw
+data:
+  bindings.yaml: |
+    # Map OIDC groups to roles. Replace placeholder group names with your
+    # IdP's actual groups before deploying. See spec §9.1.
+    viewer: ["REPLACE-VIEWER-GROUP"]
+    runner: ["REPLACE-RUNNER-GROUP"]
+    admin: ["REPLACE-ADMIN-GROUP"]

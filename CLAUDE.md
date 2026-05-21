@@ -138,6 +138,42 @@ Full procedure: `docs/operations/bootstrap-via-argocd.md`.
 - In any doubt → check whether Argo CD is installed in the target
   cluster. If yes, GitOps. If no, scripts.
 
+## dlh-controlplane (Phase B onwards)
+
+After Plan 15, `controlplane/` is a Go service that exposes the framework
+cluster's runtime state via REST + an embedded React UI. Phase B is
+read-only — `run-scenario.sh` still submits scenarios. Phase C will
+add submission.
+
+### Layout
+
+- `cmd/dlh-controlplane/main.go` — entry
+- `api/openapi.yaml` — single source of truth (do not hand-edit handlers' request/response types; regenerate)
+- `internal/{api,auth,config,k8s,minio,model}/` — backend packages
+- `web/` — Vite + React + Tailwind SPA, generated client from openapi-typescript
+- `deploy/` — k8s manifests (plain YAML — Argo CD `directory:` source)
+- `Makefile` — `codegen`, `ui-build`, `build`, `image`, `reload-minikube`
+
+### Local dev
+
+```
+make codegen        # regenerate from OpenAPI
+make ui-build       # build the React app and copy into internal/api/dist
+DLH_AUTH_DISABLED=true go run ./cmd/dlh-controlplane
+```
+
+Fake tokens for `DLH_AUTH_DISABLED=true` mode:
+`Authorization: Bearer fake:<sub>:<email>:<group1,group2>`
+
+### Auth model
+
+- OIDC bearer tokens verified against `DLH_OIDC_ISSUER_URL`.
+- Groups claim (default `groups`) drives role binding via the
+  `dlh-roles` ConfigMap (`bindings.yaml` data key).
+- Roles: viewer < runner < admin.
+- Phase B only requires viewer for all read endpoints (Phase C will add
+  RequireRole(runner) on submit/cancel).
+
 ## Image build + minikube reload
 
 We have three local images (`dlh-verdict`, `dlh-k6`, plus the three fixture images). They live at `ghcr.io/dlh/*:<tag>` but are never pushed — they're built locally and `minikube image load`-ed.
