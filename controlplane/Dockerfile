@@ -30,7 +30,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/dlh-controlplane ./cmd/dlh-c
 
 # --- Runtime stage ---------------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot
-USER nonroot
+USER 65532
 COPY --from=gobuild /out/dlh-controlplane /dlh-controlplane
 EXPOSE 8080
 ENTRYPOINT ["/dlh-controlplane"]
