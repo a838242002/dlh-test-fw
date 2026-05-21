@@ -77,7 +77,7 @@ export interface paths {
         };
         get: operations["listRuns"];
         put?: never;
-        post?: never;
+        post: operations["createRun"];
         delete?: never;
         options?: never;
         head?: never;
@@ -94,7 +94,7 @@ export interface paths {
         get: operations["getRun"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["cancelRun"];
         options?: never;
         head?: never;
         patch?: never;
@@ -111,6 +111,44 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/chaos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Called by Argo Workflow `http` template steps from the chaos WTs.
+         *     Body is the Unstructured chaos CR (apiVersion + kind + metadata + spec).
+         *     Auth is via the X-Internal-Token header carrying the controlplane's
+         *     shared secret — NOT OIDC.
+         */
+        post: operations["createChaos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/chaos/{ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteChaos"];
         options?: never;
         head?: never;
         patch?: never;
@@ -166,6 +204,33 @@ export interface components {
                 label: string;
                 url: string;
             }[];
+        };
+        CreateRunRequest: {
+            /** @description WorkflowTemplate name (e.g. mysql-pod-delete) */
+            scenarioId: string;
+            /** @description Optional parameter overrides. Keys are WT parameter names. */
+            parameters?: {
+                [key: string]: string;
+            };
+        };
+        ChaosResource: {
+            /** @example chaos-mesh.org/v1alpha1 */
+            apiVersion: string;
+            /** @example Schedule */
+            kind: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+            spec: {
+                [key: string]: unknown;
+            };
+        };
+        ChaosResourceRef: {
+            /** @description Opaque handle. URL-safe. Pass to DELETE /internal/chaos/{ref}. */
+            ref: string;
+            kind?: string;
+            name?: string;
+            namespace?: string;
         };
     };
     responses: never;
@@ -297,6 +362,44 @@ export interface operations {
             };
         };
     };
+    createRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRunRequest"];
+            };
+        };
+        responses: {
+            /** @description accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description scenario not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getRun: {
         parameters: {
             query?: never;
@@ -326,6 +429,33 @@ export interface operations {
             };
         };
     };
+    cancelRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description cancellation accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     streamRunEvents: {
         parameters: {
             query?: never;
@@ -345,6 +475,79 @@ export interface operations {
                 content: {
                     "text/event-stream": string;
                 };
+            };
+        };
+    };
+    createChaos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChaosResource"];
+            };
+        };
+        responses: {
+            /** @description chaos resource created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChaosResourceRef"];
+                };
+            };
+            /** @description invalid body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description bad internal token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description cluster API error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteChaos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Reference returned by createChaos. Encodes namespace/name/kind. */
+                ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted (or already gone) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description bad internal token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

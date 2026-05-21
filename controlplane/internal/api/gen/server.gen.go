@@ -28,6 +28,12 @@ type ServerInterface interface {
 	// (GET /api/runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
 
+	// (POST /api/runs)
+	CreateRun(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /api/runs/{id})
+	CancelRun(w http.ResponseWriter, r *http.Request, id string)
+
 	// (GET /api/runs/{id})
 	GetRun(w http.ResponseWriter, r *http.Request, id string)
 
@@ -43,6 +49,12 @@ type ServerInterface interface {
 	// (GET /healthz)
 	GetHealthz(w http.ResponseWriter, r *http.Request)
 
+	// (POST /internal/chaos)
+	CreateChaos(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /internal/chaos/{ref})
+	DeleteChaos(w http.ResponseWriter, r *http.Request, ref string)
+
 	// (GET /readyz)
 	GetReadyz(w http.ResponseWriter, r *http.Request)
 }
@@ -53,6 +65,16 @@ type Unimplemented struct{}
 
 // (GET /api/runs)
 func (_ Unimplemented) ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /api/runs)
+func (_ Unimplemented) CreateRun(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (DELETE /api/runs/{id})
+func (_ Unimplemented) CancelRun(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -78,6 +100,16 @@ func (_ Unimplemented) GetScenario(w http.ResponseWriter, r *http.Request, id st
 
 // (GET /healthz)
 func (_ Unimplemented) GetHealthz(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /internal/chaos)
+func (_ Unimplemented) CreateChaos(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (DELETE /internal/chaos/{ref})
+func (_ Unimplemented) DeleteChaos(w http.ResponseWriter, r *http.Request, ref string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -143,6 +175,57 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListRuns(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRun operation middleware
+func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRun(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelRun operation middleware
+func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelRun(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -270,6 +353,57 @@ func (siw *ServerInterfaceWrapper) GetHealthz(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealthz(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateChaos operation middleware
+func (siw *ServerInterfaceWrapper) CreateChaos(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, InternalTokenScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateChaos(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteChaos operation middleware
+func (siw *ServerInterfaceWrapper) DeleteChaos(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "ref" -------------
+	var ref string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ref", chi.URLParam(r, "ref"), &ref, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ref", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, InternalTokenScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteChaos(w, r, ref)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -410,6 +544,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/api/runs", wrapper.ListRuns)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/runs", wrapper.CreateRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/runs/{id}", wrapper.CancelRun)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/runs/{id}", wrapper.GetRun)
 	})
 	r.Group(func(r chi.Router) {
@@ -423,6 +563,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/healthz", wrapper.GetHealthz)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/internal/chaos", wrapper.CreateChaos)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/internal/chaos/{ref}", wrapper.DeleteChaos)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/readyz", wrapper.GetReadyz)
@@ -448,6 +594,63 @@ func (response ListRuns200JSONResponse) VisitListRunsResponse(w http.ResponseWri
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateRunRequestObject struct {
+	Body *CreateRunJSONRequestBody
+}
+
+type CreateRunResponseObject interface {
+	VisitCreateRunResponse(w http.ResponseWriter) error
+}
+
+type CreateRun202JSONResponse Run
+
+func (response CreateRun202JSONResponse) VisitCreateRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateRun400Response struct {
+}
+
+func (response CreateRun400Response) VisitCreateRunResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CreateRun404Response struct {
+}
+
+func (response CreateRun404Response) VisitCreateRunResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type CancelRunRequestObject struct {
+	Id string `json:"id"`
+}
+
+type CancelRunResponseObject interface {
+	VisitCancelRunResponse(w http.ResponseWriter) error
+}
+
+type CancelRun202Response struct {
+}
+
+func (response CancelRun202Response) VisitCancelRunResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type CancelRun404Response struct {
+}
+
+func (response CancelRun404Response) VisitCancelRunResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
 }
 
 type GetRunRequestObject struct {
@@ -560,6 +763,71 @@ func (response GetHealthz200Response) VisitGetHealthzResponse(w http.ResponseWri
 	return nil
 }
 
+type CreateChaosRequestObject struct {
+	Body *CreateChaosJSONRequestBody
+}
+
+type CreateChaosResponseObject interface {
+	VisitCreateChaosResponse(w http.ResponseWriter) error
+}
+
+type CreateChaos201JSONResponse ChaosResourceRef
+
+func (response CreateChaos201JSONResponse) VisitCreateChaosResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateChaos400Response struct {
+}
+
+func (response CreateChaos400Response) VisitCreateChaosResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CreateChaos401Response struct {
+}
+
+func (response CreateChaos401Response) VisitCreateChaosResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
+type CreateChaos500Response struct {
+}
+
+func (response CreateChaos500Response) VisitCreateChaosResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
+}
+
+type DeleteChaosRequestObject struct {
+	Ref string `json:"ref"`
+}
+
+type DeleteChaosResponseObject interface {
+	VisitDeleteChaosResponse(w http.ResponseWriter) error
+}
+
+type DeleteChaos204Response struct {
+}
+
+func (response DeleteChaos204Response) VisitDeleteChaosResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteChaos401Response struct {
+}
+
+func (response DeleteChaos401Response) VisitDeleteChaosResponse(w http.ResponseWriter) error {
+	w.WriteHeader(401)
+	return nil
+}
+
 type GetReadyzRequestObject struct {
 }
 
@@ -589,6 +857,12 @@ type StrictServerInterface interface {
 	// (GET /api/runs)
 	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
 
+	// (POST /api/runs)
+	CreateRun(ctx context.Context, request CreateRunRequestObject) (CreateRunResponseObject, error)
+
+	// (DELETE /api/runs/{id})
+	CancelRun(ctx context.Context, request CancelRunRequestObject) (CancelRunResponseObject, error)
+
 	// (GET /api/runs/{id})
 	GetRun(ctx context.Context, request GetRunRequestObject) (GetRunResponseObject, error)
 
@@ -603,6 +877,12 @@ type StrictServerInterface interface {
 
 	// (GET /healthz)
 	GetHealthz(ctx context.Context, request GetHealthzRequestObject) (GetHealthzResponseObject, error)
+
+	// (POST /internal/chaos)
+	CreateChaos(ctx context.Context, request CreateChaosRequestObject) (CreateChaosResponseObject, error)
+
+	// (DELETE /internal/chaos/{ref})
+	DeleteChaos(ctx context.Context, request DeleteChaosRequestObject) (DeleteChaosResponseObject, error)
 
 	// (GET /readyz)
 	GetReadyz(ctx context.Context, request GetReadyzRequestObject) (GetReadyzResponseObject, error)
@@ -656,6 +936,63 @@ func (sh *strictHandler) ListRuns(w http.ResponseWriter, r *http.Request, params
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRunsResponseObject); ok {
 		if err := validResponse.VisitListRunsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRun operation middleware
+func (sh *strictHandler) CreateRun(w http.ResponseWriter, r *http.Request) {
+	var request CreateRunRequestObject
+
+	var body CreateRunJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRun(ctx, request.(CreateRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRunResponseObject); ok {
+		if err := validResponse.VisitCreateRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelRun operation middleware
+func (sh *strictHandler) CancelRun(w http.ResponseWriter, r *http.Request, id string) {
+	var request CancelRunRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelRun(ctx, request.(CancelRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelRunResponseObject); ok {
+		if err := validResponse.VisitCancelRunResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -789,6 +1126,63 @@ func (sh *strictHandler) GetHealthz(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CreateChaos operation middleware
+func (sh *strictHandler) CreateChaos(w http.ResponseWriter, r *http.Request) {
+	var request CreateChaosRequestObject
+
+	var body CreateChaosJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateChaos(ctx, request.(CreateChaosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateChaos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateChaosResponseObject); ok {
+		if err := validResponse.VisitCreateChaosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteChaos operation middleware
+func (sh *strictHandler) DeleteChaos(w http.ResponseWriter, r *http.Request, ref string) {
+	var request DeleteChaosRequestObject
+
+	request.Ref = ref
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteChaos(ctx, request.(DeleteChaosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteChaos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteChaosResponseObject); ok {
+		if err := validResponse.VisitDeleteChaosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetReadyz operation middleware
 func (sh *strictHandler) GetReadyz(w http.ResponseWriter, r *http.Request) {
 	var request GetReadyzRequestObject
@@ -816,24 +1210,35 @@ func (sh *strictHandler) GetReadyz(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

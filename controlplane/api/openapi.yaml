@@ -3,8 +3,8 @@ info:
   title: dlh-controlplane
   version: 0.1.0
   description: |
-    Read-only Phase B API for dlh-test-fw. Submission endpoints (POST
-    /api/runs, DELETE /api/runs/{id}) are reserved for Phase C.
+    Phase C API for dlh-test-fw. Includes submission endpoints (POST
+    /api/runs, DELETE /api/runs/{id}) and internal chaos proxy endpoints.
 servers:
   - url: /
 paths:
@@ -85,6 +85,24 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Run"
+    post:
+      operationId: createRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRunRequest"
+      responses:
+        "202":
+          description: accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "400":
+          description: invalid request
+        "404":
+          description: scenario not found
   /api/runs/{id}:
     get:
       operationId: getRun
@@ -99,6 +117,18 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RunDetail" }
+        "404":
+          description: not found
+    delete:
+      operationId: cancelRun
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: cancellation accepted
         "404":
           description: not found
   /api/runs/{id}/events:
@@ -116,12 +146,60 @@ paths:
             text/event-stream:
               schema:
                 type: string
+  /internal/chaos:
+    post:
+      operationId: createChaos
+      description: |
+        Called by Argo Workflow `http` template steps from the chaos WTs.
+        Body is the Unstructured chaos CR (apiVersion + kind + metadata + spec).
+        Auth is via the X-Internal-Token header carrying the controlplane's
+        shared secret — NOT OIDC.
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChaosResource" }
+      responses:
+        "201":
+          description: chaos resource created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChaosResourceRef" }
+        "400":
+          description: invalid body
+        "401":
+          description: bad internal token
+        "500":
+          description: cluster API error
+  /internal/chaos/{ref}:
+    delete:
+      operationId: deleteChaos
+      parameters:
+        - in: path
+          name: ref
+          required: true
+          schema: { type: string }
+          description: |
+            Reference returned by createChaos. Encodes namespace/name/kind.
+      security:
+        - internalToken: []
+      responses:
+        "204":
+          description: deleted (or already gone)
+        "401":
+          description: bad internal token
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    internalToken:
+      type: apiKey
+      in: header
+      name: X-Internal-Token
   schemas:
     Scenario:
       type: object
@@ -183,5 +261,37 @@ components:
                 properties:
                   label: { type: string }
                   url:   { type: string }
+    CreateRunRequest:
+      type: object
+      required: [scenarioId]
+      properties:
+        scenarioId:
+          type: string
+          description: "WorkflowTemplate name (e.g. mysql-pod-delete)"
+        parameters:
+          type: object
+          description: "Optional parameter overrides. Keys are WT parameter names."
+          additionalProperties:
+            type: string
+    ChaosResource:
+      type: object
+      required: [apiVersion, kind, metadata, spec]
+      properties:
+        apiVersion: { type: string, example: "chaos-mesh.org/v1alpha1" }
+        kind:       { type: string, example: "Schedule" }
+        metadata:
+          type: object
+          additionalProperties: true
+        spec:
+          type: object
+          additionalProperties: true
+    ChaosResourceRef:
+      type: object
+      required: [ref]
+      properties:
+        ref:        { type: string, description: "Opaque handle. URL-safe. Pass to DELETE /internal/chaos/{ref}." }
+        kind:       { type: string }
+        name:       { type: string }
+        namespace:  { type: string }
 security:
   - bearerAuth: []

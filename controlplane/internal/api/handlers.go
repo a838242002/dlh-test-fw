@@ -98,3 +98,20 @@ func (h *Handlers) GetHealthz(_ context.Context, _ gen.GetHealthzRequestObject) 
 func (h *Handlers) GetReadyz(_ context.Context, _ gen.GetReadyzRequestObject) (gen.GetReadyzResponseObject, error) {
 	return gen.GetReadyz200Response{}, nil
 }
+
+// Phase C stubs. Real implementations land in Tasks 5 (CreateRun, CancelRun)
+// and Task 11 (CreateChaos, DeleteChaos — but those run on chi directly,
+// not through the strict server, so these stubs are intentionally
+// unreachable in production).
+func (h *Handlers) CreateRun(_ context.Context, _ gen.CreateRunRequestObject) (gen.CreateRunResponseObject, error) {
+	return gen.CreateRun400Response{}, nil
+}
+func (h *Handlers) CancelRun(_ context.Context, _ gen.CancelRunRequestObject) (gen.CancelRunResponseObject, error) {
+	return gen.CancelRun404Response{}, nil
+}
+func (h *Handlers) CreateChaos(_ context.Context, _ gen.CreateChaosRequestObject) (gen.CreateChaosResponseObject, error) {
+	return gen.CreateChaos500Response{}, nil
+}
+func (h *Handlers) DeleteChaos(_ context.Context, _ gen.DeleteChaosRequestObject) (gen.DeleteChaosResponseObject, error) {
+	return gen.DeleteChaos401Response{}, nil
+}

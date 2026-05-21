@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	BearerAuthScopes = "bearerAuth.Scopes"
+	BearerAuthScopes    = "bearerAuth.Scopes"
+	InternalTokenScopes = "internalToken.Scopes"
 )
 
 // Defines values for RunStatus.
@@ -30,6 +31,33 @@ const (
 	RunDetailStatusSucceeded RunDetailStatus = "Succeeded"
 	RunDetailStatusUnknown   RunDetailStatus = "Unknown"
 )
+
+// ChaosResource defines model for ChaosResource.
+type ChaosResource struct {
+	ApiVersion string                 `json:"apiVersion"`
+	Kind       string                 `json:"kind"`
+	Metadata   map[string]interface{} `json:"metadata"`
+	Spec       map[string]interface{} `json:"spec"`
+}
+
+// ChaosResourceRef defines model for ChaosResourceRef.
+type ChaosResourceRef struct {
+	Kind      *string `json:"kind,omitempty"`
+	Name      *string `json:"name,omitempty"`
+	Namespace *string `json:"namespace,omitempty"`
+
+	// Ref Opaque handle. URL-safe. Pass to DELETE /internal/chaos/{ref}.
+	Ref string `json:"ref"`
+}
+
+// CreateRunRequest defines model for CreateRunRequest.
+type CreateRunRequest struct {
+	// Parameters Optional parameter overrides. Keys are WT parameter names.
+	Parameters *map[string]string `json:"parameters,omitempty"`
+
+	// ScenarioId WorkflowTemplate name (e.g. mysql-pod-delete)
+	ScenarioId string `json:"scenarioId"`
+}
 
 // Run defines model for Run.
 type Run struct {
@@ -96,3 +124,9 @@ type ListRunsParams struct {
 	Since    *time.Time `form:"since,omitempty" json:"since,omitempty"`
 	Limit    *int       `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
+type CreateRunJSONRequestBody = CreateRunRequest
+
+// CreateChaosJSONRequestBody defines body for CreateChaos for application/json ContentType.
+type CreateChaosJSONRequestBody = ChaosResource
