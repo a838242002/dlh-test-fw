@@ -75,6 +75,12 @@ func (h *Handlers) ListRuns(_ context.Context, req gen.ListRunsRequestObject) (g
 func (h *Handlers) GetRun(ctx context.Context, req gen.GetRunRequestObject) (gen.GetRunResponseObject, error) {
 	wf, err := h.deps.Workflows.Get(req.Id)
 	if err != nil {
+		// Workflow CR not found — fall back to MinIO manifest (TTL-collected case).
+		if h.deps.Manifests != nil {
+			if m, mErr := h.deps.Manifests.Read(ctx, req.Id); mErr == nil && m != nil {
+				return gen.GetRun200JSONResponse(runDetailFromManifest(*m)), nil
+			}
+		}
 		return gen.GetRun404Response{}, nil
 	}
 	detail := model.RunDetailFromWorkflow(wf)
@@ -178,4 +184,23 @@ func (h *Handlers) CreateChaos(_ context.Context, _ gen.CreateChaosRequestObject
 }
 func (h *Handlers) DeleteChaos(_ context.Context, _ gen.DeleteChaosRequestObject) (gen.DeleteChaosResponseObject, error) {
 	return gen.DeleteChaos401Response{}, nil
+}
+
+// runDetailFromManifest builds a RunDetail from a stored MinIO manifest.
+// Used as fallback when the Workflow CR has been TTL-collected by Argo.
+func runDetailFromManifest(m runs.Manifest) gen.RunDetail {
+	d := gen.RunDetail{
+		Id:           m.RunID,
+		Scenario:     m.Scenario,
+		Status:       gen.RunDetailStatus(m.Status),
+		StartedAt:    m.StartedAt,
+		WorkflowName: stringPtr(m.WorkflowName),
+	}
+	if m.FinishedAt != nil {
+		d.FinishedAt = m.FinishedAt
+	}
+	if m.Score != nil {
+		d.Score = m.Score
+	}
+	return d
 }
