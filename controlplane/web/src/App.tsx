@@ -1,4 +1,7 @@
 import { Routes, Route, Link } from "react-router-dom";
+import { ScenariosPage } from "./pages/ScenariosPage";
+import { RunsPage } from "./pages/RunsPage";
+import { RunDetailPage } from "./pages/RunDetailPage";
 
 export default function App() {
   return (
@@ -12,20 +15,12 @@ export default function App() {
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/scenarios" element={<Placeholder name="Scenarios" />} />
-          <Route path="/runs" element={<Placeholder name="Runs" />} />
-          <Route path="/runs/:id" element={<Placeholder name="Run detail" />} />
+          <Route path="/" element={<RunsPage />} />
+          <Route path="/scenarios" element={<ScenariosPage />} />
+          <Route path="/runs" element={<RunsPage />} />
+          <Route path="/runs/:id" element={<RunDetailPage />} />
         </Routes>
       </main>
     </div>
   );
-}
-
-function Home() {
-  return <p>Phase B viewer. Pick Scenarios or Runs above.</p>;
-}
-
-function Placeholder({ name }: { name: string }) {
-  return <p>{name} — pending Task 13 implementation.</p>;
 }
