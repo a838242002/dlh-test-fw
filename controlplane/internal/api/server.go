@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -19,33 +20,52 @@ type Deps struct {
 
 // NewRouter mounts the generated strict server onto chi with optional auth middleware.
 //
-// Routes mounted outside the /api prefix (healthz, readyz) bypass the strict
-// handler and the auth middleware entirely — they answer before auth is checked.
+// The OpenAPI spec uses full absolute paths (/api/scenarios, /api/runs, /healthz, …).
+// HandlerFromMux registers those paths verbatim on the root chi.Router — no
+// r.Mount("/api", …) prefix layer is used.
+//
+// Auth middleware (when enabled) is applied as a global r.Use that must be
+// registered before any r.Get/r.Handle calls (chi rule).  The middleware
+// itself skips non-/api/ paths so health probes and the UI bypass auth.
 func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 
-	// Health probes — no auth, no /api prefix.
+	// ALL r.Use calls must come before any r.Get/r.Handle (chi requirement).
+	// Path-aware auth: only /api/* requests are forwarded through authMW.
+	if authMW != nil {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				if strings.HasPrefix(req.URL.Path, "/api/") {
+					authMW(next).ServeHTTP(w, req)
+					return
+				}
+				next.ServeHTTP(w, req)
+			})
+		})
+	}
+
+	// Health probes — no auth.  Registered after r.Use (which is fine —
+	// chi only requires Use before the first route registration that
+	// triggers the middleware chain build, which is the first r.Get here).
+	// Actually chi panics if Use is called after ANY route, so we keep
+	// Use above and routes below.
 	r.Get("/healthz", healthHandler)
 	r.Get("/readyz", healthHandler)
 
-	apiGroup := chi.NewRouter()
-	if authMW != nil {
-		apiGroup.Use(authMW)
-	}
-
-	// Explicit SSE route — must be registered BEFORE the strict handler
-	// so chi routes the SSE-shaped request here, not to the strict
-	// handler's stub.
+	// Explicit SSE route — registered BEFORE HandlerFromMux so chi matches
+	// this handler rather than the generated stub.
 	sseH := &SSEHandler{Workflows: deps.Workflows}
-	apiGroup.Get("/runs/{id}/events", sseH.Handle)
+	r.Get("/api/runs/{id}/events", sseH.Handle)
 
+	// Register all generated API routes (/api/scenarios, /api/runs, etc.)
+	// plus the generated /healthz + /readyz stubs.  The manually registered
+	// /healthz and /readyz above win because chi uses first-registered wins
+	// for identical patterns.
 	h := &Handlers{deps: deps}
-	// NewStrictHandler wraps our StrictServerInterface into the generated
-	// ServerInterface. HandlerFromMux registers each route onto the chi router.
 	strictSI := gen.NewStrictHandler(h, nil)
-	gen.HandlerFromMux(strictSI, apiGroup)
+	gen.HandlerFromMux(strictSI, r)
 
-	r.Mount("/api", apiGroup)
+	// Embedded React SPA — catch-all after all API routes.
 	r.Handle("/*", UIHandler())
 	return r
 }
