@@ -24,7 +24,7 @@ spec:
             sourcePath: controlplane/deploy
             valueFile: ""
             destNamespace: dlh-test-fw
-            autoSync: "false"
+            autoSync: "true"
   template:
     metadata:
       name: '{{ .appName }}'
