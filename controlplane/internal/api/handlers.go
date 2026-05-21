@@ -3,11 +3,17 @@ package api
 import (
 	"context"
 	"errors"
+	"strings"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/auth"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/model"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 )
 
 // Handlers implements the oapi-codegen StrictServerInterface.
@@ -99,15 +105,73 @@ func (h *Handlers) GetReadyz(_ context.Context, _ gen.GetReadyzRequestObject) (g
 	return gen.GetReadyz200Response{}, nil
 }
 
-// Phase C stubs. Real implementations land in Tasks 5 (CreateRun, CancelRun)
-// and Task 11 (CreateChaos, DeleteChaos — but those run on chi directly,
-// not through the strict server, so these stubs are intentionally
-// unreachable in production).
-func (h *Handlers) CreateRun(_ context.Context, _ gen.CreateRunRequestObject) (gen.CreateRunResponseObject, error) {
-	return gen.CreateRun400Response{}, nil
+// CreateRun — POST /api/runs
+func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject) (gen.CreateRunResponseObject, error) {
+	id, _ := auth.IdentityFromContext(ctx)
+	createdBy := ""
+	if id != nil {
+		createdBy = id.Subject
+	}
+	body := req.Body
+	if body == nil || body.ScenarioId == "" {
+		return gen.CreateRun400Response{}, nil
+	}
+	params := map[string]string{}
+	if body.Parameters != nil {
+		for k, v := range *body.Parameters {
+			params[k] = v
+		}
+	}
+	sr, err := h.deps.Submitter.Submit(ctx, runs.SubmitRequest{
+		ScenarioID: body.ScenarioId,
+		Parameters: params,
+		CreatedBy:  createdBy,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return gen.CreateRun404Response{}, nil
+		}
+		return nil, err
+	}
+	m := runs.Manifest{
+		RunID:        sr.RunID,
+		Scenario:     body.ScenarioId,
+		WorkflowName: sr.RunID,
+		Parameters:   params,
+		CreatedBy:    createdBy,
+		Status:       "Submitted",
+		StartedAt:    sr.StartedAt,
+	}
+	_ = h.deps.Manifests.Write(ctx, m) // best-effort; informer will write a manifest later anyway
+	resp := gen.Run{
+		Id:           sr.RunID,
+		Scenario:     body.ScenarioId,
+		Status:       gen.RunStatus("Submitted"),
+		StartedAt:    sr.StartedAt,
+		WorkflowName: stringPtr(sr.RunID),
+	}
+	return gen.CreateRun202JSONResponse(resp), nil
 }
-func (h *Handlers) CancelRun(_ context.Context, _ gen.CancelRunRequestObject) (gen.CancelRunResponseObject, error) {
-	return gen.CancelRun404Response{}, nil
+
+func stringPtr(s string) *string { return &s }
+
+// CancelRun — DELETE /api/runs/{id}
+func (h *Handlers) CancelRun(ctx context.Context, req gen.CancelRunRequestObject) (gen.CancelRunResponseObject, error) {
+	if _, err := h.deps.Workflows.Get(req.Id); err != nil {
+		return gen.CancelRun404Response{}, nil
+	}
+	// Best-effort chaos cleanup first.
+	if h.deps.ChaosCancel != nil {
+		_ = h.deps.ChaosCancel.DeleteByRun(ctx, req.Id)
+	}
+	// Argo's "shutdown=Terminate" annotation patch is the official cancel path.
+	patch := []byte(`{"spec":{"shutdown":"Terminate"}}`)
+	_, err := h.deps.ArgoClient.ArgoprojV1alpha1().Workflows(h.deps.Submitter.Namespace).Patch(
+		ctx, req.Id, types.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return gen.CancelRun202Response{}, nil
 }
 func (h *Handlers) CreateChaos(_ context.Context, _ gen.CreateChaosRequestObject) (gen.CreateChaosResponseObject, error) {
 	return gen.CreateChaos500Response{}, nil

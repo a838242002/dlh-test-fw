@@ -1,21 +1,34 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
+	wfclient "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 )
 
 // Deps groups runtime dependencies injected into API handlers.
 type Deps struct {
-	Templates k8s.TemplateLister
-	Workflows k8s.WorkflowLister
-	Reports   *mio.ReportReader
+	Templates   k8s.TemplateLister
+	Workflows   k8s.WorkflowLister
+	Reports     *mio.ReportReader
+	Submitter   *runs.Submitter      // Phase C
+	Manifests   *runs.ManifestWriter // Phase C
+	ArgoClient  wfclient.Interface   // Phase C — for terminate patch
+	ChaosCancel ChaosCanceller       // Phase C — wired in Task 11
+}
+
+// ChaosCanceller is satisfied by chaos.LocalChaosClient.DeleteByRun.
+// Decoupled here so the api package doesn't import chaos directly.
+type ChaosCanceller interface {
+	DeleteByRun(ctx context.Context, runID string) error
 }
 
 // NewRouter mounts the generated strict server onto chi with optional auth middleware.
