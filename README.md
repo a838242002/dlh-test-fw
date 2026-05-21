@@ -360,6 +360,7 @@ grep-able in `git log --first-parent`.
 | Plan 12 | `a1a9af1` | Litmus → Chaos Mesh migration; verdict-job's `chaosresult` package removed; MongoDB + ChaosCenter retired |
 | Plan 13 | `438ecb1` | Per-target dashboard enrichment (+12 panels across mysql/kafka/doris) + chaos timeline overlay via `useValueForTime` annotations |
 | Plan 14 | `130a0c1` | Argo CD platform lifecycle — `argocd/` AppProject + ApplicationSet + chart Application + controlplane Application placeholder; production bootstrap doc; scripts annotated as local-dev only |
+| Plan 15 | `XXXXXXX` | dlh-controlplane Phase B (read-only) — Go service + embedded React UI + OIDC auth + scoped RBAC + Workflow informer + MinIO report.json reader + SSE event stream; `controlplane/deploy/` manifests; `dlh-controlplane` Argo CD Application activated |
 
 Each plan's source-of-truth document lives under
 `docs/superpowers/plans/` and the deviations from those plans are noted

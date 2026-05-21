@@ -648,3 +648,39 @@ preserved for archaeology; `git log --first-parent` stays clean.
 ### Carry-forward for the companion spec
 
 The companion spec's Phase B will populate `controlplane/deploy/` and add a `resources-finalizer.argocd.argoproj.io` finalizer + auto-sync to the `dlh-controlplane` Application. Until then, the placeholder is dormant.
+
+---
+
+## Plan 15 — controlplane Phase B (read-only) (2026-05-21)
+
+### What landed
+
+- `controlplane/` Go module: chi-routed HTTP server with embedded React UI (`go:embed`), OIDC auth + role ConfigMap RBAC, in-cluster k8s informer for Workflows, Workflow + WorkflowTemplate lister, MinIO report.json reader, SSE event stream.
+- `controlplane/deploy/`: ServiceAccount + scoped Role + RoleBinding + Deployment + Service + Ingress + roles ConfigMap.
+- `argocd/apps/dlh-controlplane.yaml`: auto-sync enabled (Plan 14 left it manual).
+- CI extended: new `controlplane` job (UI build + go vet + go test + go build with embedded dist).
+
+### Operational pitfalls discovered
+
+1. **oapi-codegen response/request type names depend on output settings.** The `strict-server: true` configuration generates names like `ListScenarios200JSONResponse` and `GetScenario404Response`. Inline anonymous-struct fields (Scenario.Parameters items, RunDetail.Steps items) DON'T get named types — handler code must declare them inline matching the generator's emission. Trust the compiler when writing handlers; reconcile after every codegen regen.
+
+2. **`go:embed all:dist` requires `dist/` to exist at compile time.** The Makefile's `ui-build` target copies `web/dist` into `internal/api/dist` before `go build` so the embed directive resolves. CI must build the UI before any `go vet` / `go test` step that touches the `api` package. Local dev: run `make ui-build` once when you change `web/`.
+
+3. **SSE through nginx-ingress needs longer read/send timeouts.** Default 60s closes idle connections mid-stream. The Ingress manifest pins `proxy-read-timeout: 3600` and `proxy-send-timeout: 3600` plus `X-Accel-Buffering: no` from the handler.
+
+4. **DLH_AUTH_DISABLED is a footgun.** It bypasses OIDC verification and accepts `fake:...` tokens. The flag is intended for `kubectl port-forward`-style local smoke only. NEVER wire it into a Deployment manifest that ships to a shared cluster. The roles ConfigMap still applies — a fake token's group claim still resolves through the same `Roles.Resolve` path.
+
+5. **MinIO ReportReader path lookup is best-effort.** Phase B walks all objects under `<workflowName>/` and matches `/verdict/report.json` (with a bare-key fallback for objects at bucket root). If the artifact-repository convention changes (e.g., a new sub-key from Argo's artifact path templating), the reader returns `ErrReportNotFound` silently. Phase C's `manifest.json` indirection makes this deterministic.
+
+6. **`USER nonroot` (named) + `runAsNonRoot: true` = CreateContainerConfigError.** Distroless's `:nonroot` tag declares `USER nonroot:nonroot` symbolically. Kubelet enforcing `runAsNonRoot: true` requires it can verify the user is non-root; it can only do that from a numeric UID. Always pin `USER 65532` (the distroless nonroot numeric UID) in the Dockerfile, or remove `runAsNonRoot` from the pod SecurityContext. We went with numeric UID — caught in Task 19's smoke. See commit `7628edf`.
+
+7. **oapi-codegen strict-server's full-path operations + `r.Mount("/api", apiGroup)` double-prefix the API.** Because the OpenAPI spec uses absolute paths (`/api/scenarios`, `/api/runs`, etc.), `gen.HandlerFromMux(strictSI, apiGroup)` registers them as `/api/scenarios` on apiGroup; then `r.Mount("/api", apiGroup)` prepends another `/api`, producing `/api/api/scenarios` — all API endpoints return 404. Fix: register the strict handler directly on the root chi router (no Mount layer), and apply auth as a path-aware `r.Use` that activates only for `/api/*` paths. See commit `d75bee3`.
+
+### Carry-forward for Phase C
+
+- Add `POST /api/runs` + manifest writes + index objects.
+- Add `/internal/chaos` endpoint (called by Workflow steps).
+- Add watchdog reconciler.
+- Modify the 10 existing WorkflowTemplates to call `/internal/chaos` instead of inlining chaos CRs.
+- Deprecate `run-scenario.sh` as a shim around `dlh run`.
+- Decide on IdP for the first real environment that consumes this controlplane.
