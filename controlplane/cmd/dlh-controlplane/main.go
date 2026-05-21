@@ -12,6 +12,7 @@ import (
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/auth"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/chaos"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/config"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
@@ -63,6 +64,8 @@ func main() {
 	syncer := &runs.Syncer{Source: wfLister, Manifests: manifests, Reports: reports}
 	go syncer.Run(ctx)
 
+	chaosClient := &chaos.LocalChaosClient{Dyn: clients.Dynamic, Namespace: cfg.K8sNamespace}
+
 	var verifier auth.VerifierIface
 	if cfg.AuthDisabled {
 		logger.Warn("DLH_AUTH_DISABLED=true — accepting fake tokens; NEVER set this in prod")
@@ -88,7 +91,7 @@ func main() {
 		Submitter:  submitter,
 		Manifests:  manifests,
 		ArgoClient: clients.Argo,
-		// Chaos wired in Task 12
+		Chaos:      chaosClient,
 	}
 	authMW := auth.Middleware(verifier, roles)
 	handler := api.NewRouter(deps, authMW, cfg.InternalToken)
