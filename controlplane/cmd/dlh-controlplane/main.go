@@ -10,10 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-
+	"github.com/dlh/dlh-test-fw/controlplane/internal/api"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/auth"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/config"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
+	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 )
 
 func main() {
@@ -26,35 +27,67 @@ func main() {
 		os.Exit(1)
 	}
 
-	r := chi.NewRouter()
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
-	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok\n"))
-	})
-	r.Get("/readyz", func(w http.ResponseWriter, _ *http.Request) {
-		// Phase B: always ready as long as we're serving. Phase C will
-		// add deeper checks (k8s informer synced, MinIO reachable).
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok\n"))
-	})
+	clients, err := k8s.NewClients(os.Getenv("KUBECONFIG"))
+	if err != nil {
+		logger.Error("k8s clients", "err", err)
+		os.Exit(1)
+	}
+
+	stopCh := make(chan struct{})
+	go func() {
+		<-ctx.Done()
+		close(stopCh)
+	}()
+
+	wfLister, err := k8s.NewWorkflowLister(clients, cfg.K8sNamespace, stopCh)
+	if err != nil {
+		logger.Error("workflow informer", "err", err)
+		os.Exit(1)
+	}
+	tmplLister := k8s.NewTemplateLister(clients, cfg.K8sNamespace)
+
+	mc, err := mio.New(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOSecure)
+	if err != nil {
+		logger.Error("minio client", "err", err)
+		os.Exit(1)
+	}
+	reports := mio.NewReportReader(mc, cfg.MinIOBucket)
+
+	var verifier auth.VerifierIface
+	if cfg.AuthDisabled {
+		logger.Warn("DLH_AUTH_DISABLED=true — accepting fake tokens; NEVER set this in prod")
+		verifier = auth.FakeVerifier{}
+	} else {
+		v, err := auth.NewVerifier(ctx, cfg.OIDCIssuerURL, cfg.OIDCClientID, cfg.OIDCRequiredAudience, cfg.OIDCGroupsClaim)
+		if err != nil {
+			logger.Error("oidc verifier", "err", err)
+			os.Exit(1)
+		}
+		verifier = v
+	}
+	roles, err := auth.NewRoles(ctx, clients.Core, cfg.RolesConfigMapNS, cfg.RolesConfigMapName)
+	if err != nil {
+		logger.Error("roles configmap", "err", err)
+		os.Exit(1)
+	}
+
+	deps := &api.Deps{Templates: tmplLister, Workflows: wfLister, Reports: reports}
+	authMW := auth.Middleware(verifier, roles)
+	handler := api.NewRouter(deps, authMW)
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           r,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 
 	go func() {
 		logger.Info("listening", "addr", cfg.ListenAddr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("listen error", "err", err)
+			logger.Error("listen", "err", err)
 			cancel()
 		}
 	}()
