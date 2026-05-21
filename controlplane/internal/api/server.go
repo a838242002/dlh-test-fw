@@ -46,6 +46,7 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler) http.Handler 
 	gen.HandlerFromMux(strictSI, apiGroup)
 
 	r.Mount("/api", apiGroup)
+	r.Handle("/*", UIHandler())
 	return r
 }
 

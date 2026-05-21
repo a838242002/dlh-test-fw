@@ -20,6 +20,8 @@ ui-install:
 
 ui-build: ui-install
 	cd web && pnpm build
+	rm -rf internal/api/dist
+	cp -R web/dist internal/api/dist
 
 codegen:
 	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen \
