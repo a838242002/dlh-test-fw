@@ -33,6 +33,12 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler) http.Handler 
 		apiGroup.Use(authMW)
 	}
 
+	// Explicit SSE route — must be registered BEFORE the strict handler
+	// so chi routes the SSE-shaped request here, not to the strict
+	// handler's stub.
+	sseH := &SSEHandler{Workflows: deps.Workflows}
+	apiGroup.Get("/runs/{id}/events", sseH.Handle)
+
 	h := &Handlers{deps: deps}
 	// NewStrictHandler wraps our StrictServerInterface into the generated
 	// ServerInterface. HandlerFromMux registers each route onto the chi router.
