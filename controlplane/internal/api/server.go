@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
@@ -9,6 +8,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/auth"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/chaos"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
@@ -16,19 +17,13 @@ import (
 
 // Deps groups runtime dependencies injected into API handlers.
 type Deps struct {
-	Templates   k8s.TemplateLister
-	Workflows   k8s.WorkflowLister
-	Reports     *mio.ReportReader
-	Submitter   *runs.Submitter      // Phase C
-	Manifests   *runs.ManifestWriter // Phase C
-	ArgoClient  wfclient.Interface   // Phase C — for terminate patch
-	ChaosCancel ChaosCanceller       // Phase C — wired in Task 11
-}
-
-// ChaosCanceller is satisfied by chaos.LocalChaosClient.DeleteByRun.
-// Decoupled here so the api package doesn't import chaos directly.
-type ChaosCanceller interface {
-	DeleteByRun(ctx context.Context, runID string) error
+	Templates  k8s.TemplateLister
+	Workflows  k8s.WorkflowLister
+	Reports    *mio.ReportReader
+	Submitter  *runs.Submitter      // Phase C
+	Manifests  *runs.ManifestWriter // Phase C
+	ArgoClient wfclient.Interface   // Phase C — for terminate patch
+	Chaos      chaos.Client         // Phase C — wired in Task 12
 }
 
 // NewRouter mounts the generated strict server onto chi with optional auth middleware.
@@ -40,7 +35,7 @@ type ChaosCanceller interface {
 // Auth middleware (when enabled) is applied as a global r.Use that must be
 // registered before any r.Get/r.Handle calls (chi rule).  The middleware
 // itself skips non-/api/ paths so health probes and the UI bypass auth.
-func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler) http.Handler {
+func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken string) http.Handler {
 	r := chi.NewRouter()
 
 	// ALL r.Use calls must come before any r.Get/r.Handle (chi requirement).
@@ -77,6 +72,16 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler) http.Handler 
 	h := &Handlers{deps: deps}
 	strictSI := gen.NewStrictHandler(h, nil)
 	gen.HandlerFromMux(strictSI, r)
+
+	// /internal/chaos — chi-direct mount, X-Internal-Token auth (not OIDC).
+	if deps.Chaos != nil {
+		intH := &InternalChaosHandler{Chaos: deps.Chaos}
+		r.Route("/internal/chaos", func(ir chi.Router) {
+			ir.Use(auth.InternalTokenMiddleware(internalToken))
+			ir.Post("/", intH.Create)
+			ir.Delete("/{ref}", intH.Delete)
+		})
+	}
 
 	// Embedded React SPA — catch-all after all API routes.
 	r.Handle("/*", UIHandler())

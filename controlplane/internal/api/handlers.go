@@ -167,8 +167,8 @@ func (h *Handlers) CancelRun(ctx context.Context, req gen.CancelRunRequestObject
 		return gen.CancelRun404Response{}, nil
 	}
 	// Best-effort chaos cleanup first.
-	if h.deps.ChaosCancel != nil {
-		_ = h.deps.ChaosCancel.DeleteByRun(ctx, req.Id)
+	if h.deps.Chaos != nil {
+		_ = h.deps.Chaos.DeleteByRun(ctx, req.Id)
 	}
 	// Argo's "shutdown=Terminate" annotation patch is the official cancel path.
 	patch := []byte(`{"spec":{"shutdown":"Terminate"}}`)
@@ -179,9 +179,13 @@ func (h *Handlers) CancelRun(ctx context.Context, req gen.CancelRunRequestObject
 	}
 	return gen.CancelRun202Response{}, nil
 }
+// Unreachable: /internal/chaos is mounted directly on chi outside the
+// strict-server chain. This stub satisfies the strict interface.
 func (h *Handlers) CreateChaos(_ context.Context, _ gen.CreateChaosRequestObject) (gen.CreateChaosResponseObject, error) {
 	return gen.CreateChaos500Response{}, nil
 }
+
+// Unreachable: see CreateChaos.
 func (h *Handlers) DeleteChaos(_ context.Context, _ gen.DeleteChaosRequestObject) (gen.DeleteChaosResponseObject, error) {
 	return gen.DeleteChaos401Response{}, nil
 }

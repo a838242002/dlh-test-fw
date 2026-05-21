@@ -88,10 +88,10 @@ func main() {
 		Submitter:  submitter,
 		Manifests:  manifests,
 		ArgoClient: clients.Argo,
-		// ChaosCancel wired in Task 11
+		// Chaos wired in Task 12
 	}
 	authMW := auth.Middleware(verifier, roles)
-	handler := api.NewRouter(deps, authMW)
+	handler := api.NewRouter(deps, authMW, cfg.InternalToken)
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
