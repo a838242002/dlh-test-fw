@@ -15,6 +15,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/config"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 )
 
 func main() {
@@ -56,6 +57,12 @@ func main() {
 	}
 	reports := mio.NewReportReader(mc, cfg.MinIOBucket)
 
+	// Phase C: submission + manifest writes.
+	manifests := &runs.ManifestWriter{Client: mc, Bucket: cfg.MinIOBucket}
+	submitter := &runs.Submitter{Argo: clients.Argo, Namespace: cfg.K8sNamespace}
+	syncer := &runs.Syncer{Source: wfLister, Manifests: manifests, Reports: reports}
+	go syncer.Run(ctx)
+
 	var verifier auth.VerifierIface
 	if cfg.AuthDisabled {
 		logger.Warn("DLH_AUTH_DISABLED=true — accepting fake tokens; NEVER set this in prod")
@@ -74,7 +81,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	deps := &api.Deps{Templates: tmplLister, Workflows: wfLister, Reports: reports}
+	deps := &api.Deps{
+		Templates:  tmplLister,
+		Workflows:  wfLister,
+		Reports:    reports,
+		Submitter:  submitter,
+		Manifests:  manifests,
+		ArgoClient: clients.Argo,
+		// ChaosCancel wired in Task 11
+	}
 	authMW := auth.Middleware(verifier, roles)
 	handler := api.NewRouter(deps, authMW)
 
