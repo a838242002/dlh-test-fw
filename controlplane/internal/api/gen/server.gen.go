@@ -46,6 +46,15 @@ type ServerInterface interface {
 	// (GET /api/scenarios/{id})
 	GetScenario(w http.ResponseWriter, r *http.Request, id string)
 
+	// (GET /api/targets)
+	ListTargets(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/targets/{id})
+	GetTarget(w http.ResponseWriter, r *http.Request, id string)
+
+	// (POST /api/targets/{id}/test)
+	TestTargetConnection(w http.ResponseWriter, r *http.Request, id string)
+
 	// (GET /healthz)
 	GetHealthz(w http.ResponseWriter, r *http.Request)
 
@@ -95,6 +104,21 @@ func (_ Unimplemented) ListScenarios(w http.ResponseWriter, r *http.Request) {
 
 // (GET /api/scenarios/{id})
 func (_ Unimplemented) GetScenario(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /api/targets)
+func (_ Unimplemented) ListTargets(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /api/targets/{id})
+func (_ Unimplemented) GetTarget(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /api/targets/{id}/test)
+func (_ Unimplemented) TestTargetConnection(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -348,6 +372,88 @@ func (siw *ServerInterfaceWrapper) GetScenario(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListTargets operation middleware
+func (siw *ServerInterfaceWrapper) ListTargets(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTargets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTarget operation middleware
+func (siw *ServerInterfaceWrapper) GetTarget(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTarget(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestTargetConnection operation middleware
+func (siw *ServerInterfaceWrapper) TestTargetConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestTargetConnection(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealthz operation middleware
 func (siw *ServerInterfaceWrapper) GetHealthz(w http.ResponseWriter, r *http.Request) {
 
@@ -562,6 +668,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/api/scenarios/{id}", wrapper.GetScenario)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/targets", wrapper.ListTargets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/targets/{id}", wrapper.GetTarget)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/targets/{id}/test", wrapper.TestTargetConnection)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/healthz", wrapper.GetHealthz)
 	})
 	r.Group(func(r chi.Router) {
@@ -748,6 +863,74 @@ func (response GetScenario404Response) VisitGetScenarioResponse(w http.ResponseW
 	return nil
 }
 
+type ListTargetsRequestObject struct {
+}
+
+type ListTargetsResponseObject interface {
+	VisitListTargetsResponse(w http.ResponseWriter) error
+}
+
+type ListTargets200JSONResponse struct {
+	Items []Target `json:"items"`
+}
+
+func (response ListTargets200JSONResponse) VisitListTargetsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTargetRequestObject struct {
+	Id string `json:"id"`
+}
+
+type GetTargetResponseObject interface {
+	VisitGetTargetResponse(w http.ResponseWriter) error
+}
+
+type GetTarget200JSONResponse Target
+
+func (response GetTarget200JSONResponse) VisitGetTargetResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTarget404Response struct {
+}
+
+func (response GetTarget404Response) VisitGetTargetResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type TestTargetConnectionRequestObject struct {
+	Id string `json:"id"`
+}
+
+type TestTargetConnectionResponseObject interface {
+	VisitTestTargetConnectionResponse(w http.ResponseWriter) error
+}
+
+type TestTargetConnection200JSONResponse ProbeResult
+
+func (response TestTargetConnection200JSONResponse) VisitTestTargetConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type TestTargetConnection404Response struct {
+}
+
+func (response TestTargetConnection404Response) VisitTestTargetConnectionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 type GetHealthzRequestObject struct {
 }
 
@@ -874,6 +1057,15 @@ type StrictServerInterface interface {
 
 	// (GET /api/scenarios/{id})
 	GetScenario(ctx context.Context, request GetScenarioRequestObject) (GetScenarioResponseObject, error)
+
+	// (GET /api/targets)
+	ListTargets(ctx context.Context, request ListTargetsRequestObject) (ListTargetsResponseObject, error)
+
+	// (GET /api/targets/{id})
+	GetTarget(ctx context.Context, request GetTargetRequestObject) (GetTargetResponseObject, error)
+
+	// (POST /api/targets/{id}/test)
+	TestTargetConnection(ctx context.Context, request TestTargetConnectionRequestObject) (TestTargetConnectionResponseObject, error)
 
 	// (GET /healthz)
 	GetHealthz(ctx context.Context, request GetHealthzRequestObject) (GetHealthzResponseObject, error)
@@ -1102,6 +1294,82 @@ func (sh *strictHandler) GetScenario(w http.ResponseWriter, r *http.Request, id 
 	}
 }
 
+// ListTargets operation middleware
+func (sh *strictHandler) ListTargets(w http.ResponseWriter, r *http.Request) {
+	var request ListTargetsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTargets(ctx, request.(ListTargetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTargets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTargetsResponseObject); ok {
+		if err := validResponse.VisitListTargetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTarget operation middleware
+func (sh *strictHandler) GetTarget(w http.ResponseWriter, r *http.Request, id string) {
+	var request GetTargetRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTarget(ctx, request.(GetTargetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTarget")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTargetResponseObject); ok {
+		if err := validResponse.VisitGetTargetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestTargetConnection operation middleware
+func (sh *strictHandler) TestTargetConnection(w http.ResponseWriter, r *http.Request, id string) {
+	var request TestTargetConnectionRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestTargetConnection(ctx, request.(TestTargetConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestTargetConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestTargetConnectionResponseObject); ok {
+		if err := validResponse.VisitTestTargetConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetHealthz operation middleware
 func (sh *strictHandler) GetHealthz(w http.ResponseWriter, r *http.Request) {
 	var request GetHealthzRequestObject
@@ -1210,35 +1478,40 @@ func (sh *strictHandler) GetReadyz(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"z/q7lmSabG43/wsAAP//uJ3NttggAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

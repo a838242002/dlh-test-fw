@@ -190,6 +190,17 @@ func (h *Handlers) DeleteChaos(_ context.Context, _ gen.DeleteChaosRequestObject
 	return gen.DeleteChaos401Response{}, nil
 }
 
+// Phase D stubs. Real implementations land in Task 9.
+func (h *Handlers) ListTargets(_ context.Context, _ gen.ListTargetsRequestObject) (gen.ListTargetsResponseObject, error) {
+	return gen.ListTargets200JSONResponse{Items: []gen.Target{}}, nil
+}
+func (h *Handlers) GetTarget(_ context.Context, _ gen.GetTargetRequestObject) (gen.GetTargetResponseObject, error) {
+	return gen.GetTarget404Response{}, nil
+}
+func (h *Handlers) TestTargetConnection(_ context.Context, _ gen.TestTargetConnectionRequestObject) (gen.TestTargetConnectionResponseObject, error) {
+	return gen.TestTargetConnection404Response{}, nil
+}
+
 // runDetailFromManifest builds a RunDetail from a stored MinIO manifest.
 // Used as fallback when the Workflow CR has been TTL-collected by Argo.
 func runDetailFromManifest(m runs.Manifest) gen.RunDetail {

@@ -154,6 +154,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTargets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/targets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTarget"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/targets/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["testTargetConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -182,6 +230,8 @@ export interface components {
             /** Format: double */
             score?: number | null;
             workflowName?: string;
+            /** @description Remote target ID (Run was injected into a remote cluster). Empty = local. */
+            target?: string;
         };
         RunDetail: components["schemas"]["Run"] & {
             parameters?: {
@@ -204,10 +254,14 @@ export interface components {
                 label: string;
                 url: string;
             }[];
+            /** @description Remote target ID (Run was injected into a remote cluster). Empty = local. */
+            target?: string;
         };
         CreateRunRequest: {
             /** @description WorkflowTemplate name (e.g. mysql-pod-delete) */
             scenarioId: string;
+            /** @description Optional remote target ID. Empty = inject chaos in framework cluster. */
+            targetId?: string;
             /** @description Optional parameter overrides. Keys are WT parameter names. */
             parameters?: {
                 [key: string]: string;
@@ -231,6 +285,21 @@ export interface components {
             kind?: string;
             name?: string;
             namespace?: string;
+        };
+        Target: {
+            id: string;
+            displayName?: string;
+            kubeconfigSecret?: string;
+            allowedTargetTypes?: string[];
+            namespace?: string;
+            /** @description True if a valid kubeconfig was loaded for this target. */
+            configured?: boolean;
+        };
+        ProbeResult: {
+            ok: boolean;
+            /** Format: int64 */
+            latencyNanos?: number;
+            error?: string;
         };
     };
     responses: never;
@@ -544,6 +613,86 @@ export interface operations {
             };
             /** @description bad internal token */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description registered targets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Target"][];
+                    };
+                };
+            };
+        };
+    };
+    getTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description target detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Target"];
+                };
+            };
+            /** @description not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    testTargetConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description probe result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProbeResult"];
+                };
+            };
+            /** @description not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

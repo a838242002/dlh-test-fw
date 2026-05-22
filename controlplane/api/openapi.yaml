@@ -190,6 +190,53 @@ paths:
           description: deleted (or already gone)
         "401":
           description: bad internal token
+  /api/targets:
+    get:
+      operationId: listTargets
+      responses:
+        "200":
+          description: registered targets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Target" }
+  /api/targets/{id}:
+    get:
+      operationId: getTarget
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: target detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Target" }
+        "404":
+          description: not found
+  /api/targets/{id}/test:
+    post:
+      operationId: testTargetConnection
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: probe result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProbeResult" }
+        "404":
+          description: not found
 components:
   securitySchemes:
     bearerAuth:
@@ -229,6 +276,7 @@ components:
         finishedAt: { type: string, format: date-time }
         score:      { type: number, format: double, nullable: true }
         workflowName: { type: string }
+        target:       { type: string, description: "Remote target ID (Run was injected into a remote cluster). Empty = local." }
     RunDetail:
       allOf:
         - $ref: "#/components/schemas/Run"
@@ -261,6 +309,9 @@ components:
                 properties:
                   label: { type: string }
                   url:   { type: string }
+            target:
+              type: string
+              description: "Remote target ID (Run was injected into a remote cluster). Empty = local."
     CreateRunRequest:
       type: object
       required: [scenarioId]
@@ -268,6 +319,9 @@ components:
         scenarioId:
           type: string
           description: "WorkflowTemplate name (e.g. mysql-pod-delete)"
+        targetId:
+          type: string
+          description: "Optional remote target ID. Empty = inject chaos in framework cluster."
         parameters:
           type: object
           description: "Optional parameter overrides. Keys are WT parameter names."
@@ -293,5 +347,22 @@ components:
         kind:       { type: string }
         name:       { type: string }
         namespace:  { type: string }
+    Target:
+      type: object
+      required: [id]
+      properties:
+        id:                 { type: string }
+        displayName:        { type: string }
+        kubeconfigSecret:   { type: string }
+        allowedTargetTypes: { type: array, items: { type: string } }
+        namespace:          { type: string }
+        configured:         { type: boolean, description: "True if a valid kubeconfig was loaded for this target." }
+    ProbeResult:
+      type: object
+      required: [ok]
+      properties:
+        ok:           { type: boolean }
+        latencyNanos: { type: integer, format: int64 }
+        error:        { type: string }
 security:
   - bearerAuth: []
