@@ -1,0 +1,33 @@
+# Plan 16 (2026-05-22): Argo's HTTP-template agent uses WorkflowTaskSets to
+# report results back to the workflow controller.  The argo-workflows
+# subchart's ClusterRole includes patch on workflowtasksets but omits the
+# /status subresource; without it, the controller logs
+# "cannot patch resource workflowtasksets/status" and every http step hangs
+# at Pending.  This ClusterRole extends the subchart role with the missing rule.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-argo-http-taskset-status
+  labels:
+    app.kubernetes.io/part-of: dlh-test-fw
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+rules:
+- apiGroups: ["argoproj.io"]
+  resources: ["workflowtasksets/status"]
+  verbs: ["patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-argo-http-taskset-status
+  labels:
+    app.kubernetes.io/part-of: dlh-test-fw
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-argo-http-taskset-status
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}-argo-workflows-workflow-controller
+  namespace: {{ .Release.Namespace }}
