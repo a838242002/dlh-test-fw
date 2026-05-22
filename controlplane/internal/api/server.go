@@ -24,7 +24,7 @@ type Deps struct {
 	Submitter  *runs.Submitter      // Phase C
 	Manifests  *runs.ManifestWriter // Phase C
 	ArgoClient wfclient.Interface   // Phase C — for terminate patch
-	Chaos      chaos.Client         // Phase C — wired in Task 12
+	Chaos      *chaos.Router        // Phase D — wired in Task 12
 	Targets    *targets.Registry    // Phase D — wired in Task 9
 }
 
