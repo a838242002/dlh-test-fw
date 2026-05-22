@@ -14,6 +14,7 @@ func runCmd() *cobra.Command {
 	var (
 		paramFlags []string
 		wait       bool
+		target     string
 	)
 	c := &cobra.Command{
 		Use:   "run <scenario>",
@@ -31,6 +32,9 @@ func runCmd() *cobra.Command {
 			}
 			client := newClient()
 			body := map[string]any{"scenarioId": scenario}
+			if target != "" {
+				body["targetId"] = target
+			}
 			if len(params) > 0 {
 				body["parameters"] = params
 			}
@@ -52,6 +56,7 @@ func runCmd() *cobra.Command {
 	}
 	c.Flags().StringArrayVarP(&paramFlags, "param", "p", nil, "Parameter override key=value (repeatable)")
 	c.Flags().BoolVar(&wait, "wait", false, "Block until the run reaches a terminal phase")
+	c.Flags().StringVar(&target, "target", "", "Optional remote target ID")
 	return c
 }
 
