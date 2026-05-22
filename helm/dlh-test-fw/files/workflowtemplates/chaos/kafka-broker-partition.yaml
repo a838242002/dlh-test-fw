@@ -115,7 +115,7 @@ spec:
       command: [bash]
       source: |
         set -euo pipefail
-        TOKEN=$(cat /var/run/secrets/dlh-internal-token/token)
+        TOKEN=$(tr -d '\n' < /var/run/secrets/dlh-internal-token/token)
         REF=$(echo '{{`{{inputs.parameters.post_result}}`}}' | jq -r '.ref')
         if [ -z "$REF" ] || [ "$REF" = "null" ]; then
           echo "No ref in post_result — nothing to clean up"
