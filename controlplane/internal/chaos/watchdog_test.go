@@ -92,3 +92,36 @@ func TestWatchdog_DefaultInterval(t *testing.T) {
 		t.Errorf("default interval: got %v, want 30s", w.Interval)
 	}
 }
+
+func TestWatchdog_FanOutAcrossTargets(t *testing.T) {
+	// Simulate a Router.ListManaged result by stuffing chaos from
+	// "different clusters" into the same fake. The watchdog doesn't
+	// care which client the chaos came from — only whether the run
+	// is terminal.
+	merged := &fakeChaosForWatchdog{
+		managed: map[string][]Ref{
+			"run-running":  {{Name: "sched-local", Namespace: "dlh-test-fw"}},
+			"run-finished": {{Name: "sched-remote", Namespace: "dlh-test-fw"}},
+		},
+	}
+	w := &Watchdog{
+		Chaos: merged,
+		RunsTerminal: RunsTerminalCheckerFunc(func(runID string) bool {
+			return runID == "run-finished"
+		}),
+		Interval: 10 * time.Millisecond,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	w.Run(ctx)
+
+	deleted := merged.deletedSnapshot()
+	if len(deleted) == 0 {
+		t.Fatal("expected deletions")
+	}
+	for _, d := range deleted {
+		if d.Name == "sched-local" {
+			t.Errorf("running run's chaos should not be reaped: %+v", d)
+		}
+	}
+}
