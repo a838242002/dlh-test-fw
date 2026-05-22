@@ -1,11 +1,8 @@
-# Plan 12 (2026-05-19): rewritten to use Chaos Mesh Schedule + PodChaos
-# instead of Litmus ChaosEngine. A single script step:
-#   1. creates a Schedule CR (re-applies pod-kill every `interval`),
-#   2. sleeps for `duration`,
-#   3. deletes the Schedule so it stops producing children.
-# This bounds chaos cleanly within the chaos window — without explicit
-# delete the Schedule would keep killing target pods past the window
-# and torpedo the recovery-phase SLO.
+# Plan 16 (2026-05-22): chaos lifecycle moved out of kubectl-in-script
+# and into controlplane's /internal/chaos endpoint. The WT now POSTs the
+# Schedule body to the controlplane via Argo's http template; the
+# cleanup step DELETEs the chaos ref to bound the chaos window even if
+# the workflow is terminated.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -20,50 +17,116 @@ spec:
     inputs:
       parameters:
       - name: target_namespace
-      - name: target_pod_selector      # "key=value" form (Litmus convention preserved)
-      - name: duration                 # e.g. "60s"
-      - name: interval                 # e.g. "10s"
+      - name: target_pod_selector
+      - name: duration
+      - name: interval
+    steps:
+    - - name: build-body
+        template: build-podchaos-body
+        arguments:
+          parameters:
+          - { name: target_namespace, value: '{{`{{inputs.parameters.target_namespace}}`}}' }
+          - { name: target_pod_selector, value: '{{`{{inputs.parameters.target_pod_selector}}`}}' }
+          - { name: interval, value: '{{`{{inputs.parameters.interval}}`}}' }
+    - - name: post
+        template: post-chaos
+        arguments:
+          parameters:
+          - { name: body, value: '{{`{{steps.build-body.outputs.parameters.body}}`}}' }
+    - - name: wait
+        template: wait-window
+        arguments:
+          parameters:
+          - { name: duration, value: '{{`{{inputs.parameters.duration}}`}}' }
+    - - name: cleanup
+        template: cleanup-chaos
+        arguments:
+          parameters:
+          - { name: ref, value: '{{`{{steps.post.outputs.parameters.ref}}`}}' }
+
+  - name: build-podchaos-body
+    inputs:
+      parameters:
+      - name: target_namespace
+      - name: target_pod_selector
+      - name: interval
+    outputs:
+      parameters:
+      - name: body
+        valueFrom: { path: /tmp/body.json }
     script:
       image: alpine/k8s:1.30.0
       command: [bash]
       source: |
         set -euo pipefail
-        # Parse "key=value" selector into the labelSelectors map form.
         SEL='{{`{{inputs.parameters.target_pod_selector}}`}}'
         KEY="${SEL%%=*}"
         VAL="${SEL#*=}"
-        DURATION='{{`{{inputs.parameters.duration}}`}}'
-        # Strip trailing "s" for sleep(1) — input is duration like "60s".
-        SLEEP_SECS="${DURATION%s}"
+        jq -n \
+          --arg ns '{{`{{inputs.parameters.target_namespace}}`}}' \
+          --arg interval '{{`{{inputs.parameters.interval}}`}}' \
+          --arg key "$KEY" \
+          --arg val "$VAL" \
+          '{
+            apiVersion: "chaos-mesh.org/v1alpha1",
+            kind: "Schedule",
+            metadata: { generateName: "dlh-pod-kill-" },
+            spec: {
+              schedule: "@every \($interval)",
+              historyLimit: 10,
+              concurrencyPolicy: "Forbid",
+              type: "PodChaos",
+              podChaos: {
+                action: "pod-kill",
+                mode: "one",
+                gracePeriod: 30,
+                selector: {
+                  namespaces: [$ns],
+                  labelSelectors: { ($key): $val }
+                }
+              }
+            }
+          }' > /tmp/body.json
 
-        SCHED_NAME=$(kubectl create -f - -o jsonpath='{.metadata.name}' <<EOF
-        apiVersion: chaos-mesh.org/v1alpha1
-        kind: Schedule
-        metadata:
-          generateName: dlh-pod-kill-
-          namespace: {{`{{workflow.namespace}}`}}
-          labels:
-            dlh.workflow: {{`{{workflow.name}}`}}
-        spec:
-          schedule: '@every {{`{{inputs.parameters.interval}}`}}'
-          historyLimit: 10
-          concurrencyPolicy: Forbid
-          type: PodChaos
-          podChaos:
-            action: pod-kill
-            mode: one
-            # gracePeriod 30 lets the pod terminate gracefully (matches
-            # Litmus pod-delete semantics) rather than Chaos Mesh's
-            # default gracePeriod=0 SIGKILL.
-            gracePeriod: 30
-            selector:
-              namespaces:
-              - {{`{{inputs.parameters.target_namespace}}`}}
-              labelSelectors:
-                $KEY: $VAL
-        EOF
-        )
-        echo "created schedule/$SCHED_NAME; sleeping ${SLEEP_SECS}s"
-        sleep "$SLEEP_SECS"
-        echo "chaos window elapsed; deleting schedule/$SCHED_NAME"
-        kubectl delete schedule "$SCHED_NAME" -n {{`{{workflow.namespace}}`}} --wait=false || true
+  - name: post-chaos
+    inputs:
+      parameters:
+      - name: body
+    outputs:
+      parameters:
+      - name: ref
+        valueFrom: { jsonPath: '$.ref' }
+    http:
+      url: 'http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos?runID={{`{{workflow.name}}`}}'
+      method: POST
+      headers:
+      - name: X-Internal-Token
+        valueFrom:
+          secretKeyRef: { name: dlh-internal-token, key: token }
+      - name: Content-Type
+        value: application/json
+      body: '{{`{{inputs.parameters.body}}`}}'
+
+  - name: wait-window
+    inputs:
+      parameters:
+      - name: duration
+    container:
+      image: alpine:3.20
+      command: [sh, -c]
+      args: ['sleep ${DURATION%s}']
+      env:
+      - name: DURATION
+        value: '{{`{{inputs.parameters.duration}}`}}'
+
+  - name: cleanup-chaos
+    inputs:
+      parameters:
+      - name: ref
+    http:
+      url: 'http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos/{{`{{inputs.parameters.ref}}`}}'
+      method: DELETE
+      headers:
+      - name: X-Internal-Token
+        valueFrom:
+          secretKeyRef: { name: dlh-internal-token, key: token }

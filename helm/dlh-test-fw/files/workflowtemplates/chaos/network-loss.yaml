@@ -1,5 +1,4 @@
-# Plan 12 (2026-05-19): rewritten to use Chaos Mesh NetworkChaos.
-# NetworkChaos has a native duration field, so no Schedule wrapper.
+# Plan 16 (2026-05-22): NetworkChaos via /internal/chaos.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -14,9 +13,45 @@ spec:
     inputs:
       parameters:
       - name: target_namespace
-      - name: target_pod_selector      # "key=value" form
-      - name: loss_percent             # e.g. "50"
-      - name: duration                 # e.g. "60s"
+      - name: target_pod_selector
+      - name: loss_percent
+      - name: duration
+    steps:
+    - - name: build-body
+        template: build-netchaos-body
+        arguments:
+          parameters:
+          - { name: target_namespace, value: '{{`{{inputs.parameters.target_namespace}}`}}' }
+          - { name: target_pod_selector, value: '{{`{{inputs.parameters.target_pod_selector}}`}}' }
+          - { name: loss_percent, value: '{{`{{inputs.parameters.loss_percent}}`}}' }
+          - { name: duration, value: '{{`{{inputs.parameters.duration}}`}}' }
+    - - name: post
+        template: post-chaos
+        arguments:
+          parameters:
+          - { name: body, value: '{{`{{steps.build-body.outputs.parameters.body}}`}}' }
+    - - name: wait
+        template: wait-window
+        arguments:
+          parameters:
+          - { name: duration, value: '{{`{{inputs.parameters.duration}}`}}' }
+    - - name: cleanup
+        template: cleanup-chaos
+        arguments:
+          parameters:
+          - { name: ref, value: '{{`{{steps.post.outputs.parameters.ref}}`}}' }
+
+  - name: build-netchaos-body
+    inputs:
+      parameters:
+      - name: target_namespace
+      - name: target_pod_selector
+      - name: loss_percent
+      - name: duration
+    outputs:
+      parameters:
+      - name: body
+        valueFrom: { path: /tmp/body.json }
     script:
       image: alpine/k8s:1.30.0
       command: [bash]
@@ -25,42 +60,64 @@ spec:
         SEL='{{`{{inputs.parameters.target_pod_selector}}`}}'
         KEY="${SEL%%=*}"
         VAL="${SEL#*=}"
+        jq -n \
+          --arg ns '{{`{{inputs.parameters.target_namespace}}`}}' \
+          --arg duration '{{`{{inputs.parameters.duration}}`}}' \
+          --arg loss '{{`{{inputs.parameters.loss_percent}}`}}' \
+          --arg key "$KEY" \
+          --arg val "$VAL" \
+          '{
+            apiVersion: "chaos-mesh.org/v1alpha1",
+            kind: "NetworkChaos",
+            metadata: { generateName: "dlh-network-loss-" },
+            spec: {
+              action: "loss",
+              mode: "one",
+              duration: $duration,
+              selector: {
+                namespaces: [$ns],
+                labelSelectors: { ($key): $val }
+              },
+              loss: { loss: $loss, correlation: "0" },
+              direction: "to"
+            }
+          }' > /tmp/body.json
 
-        NAME=$(cat <<EOF | kubectl create -f - -o jsonpath='{.metadata.name}'
-        apiVersion: chaos-mesh.org/v1alpha1
-        kind: NetworkChaos
-        metadata:
-          generateName: dlh-network-loss-
-          namespace: {{`{{workflow.namespace}}`}}
-        spec:
-          action: loss
-          duration: '{{`{{inputs.parameters.duration}}`}}'
-          mode: one
-          selector:
-            namespaces:
-            - {{`{{inputs.parameters.target_namespace}}`}}
-            labelSelectors:
-              $KEY: $VAL
-          loss:
-            loss: '{{`{{inputs.parameters.loss_percent}}`}}'
-            correlation: '0'
-          direction: to
-        EOF
-        )
-        echo "NetworkChaos created: $NAME"
+  - name: post-chaos
+    inputs:
+      parameters:
+      - name: body
+    outputs:
+      parameters:
+      - name: ref
+        valueFrom: { jsonPath: '$.ref' }
+    http:
+      url: 'http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos?runID={{`{{workflow.name}}`}}'
+      method: POST
+      headers:
+      - name: X-Internal-Token
+        valueFrom: { secretKeyRef: { name: dlh-internal-token, key: token } }
+      - name: Content-Type
+        value: application/json
+      body: '{{`{{inputs.parameters.body}}`}}'
 
-        D='{{`{{inputs.parameters.duration}}`}}'
-        DEADLINE=$(( $(date +%s) + ${D%s} + 30 ))
-        while (( $(date +%s) < DEADLINE )); do
-          phase=$(kubectl -n {{`{{workflow.namespace}}`}} get networkchaos "$NAME" \
-                    -o jsonpath='{.status.experiment.containerRecords[0].phase}' 2>/dev/null || echo "")
-          echo "[$(date +%H:%M:%S)] phase=$phase"
-          if [[ "$phase" == "Recovered" || "$phase" == "Not Injected" ]]; then
-            echo "Reached terminal phase: $phase"
-            break
-          fi
-          sleep 3
-        done
+  - name: wait-window
+    inputs:
+      parameters:
+      - name: duration
+    container:
+      image: alpine:3.20
+      command: [sh, -c]
+      args: ['sleep ${DURATION%s}']
+      env: [{ name: DURATION, value: '{{`{{inputs.parameters.duration}}`}}' }]
 
-        # Cleanup
-        kubectl -n {{`{{workflow.namespace}}`}} delete networkchaos "$NAME" 2>/dev/null || true
+  - name: cleanup-chaos
+    inputs:
+      parameters:
+      - name: ref
+    http:
+      url: 'http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos/{{`{{inputs.parameters.ref}}`}}'
+      method: DELETE
+      headers:
+      - name: X-Internal-Token
+        valueFrom: { secretKeyRef: { name: dlh-internal-token, key: token } }
