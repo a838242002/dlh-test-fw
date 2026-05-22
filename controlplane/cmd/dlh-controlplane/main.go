@@ -66,6 +66,22 @@ func main() {
 
 	chaosClient := &chaos.LocalChaosClient{Dyn: clients.Dynamic, Namespace: cfg.K8sNamespace}
 
+	// Watchdog: reap orphaned chaos resources every 30s.
+	checker := chaos.RunsTerminalCheckerFunc(func(runID string) bool {
+		wf, err := wfLister.Get(runID)
+		if err != nil || wf == nil {
+			// Workflow CR is gone (TTL'd) — treat as terminal; chaos shouldn't linger.
+			return true
+		}
+		switch string(wf.Status.Phase) {
+		case "Succeeded", "Failed", "Error":
+			return true
+		}
+		return false
+	})
+	watchdog := &chaos.Watchdog{Chaos: chaosClient, RunsTerminal: checker, Interval: 30 * time.Second}
+	go watchdog.Run(ctx)
+
 	var verifier auth.VerifierIface
 	if cfg.AuthDisabled {
 		logger.Warn("DLH_AUTH_DISABLED=true — accepting fake tokens; NEVER set this in prod")
