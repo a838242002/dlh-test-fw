@@ -174,6 +174,25 @@ Fake tokens for `DLH_AUTH_DISABLED=true` mode:
 - Phase B only requires viewer for all read endpoints (Phase C will add
   RequireRole(runner) on submit/cancel).
 
+### Phase D additions (Plan 17)
+
+- Registered remote targets live in the `dlh-targets` ConfigMap +
+  per-target `dlh-target-<id>` Secrets (each holding `kubeconfig`).
+- `POST /api/runs` accepts optional `targetId`; the Workflow gets
+  `dlh.target` label + `target_id` workflow argument. Chaos WTs
+  forward the latter via `?targetID=...` query in /internal/chaos calls.
+- `chaos.Router` picks Local vs Remote per call. Empty targetID is
+  the default — preserves Phase C behaviour.
+- New endpoints: `GET /api/targets`, `GET /api/targets/{id}`,
+  `POST /api/targets/{id}/test`.
+- New UI page: Targets (read-only + test-connection button). New
+  control in Scenarios cards: a TargetPicker dropdown.
+- New CLI flag: `dlh run --target <id>` / `dlh runs ls --target <id>`.
+- Operator runbook: `docs/operations/register-target.md`.
+- Each scenario's chaos step must declare `target_id` in its
+  arguments block (Plan 17 fixed mysql-pod-delete; the kafka + doris
+  scenarios may need the same pattern — see Plan 17 FINDING #10).
+
 ## Image build + minikube reload
 
 We have three local images (`dlh-verdict`, `dlh-k6`, plus the three fixture images). They live at `ghcr.io/dlh/*:<tag>` but are never pushed — they're built locally and `minikube image load`-ed.

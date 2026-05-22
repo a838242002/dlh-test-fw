@@ -719,3 +719,55 @@ Branch: feat/plan16-controlplane-submission
 
 9. **`kind: Workflow` in `scenarios/` ≠ WorkflowTemplate for controlplane submission.** The controlplane's `Submitter` looks up `WorkflowTemplates` by `scenarioId`. The existing `scenarios/mysql-pod-delete.yaml` is `kind: Workflow`, not `kind: WorkflowTemplate` — the controlplane can't submit it by name. Add a matching `kind: WorkflowTemplate` file under `helm/dlh-test-fw/files/workflowtemplates/scenario/` with backtick-escaped Argo template expressions for the Helm renderer.
 - Decide on IdP for the first real environment that consumes this controlplane.
+
+---
+
+## Plan 17 — controlplane Phase D (remote targets) (2026-05-23)
+
+### What landed
+
+- `controlplane/internal/targets/` — Registry + Loader + Refresher (30s poll) + Probe.
+- `controlplane/internal/chaos/remote.go` — RemoteChaosClient (per-target dynamic client built from kubeconfig Secret).
+- `controlplane/internal/chaos/router.go` — Router picks Local vs Remote per call based on targetID. Existing Client-interface methods union across all clients (so watchdog reaps cross-cluster).
+- `POST /api/runs` accepts optional `targetId`; `Run.target` populated end-to-end; manifest gains `runs/index/by-target/{target}/...` index.
+- `GET /api/targets`, `GET /api/targets/{id}`, `POST /api/targets/{id}/test`.
+- UI Targets page + per-card TargetPicker on Scenarios + Target column on Runs.
+- `dlh run --target` + `dlh runs ls --target`.
+- 3 chaos WTs accept `target_id` parameter (default `""`) and forward to `/internal/chaos?targetID=...`.
+- Empty `dlh-targets` ConfigMap shipped by the umbrella chart so a fresh install is fully Phase-C-compatible.
+- Operator runbook + Argo CD Application example for installing chaos-mesh into a target cluster.
+
+### Operational pitfalls discovered (record so Phase E doesn't re-learn)
+
+1. **oapi-codegen `Target` type uses pointer fields uniformly.** All optional fields (`DisplayName`, `KubeconfigSecret`, `AllowedTargetTypes`, `Namespace`, `Configured`) are `*T` pointers. The `targetDTO` converter takes the address of local variables; don't try `Configured: &t.RestConfig != nil` (won't compile) — assign to a local bool first.
+
+2. **`ProbeResult.OK`** (uppercase K) in our Go struct vs. the codegen field naming: confirm with `grep "type TestTargetConnection200JSONResponse" internal/api/gen/server.gen.go`. Plan template used `res.Ok` which doesn't match `targets.ProbeResult.OK`.
+
+3. **Submit's `target_id` workflow argument is ALWAYS appended** (empty value for local runs). Existing Submit test that checked `len(params) == 1` had to update to expect `len == 2` and scan by name. Future tests that count args should treat `target_id` as a baseline.
+
+4. **First Refresher tick must be synchronous.** Otherwise the controlplane starts serving requests before the registry is populated, and `/api/targets` briefly returns empty. `Refresher.Run` calls `tick()` once before the ticker loop.
+
+5. **`dyn.Resource(gvr).Namespace(ns).List` with an absent CRD returns an error, not empty.** We tolerate it in `ListByRun` + `ListManaged` by `continue`-ing past errors. Acceptable because the absence of one chaos kind doesn't invalidate the others.
+
+6. **Argo `http` template URL templating respects `&` in query strings.** `?runID={{workflow.name}}&targetID={{inputs.parameters.target_id}}` works as-is. Empty target_id produces `&targetID=` which the controlplane handler treats as empty (routes local).
+
+7. **chaos-mesh `vauth` webhook requires SA permissions across all target namespaces** (Task 23 smoke). When the controlplane SA creates a chaos CR in `dlh-test-fw` targeting pods in another namespace (e.g. `mysql-sys`), the `vauth.kb.io` webhook validates the SA has create permission for the chaos type in EVERY target namespace, not just the chaos-mesh home namespace. `controlplane/deploy/targets-rbac.yaml.example` only grants Role access in `dlh-test-fw`. Operators must either (a) grant the SA a ClusterRole for chaos creation across target namespaces, (b) create per-namespace Role/RoleBindings for each target namespace, or (c) for dev clusters only, delete `ValidatingWebhookConfiguration/chaos-mesh-validation-auth`. Production must use (a) or (b).
+
+8. **Minikube profile docker-network name == profile name, not "minikube"** (Task 23 smoke). For a `dlh-chaos` profile, the docker network is named `dlh-chaos`. Look up container IP via `docker inspect dlh-chaos --format '{{.NetworkSettings.Networks.dlh-chaos.IPAddress}}'`. The API server IP (e.g. `192.168.67.2:8443`) is reachable from inside other minikube containers but NOT from the macOS host. In-cluster kubeconfig validation passes; host validation fails with TLS timeout.
+
+9. **kubectl-patched `dlh-targets` ConfigMap conflicts with helm upgrade** (Task 23 smoke). Patching the ConfigMap outside helm creates a field-manager conflict; `helm upgrade` fails on a subsequent run. Workaround: `kubectl apply --server-side --force-conflicts` to re-sync helm's ownership. Better: register targets via PR-driven Argo CD reconciliation (the intended production flow).
+
+10. **Scenario WTs must declare `target_id` in chaos-step arguments** (Task 23 fix `93eea0b`). The Submitter now appends `target_id` to workflow.arguments.parameters, but scenarios route parameters into sub-workflow steps explicitly. If a scenario's `chaos` step's arguments block doesn't include `target_id`, it never reaches the chaos WT and the target_id is silently dropped. Each scenario's chaos step must declare `target_id` like:
+    ```yaml
+    arguments:
+      parameters:
+      - { name: target_id, value: "{{workflow.parameters.target_id}}" }
+    ```
+
+### Carry-forward for Phase E
+
+- OIDC device-code flow for `dlh login`.
+- CI OIDC token exchange endpoint for GH Actions.
+- Removal of `scripts/run-scenario.sh` entirely.
+- Notification hooks (Slack/email on run completion) — interface stub already lives in Phase C's event-bus design.
+- Sweep remaining scenarios (kafka-broker-partition, doris-be-network-loss) for target_id propagation pattern — Task 23 fixed only mysql-pod-delete.
