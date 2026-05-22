@@ -56,6 +56,11 @@ spec:
               value: "REPLACE-OIDC-ISSUER"
             - name: DLH_OIDC_CLIENT_ID
               value: "REPLACE-OIDC-CLIENT-ID"
+            - name: DLH_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: dlh-internal-token
+                  key: token
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits:   { cpu: 500m, memory: 256Mi }
