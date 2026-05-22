@@ -72,7 +72,10 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 		intH := &InternalChaosHandler{Chaos: deps.Chaos}
 		r.Route("/internal/chaos", func(ir chi.Router) {
 			ir.Use(auth.InternalTokenMiddleware(internalToken))
+			// Register both "" and "/" so POST /internal/chaos (no trailing slash)
+			// and POST /internal/chaos/ (with trailing slash) both work.
 			ir.Post("/", intH.Create)
+			ir.Post("", intH.Create)
 			ir.Delete("/{ref}", intH.Delete)
 		})
 	}
