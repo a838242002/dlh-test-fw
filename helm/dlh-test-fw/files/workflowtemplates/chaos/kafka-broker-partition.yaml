@@ -1,6 +1,10 @@
 # Plan 16 (2026-05-22): kafka broker partition via /internal/chaos.
 # NetworkChaos action=partition direction=to (no target selector — see
 # FINDINGS #5: only direction=both requires a target selector).
+#
+# Plan 17 Task 19 (2026-05-23): added target_id parameter (default "").
+# Forwarded as &targetID= on both POST and DELETE calls so the controlplane
+# Router can dispatch to RemoteChaosClient when non-empty.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -17,6 +21,7 @@ spec:
       - name: kafka_namespace
       - name: broker_id
       - name: duration
+      - { name: target_id, value: "" }
     steps:
     - - name: build-body
         template: build-partition-body
@@ -30,6 +35,7 @@ spec:
         arguments:
           parameters:
           - { name: body, value: '{{`{{steps.build-body.outputs.parameters.body}}`}}' }
+          - { name: target_id, value: '{{`{{inputs.parameters.target_id}}`}}' }
     - - name: wait
         template: wait-window
         arguments:
@@ -42,6 +48,7 @@ spec:
           # Pass full JSON result; cleanup extracts ref with jq
           # (Argo v3.6.x HTTP template does not populate outputs.parameters.valueFrom.jsonPath)
           - { name: post_result, value: '{{`{{steps.post.outputs.result}}`}}' }
+          - { name: target_id, value: '{{`{{inputs.parameters.target_id}}`}}' }
 
   - name: build-partition-body
     inputs:
@@ -85,8 +92,9 @@ spec:
     inputs:
       parameters:
       - name: body
+      - name: target_id
     http:
-      url: 'http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos?runID={{`{{workflow.name}}`}}'
+      url: 'http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos?runID={{`{{workflow.name}}`}}&targetID={{`{{inputs.parameters.target_id}}`}}'
       method: POST
       headers:
       - name: X-Internal-Token
@@ -110,6 +118,7 @@ spec:
     inputs:
       parameters:
       - name: post_result
+      - name: target_id
     script:
       image: alpine/k8s:1.30.0
       command: [bash]
@@ -122,8 +131,10 @@ spec:
           exit 0
         fi
         echo "Deleting chaos ref: $REF"
+        TARGET_ID='{{`{{inputs.parameters.target_id}}`}}'
+        URL="http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos/${REF}?targetID=${TARGET_ID}"
         curl -fsSL -X DELETE \
-          "http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos/${REF}" \
+          "${URL}" \
           -H "X-Internal-Token: ${TOKEN}" \
           -o /dev/null -w "HTTP %{http_code}\n"
       volumeMounts:
