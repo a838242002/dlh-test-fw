@@ -129,8 +129,13 @@ func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 			params[k] = v
 		}
 	}
+	targetID := ""
+	if body.TargetId != nil {
+		targetID = *body.TargetId
+	}
 	sr, err := h.deps.Submitter.Submit(ctx, runs.SubmitRequest{
 		ScenarioID: body.ScenarioId,
+		TargetID:   targetID,
 		Parameters: params,
 		CreatedBy:  createdBy,
 	})
@@ -143,6 +148,7 @@ func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 	m := runs.Manifest{
 		RunID:        sr.RunID,
 		Scenario:     body.ScenarioId,
+		Target:       targetID,
 		WorkflowName: sr.RunID,
 		Parameters:   params,
 		CreatedBy:    createdBy,
@@ -156,6 +162,9 @@ func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 		Status:       gen.RunStatus("Submitted"),
 		StartedAt:    sr.StartedAt,
 		WorkflowName: stringPtr(sr.RunID),
+	}
+	if targetID != "" {
+		resp.Target = &targetID
 	}
 	return gen.CreateRun202JSONResponse(resp), nil
 }

@@ -39,8 +39,18 @@ func TestSubmit_CreatesWorkflowWithTemplateRef(t *testing.T) {
 	if got.Labels["dlh.scenario"] != "mysql-pod-delete" {
 		t.Errorf("label: %v", got.Labels)
 	}
-	if len(got.Spec.Arguments.Parameters) != 1 || got.Spec.Arguments.Parameters[0].Name != "vus" {
-		t.Errorf("params: %+v", got.Spec.Arguments.Parameters)
+	// Expect vus + target_id (always appended).
+	if len(got.Spec.Arguments.Parameters) != 2 {
+		t.Errorf("expected 2 params (vus + target_id), got: %+v", got.Spec.Arguments.Parameters)
+	}
+	foundVus := false
+	for _, p := range got.Spec.Arguments.Parameters {
+		if p.Name == "vus" {
+			foundVus = true
+		}
+	}
+	if !foundVus {
+		t.Errorf("vus param missing: %+v", got.Spec.Arguments.Parameters)
 	}
 }
 
@@ -61,5 +71,39 @@ func TestSubmit_EmptyScenarioRejected(t *testing.T) {
 	_, err := s.Submit(context.Background(), SubmitRequest{})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestSubmit_WithTargetID(t *testing.T) {
+	ns := "dlh-test-fw"
+	tmpl := &wfv1.WorkflowTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+	}
+	argo := wfake.NewSimpleClientset(tmpl)
+	s := &Submitter{Argo: argo, Namespace: ns}
+	res, err := s.Submit(context.Background(), SubmitRequest{
+		ScenarioID: "mysql-pod-delete",
+		TargetID:   "staging-mysql",
+		CreatedBy:  "tester",
+	})
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if res.TargetID != "staging-mysql" {
+		t.Errorf("TargetID echo: %q", res.TargetID)
+	}
+	got, _ := argo.ArgoprojV1alpha1().Workflows(ns).Get(context.Background(), res.RunID, metav1.GetOptions{})
+	if got.Labels["dlh.target"] != "staging-mysql" {
+		t.Errorf("dlh.target label: %v", got.Labels)
+	}
+	foundTargetArg := false
+	for _, p := range got.Spec.Arguments.Parameters {
+		if p.Name == "target_id" && p.Value != nil && p.Value.String() == "staging-mysql" {
+			foundTargetArg = true
+			break
+		}
+	}
+	if !foundTargetArg {
+		t.Errorf("target_id parameter not propagated: %+v", got.Spec.Arguments.Parameters)
 	}
 }

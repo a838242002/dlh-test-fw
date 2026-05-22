@@ -16,6 +16,7 @@ import (
 type Manifest struct {
 	RunID        string            `json:"runId"`
 	Scenario     string            `json:"scenario"`
+	Target       string            `json:"target,omitempty"`
 	WorkflowName string            `json:"workflowName"`
 	Parameters   map[string]string `json:"parameters,omitempty"`
 	CreatedBy    string            `json:"createdBy,omitempty"`
