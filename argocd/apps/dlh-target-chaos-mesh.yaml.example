@@ -1,0 +1,33 @@
+# Operator template: copy + rename per target. Replace REPLACE-CLUSTER
+# with the Argo CD destination cluster name (registered via
+# `argocd cluster add`).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dlh-target-chaos-mesh-REPLACE-CLUSTER
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: dlh-test-fw
+spec:
+  project: dlh-test-fw
+  source:
+    chart: chaos-mesh
+    repoURL: https://charts.chaos-mesh.org
+    targetRevision: 2.8.2
+    helm:
+      values: |
+        chaosDaemon:
+          runtime: containerd
+          socketPath: /run/containerd/containerd.sock
+        dashboard:
+          create: false
+  destination:
+    name: REPLACE-CLUSTER          # Argo CD-registered cluster name
+    namespace: chaos-mesh
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

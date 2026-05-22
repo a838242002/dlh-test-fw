@@ -1,0 +1,41 @@
+# Apply this on each TARGET cluster (not the framework cluster) to give
+# the controlplane a scoped ServiceAccount for chaos injection. The
+# kubeconfig for this SA goes into the framework cluster's
+# dlh-target-<id> Secret.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dlh-test-fw
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dlh-controlplane-remote
+  namespace: dlh-test-fw
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dlh-controlplane-remote
+  namespace: dlh-test-fw
+rules:
+  - apiGroups: ["chaos-mesh.org"]
+    resources: ["schedules", "podchaos", "networkchaos"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dlh-controlplane-remote
+  namespace: dlh-test-fw
+subjects:
+  - kind: ServiceAccount
+    name: dlh-controlplane-remote
+    namespace: dlh-test-fw
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dlh-controlplane-remote
