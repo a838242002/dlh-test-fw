@@ -24,6 +24,7 @@ type WorkflowLister interface {
 // WorkflowFilter narrows a list query.
 type WorkflowFilter struct {
 	Scenario string
+	Target   string
 	Status   string
 	Since    *time.Time
 	Limit    int
@@ -149,6 +150,9 @@ func filterWorkflows(items []*wfv1.Workflow, f WorkflowFilter) []*wfv1.Workflow 
 	filtered := []*wfv1.Workflow{}
 	for _, wf := range items {
 		if f.Scenario != "" && wf.Labels["dlh.scenario"] != f.Scenario && templateRef(wf) != f.Scenario {
+			continue
+		}
+		if f.Target != "" && wf.Labels["dlh.target"] != f.Target {
 			continue
 		}
 		if f.Status != "" && string(wf.Status.Phase) != f.Status {

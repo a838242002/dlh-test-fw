@@ -51,6 +51,9 @@ func (h *Handlers) ListRuns(_ context.Context, req gen.ListRunsRequestObject) (g
 	if req.Params.Scenario != nil {
 		f.Scenario = *req.Params.Scenario
 	}
+	if req.Params.Target != nil {
+		f.Target = *req.Params.Target
+	}
 	if req.Params.Status != nil {
 		f.Status = *req.Params.Status
 	}

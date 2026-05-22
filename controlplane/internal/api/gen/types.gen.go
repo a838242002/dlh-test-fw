@@ -148,6 +148,7 @@ type Target struct {
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	Scenario *string    `form:"scenario,omitempty" json:"scenario,omitempty"`
+	Target   *string    `form:"target,omitempty" json:"target,omitempty"`
 	Status   *string    `form:"status,omitempty" json:"status,omitempty"`
 	Since    *time.Time `form:"since,omitempty" json:"since,omitempty"`
 	Limit    *int       `form:"limit,omitempty" json:"limit,omitempty"`

@@ -408,6 +408,7 @@ export interface operations {
         parameters: {
             query?: {
                 scenario?: string;
+                target?: string;
                 status?: string;
                 since?: string;
                 limit?: number;

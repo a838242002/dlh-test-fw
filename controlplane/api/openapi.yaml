@@ -64,6 +64,9 @@ paths:
           name: scenario
           schema: { type: string }
         - in: query
+          name: target
+          schema: { type: string }
+        - in: query
           name: status
           schema: { type: string }
         - in: query

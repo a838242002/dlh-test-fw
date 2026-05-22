@@ -32,6 +32,18 @@ func TestFilter_Since(t *testing.T) {
 	}
 }
 
+func TestFilter_ByTarget(t *testing.T) {
+	now := metav1.Now()
+	items := []*wfv1.Workflow{
+		{ObjectMeta: metav1.ObjectMeta{Name: "a", Labels: map[string]string{"dlh.target": "staging-mysql"}, CreationTimestamp: now}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "b", Labels: map[string]string{}, CreationTimestamp: now}},
+	}
+	got := filterWorkflows(items, WorkflowFilter{Target: "staging-mysql"})
+	if len(got) != 1 || got[0].Name != "a" {
+		t.Errorf("got %+v", got)
+	}
+}
+
 func TestFilter_StatusAndLimit(t *testing.T) {
 	now := metav1.Now()
 	items := []*wfv1.Workflow{
