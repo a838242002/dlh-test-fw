@@ -17,6 +17,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
 )
 
 func main() {
@@ -82,6 +83,12 @@ func main() {
 	watchdog := &chaos.Watchdog{Chaos: chaosClient, RunsTerminal: checker, Interval: 30 * time.Second}
 	go watchdog.Run(ctx)
 
+	// Phase D: targets registry.
+	targetsReg := targets.NewRegistry()
+	loader := &targets.Loader{Client: clients.Core, Namespace: cfg.K8sNamespace}
+	refresher := &targets.Refresher{Loader: loader, Registry: targetsReg, Interval: 30 * time.Second}
+	go refresher.Run(ctx)
+
 	var verifier auth.VerifierIface
 	if cfg.AuthDisabled {
 		logger.Warn("DLH_AUTH_DISABLED=true — accepting fake tokens; NEVER set this in prod")
@@ -108,6 +115,7 @@ func main() {
 		Manifests:  manifests,
 		ArgoClient: clients.Argo,
 		Chaos:      chaosClient,
+		Targets:    targetsReg,
 	}
 	authMW := auth.Middleware(verifier, roles)
 	handler := api.NewRouter(deps, authMW, cfg.InternalToken)

@@ -13,6 +13,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
 )
 
 // Deps groups runtime dependencies injected into API handlers.
@@ -24,6 +25,7 @@ type Deps struct {
 	Manifests  *runs.ManifestWriter // Phase C
 	ArgoClient wfclient.Interface   // Phase C — for terminate patch
 	Chaos      chaos.Client         // Phase C — wired in Task 12
+	Targets    *targets.Registry    // Phase D — wired in Task 9
 }
 
 // NewRouter mounts the generated strict server onto chi with optional auth middleware.

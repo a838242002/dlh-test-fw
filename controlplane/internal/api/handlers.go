@@ -14,6 +14,7 @@ import (
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/model"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
 )
 
 // Handlers implements the oapi-codegen StrictServerInterface.
@@ -190,15 +191,47 @@ func (h *Handlers) DeleteChaos(_ context.Context, _ gen.DeleteChaosRequestObject
 	return gen.DeleteChaos401Response{}, nil
 }
 
-// Phase D stubs. Real implementations land in Task 9.
+// Phase D — Task 9: real targets handlers backed by the registry.
+
 func (h *Handlers) ListTargets(_ context.Context, _ gen.ListTargetsRequestObject) (gen.ListTargetsResponseObject, error) {
-	return gen.ListTargets200JSONResponse{Items: []gen.Target{}}, nil
+	if h.deps.Targets == nil {
+		return gen.ListTargets200JSONResponse{Items: []gen.Target{}}, nil
+	}
+	loaded := h.deps.Targets.List()
+	items := make([]gen.Target, 0, len(loaded))
+	for _, t := range loaded {
+		items = append(items, targetDTO(t))
+	}
+	return gen.ListTargets200JSONResponse{Items: items}, nil
 }
-func (h *Handlers) GetTarget(_ context.Context, _ gen.GetTargetRequestObject) (gen.GetTargetResponseObject, error) {
-	return gen.GetTarget404Response{}, nil
+
+func (h *Handlers) GetTarget(_ context.Context, req gen.GetTargetRequestObject) (gen.GetTargetResponseObject, error) {
+	if h.deps.Targets == nil {
+		return gen.GetTarget404Response{}, nil
+	}
+	t := h.deps.Targets.Get(req.Id)
+	if t == nil {
+		return gen.GetTarget404Response{}, nil
+	}
+	return gen.GetTarget200JSONResponse(targetDTO(t)), nil
 }
-func (h *Handlers) TestTargetConnection(_ context.Context, _ gen.TestTargetConnectionRequestObject) (gen.TestTargetConnectionResponseObject, error) {
-	return gen.TestTargetConnection404Response{}, nil
+
+func (h *Handlers) TestTargetConnection(ctx context.Context, req gen.TestTargetConnectionRequestObject) (gen.TestTargetConnectionResponseObject, error) {
+	if h.deps.Targets == nil {
+		return gen.TestTargetConnection404Response{}, nil
+	}
+	t := h.deps.Targets.Get(req.Id)
+	if t == nil {
+		return gen.TestTargetConnection404Response{}, nil
+	}
+	res := targets.Probe(ctx, t)
+	latencyNanos := res.Latency.Nanoseconds()
+	errStr := res.Error
+	return gen.TestTargetConnection200JSONResponse{
+		Ok:           res.OK,
+		LatencyNanos: &latencyNanos,
+		Error:        &errStr,
+	}, nil
 }
 
 // runDetailFromManifest builds a RunDetail from a stored MinIO manifest.
