@@ -26,6 +26,7 @@ export function RunsPage() {
         <thead>
           <tr className="border-b border-slate-200 text-left text-slate-600">
             <th className="py-2">Scenario</th>
+            <th>Target</th>
             <th>Status</th>
             <th>Started</th>
             <th>Score</th>
@@ -36,6 +37,7 @@ export function RunsPage() {
           {items.map((r) => (
             <tr key={r.id} className="border-b border-slate-100">
               <td className="py-2">{r.scenario}</td>
+              <td>{r.target ?? "local"}</td>
               <td><StatusBadge status={String(r.status)} /></td>
               <td className="text-slate-600">{new Date(r.startedAt).toLocaleString()}</td>
               <td>{r.score?.toFixed(2) ?? "—"}</td>
