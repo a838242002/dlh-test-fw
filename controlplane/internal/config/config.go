@@ -26,6 +26,9 @@ type Config struct {
 	ShutdownGrace        time.Duration
 	// AuthDisabled bypasses OIDC. ONLY for local dev — never set in prod.
 	AuthDisabled bool
+	// InternalToken is the shared secret for /internal/* endpoints.
+	// Required when auth is enabled.
+	InternalToken string
 }
 
 // Load reads env vars and returns a populated Config or an error if any
@@ -47,6 +50,7 @@ func Load() (*Config, error) {
 		MinIOSecure:          os.Getenv("DLH_MINIO_SECURE") == "true",
 		ShutdownGrace:        15 * time.Second,
 		AuthDisabled:         os.Getenv("DLH_AUTH_DISABLED") == "true",
+		InternalToken:        os.Getenv("DLH_INTERNAL_TOKEN"),
 	}
 	if !c.AuthDisabled {
 		if c.OIDCIssuerURL == "" {
@@ -55,6 +59,9 @@ func Load() (*Config, error) {
 		if c.OIDCClientID == "" {
 			return nil, fmt.Errorf("DLH_OIDC_CLIENT_ID is required when auth is enabled")
 		}
+	}
+	if !c.AuthDisabled && c.InternalToken == "" {
+		return nil, fmt.Errorf("DLH_INTERNAL_TOKEN is required when auth is enabled")
 	}
 	return c, nil
 }

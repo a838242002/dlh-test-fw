@@ -12,9 +12,11 @@ import (
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/auth"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/chaos"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/config"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 )
 
 func main() {
@@ -56,6 +58,30 @@ func main() {
 	}
 	reports := mio.NewReportReader(mc, cfg.MinIOBucket)
 
+	// Phase C: submission + manifest writes.
+	manifests := &runs.ManifestWriter{Client: mc, Bucket: cfg.MinIOBucket}
+	submitter := &runs.Submitter{Argo: clients.Argo, Namespace: cfg.K8sNamespace}
+	syncer := &runs.Syncer{Source: wfLister, Manifests: manifests, Reports: reports}
+	go syncer.Run(ctx)
+
+	chaosClient := &chaos.LocalChaosClient{Dyn: clients.Dynamic, Namespace: cfg.K8sNamespace}
+
+	// Watchdog: reap orphaned chaos resources every 30s.
+	checker := chaos.RunsTerminalCheckerFunc(func(runID string) bool {
+		wf, err := wfLister.Get(runID)
+		if err != nil || wf == nil {
+			// Workflow CR is gone (TTL'd) — treat as terminal; chaos shouldn't linger.
+			return true
+		}
+		switch string(wf.Status.Phase) {
+		case "Succeeded", "Failed", "Error":
+			return true
+		}
+		return false
+	})
+	watchdog := &chaos.Watchdog{Chaos: chaosClient, RunsTerminal: checker, Interval: 30 * time.Second}
+	go watchdog.Run(ctx)
+
 	var verifier auth.VerifierIface
 	if cfg.AuthDisabled {
 		logger.Warn("DLH_AUTH_DISABLED=true — accepting fake tokens; NEVER set this in prod")
@@ -74,9 +100,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	deps := &api.Deps{Templates: tmplLister, Workflows: wfLister, Reports: reports}
+	deps := &api.Deps{
+		Templates:  tmplLister,
+		Workflows:  wfLister,
+		Reports:    reports,
+		Submitter:  submitter,
+		Manifests:  manifests,
+		ArgoClient: clients.Argo,
+		Chaos:      chaosClient,
+	}
 	authMW := auth.Middleware(verifier, roles)
-	handler := api.NewRouter(deps, authMW)
+	handler := api.NewRouter(deps, authMW, cfg.InternalToken)
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,

@@ -4,18 +4,26 @@ import (
 	"net/http"
 	"strings"
 
+	wfclient "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/auth"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/chaos"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 )
 
 // Deps groups runtime dependencies injected into API handlers.
 type Deps struct {
-	Templates k8s.TemplateLister
-	Workflows k8s.WorkflowLister
-	Reports   *mio.ReportReader
+	Templates  k8s.TemplateLister
+	Workflows  k8s.WorkflowLister
+	Reports    *mio.ReportReader
+	Submitter  *runs.Submitter      // Phase C
+	Manifests  *runs.ManifestWriter // Phase C
+	ArgoClient wfclient.Interface   // Phase C — for terminate patch
+	Chaos      chaos.Client         // Phase C — wired in Task 12
 }
 
 // NewRouter mounts the generated strict server onto chi with optional auth middleware.
@@ -27,7 +35,7 @@ type Deps struct {
 // Auth middleware (when enabled) is applied as a global r.Use that must be
 // registered before any r.Get/r.Handle calls (chi rule).  The middleware
 // itself skips non-/api/ paths so health probes and the UI bypass auth.
-func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler) http.Handler {
+func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken string) http.Handler {
 	r := chi.NewRouter()
 
 	// ALL r.Use calls must come before any r.Get/r.Handle (chi requirement).
@@ -64,6 +72,20 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler) http.Handler 
 	h := &Handlers{deps: deps}
 	strictSI := gen.NewStrictHandler(h, nil)
 	gen.HandlerFromMux(strictSI, r)
+
+	// /internal/chaos — chi-direct mount, X-Internal-Token auth (not OIDC).
+	// MUST be registered AFTER gen.HandlerFromMux: HandlerFromMux uses r.Group
+	// which is merged into the routing tree. When we register AFTER the Group,
+	// our handler wins (last-registered wins for identical patterns in chi v5).
+	if deps.Chaos != nil {
+		intH := &InternalChaosHandler{Chaos: deps.Chaos}
+		internalMW := auth.InternalTokenMiddleware(internalToken)
+		createH := internalMW(http.HandlerFunc(intH.Create))
+		deleteH := internalMW(http.HandlerFunc(intH.Delete))
+		r.Post("/internal/chaos", createH.ServeHTTP)
+		r.Post("/internal/chaos/", createH.ServeHTTP)
+		r.Delete("/internal/chaos/{ref}", deleteH.ServeHTTP)
+	}
 
 	// Embedded React SPA — catch-all after all API routes.
 	r.Handle("/*", UIHandler())

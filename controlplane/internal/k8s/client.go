@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	wfclient "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -11,8 +12,9 @@ import (
 
 // Clients groups the Kubernetes + Argo client-go clients we need.
 type Clients struct {
-	Core kubernetes.Interface
-	Argo wfclient.Interface
+	Core    kubernetes.Interface
+	Argo    wfclient.Interface
+	Dynamic dynamic.Interface
 }
 
 // NewClients builds an in-cluster client if kubeconfigPath is empty,
@@ -37,5 +39,9 @@ func NewClients(kubeconfigPath string) (*Clients, error) {
 	if err != nil {
 		return nil, fmt.Errorf("argo client: %w", err)
 	}
-	return &Clients{Core: core, Argo: argo}, nil
+	dyn, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("dynamic client: %w", err)
+	}
+	return &Clients{Core: core, Argo: argo, Dynamic: dyn}, nil
 }

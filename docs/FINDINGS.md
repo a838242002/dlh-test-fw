@@ -683,4 +683,39 @@ The companion spec's Phase B will populate `controlplane/deploy/` and add a `res
 - Add watchdog reconciler.
 - Modify the 10 existing WorkflowTemplates to call `/internal/chaos` instead of inlining chaos CRs.
 - Deprecate `run-scenario.sh` as a shim around `dlh run`.
+
+---
+
+## Plan 16 findings — controlplane Phase C: /internal/chaos + dlh CLI + smoke
+
+Date: 2026-05-22  
+Branch: feat/plan16-controlplane-submission
+
+### What landed
+
+- **chaos WorkflowTemplates rewired**: all three chaos WTs (`chaos-pod-delete`, `chaos-network-loss`, `chaos-kafka-broker-partition`) now POST to `/internal/chaos?runID={{workflow.name}}` via Argo's HTTP template step and DELETE via a `cleanup-chaos` script step.
+- **dlh-internal-token Secret + RBAC**: chart provisions the shared-secret `dlh-internal-token`, wires `DLH_INTERNAL_TOKEN` into the controlplane Deployment, and extends both the `dlh-argo-workflow-scenarios` Role and `dlh-argo-workflow-chaos-targets` ClusterRoleBinding.
+- **Watchdog reconciler**: `chaos.Watchdog` runs every 30 s in-process; reaps any chaos CR whose `dlh.run-id` maps to a terminal or missing Workflow.
+- **dlh CLI**: `dlh run <scenario>` + `dlh runs ls/show/logs/cancel` with `--endpoint/--token` flags. `run-scenario.sh` is a deprecated shim that `exec dlh run`.
+- **argo-workflow.service-account-token Secret**: added to `secrets.yaml` — Kubernetes 1.24+ doesn't auto-create legacy SA token secrets; the Argo HTTP-template agent mounts it as a projected volume.
+
+### Operational pitfalls discovered
+
+1. **Argo v3.6.x HTTP template `outputs.parameters.valueFrom.jsonPath` is silently no-op.** Only `outputs.result` (the raw body string) is populated. Any handler that tries to bind a JSON path from an HTTP step response gets an empty string. Workaround: pass `outputs.result` to the next step as a plain parameter, then extract fields with `jq` inside a script template.
+
+2. **chi v5 last-registered wins for duplicate patterns across `r.Group`.** `gen.HandlerFromMux` uses `r.Group(func(r){ r.Post(...) })` for every route. Registering the same path/method both before and after the Group produces last-registered-wins behavior (Group overrides earlier flat registrations; flat registrations override earlier Groups). Conclusion: register custom handlers **after** `gen.HandlerFromMux`. This is the opposite of the first-registered-wins intuition from some other routers.
+
+3. **chi `r.Route("/foo", func(ir){ ir.Post("/", ...) })` only matches `/foo/` (trailing slash).** `POST /foo` (no slash) falls through to the next handler. Register both `r.Post("/foo", h)` and `r.Post("/foo/", h)` at the flat level, or use chi's `RedirectSlashes` middleware. The chaos WT calls `/internal/chaos` without a trailing slash.
+
+4. **chi `r.With(mw).Post(path, h)` does NOT reliably register on the outer mux.** `.With()` returns a new inline mux; route registration on it may or may not propagate to the parent tree depending on the chi version. Use `internalMW(http.HandlerFunc(h)).ServeHTTP` wrapped inline and register via `r.Post(path, wrappedH.ServeHTTP)` instead.
+
+5. **`X-Internal-Token` + `TOKEN=$(cat file)` + `ConstantTimeCompare` = 401.** Kubernetes secret volume mounts add a trailing newline to the projected file. `cat file` preserves the newline; `ConstantTimeCompare` is byte-exact. Fix: `TOKEN=$(tr -d '\n' < /var/run/secrets/.../token)`.
+
+6. **`argo-workflow` SA needs `secrets/dlh-internal-token` get permission for HTTP template secretKeyRef headers.** The Argo HTTP template agent resolves `secretKeyRef` at step execution time, not at pod scheduling time. Without a `verbs: [get]` rule for the secret by name, the agent pod emits a 403 and the step stays Pending indefinitely.
+
+7. **`argo-workflow` SA needs `workflowtasksets` get+watch AND `workflowtasksets/status` patch.** The Argo HTTP template agent (`argoexec agent`) communicates with the workflow controller via `workflowtasksets`. Both resources (base and `/status` subresource) must be covered for HTTP template steps to progress. The argo-workflows Helm subchart ClusterRole covers the base resource but omits `/status` — add it as a supplemental ClusterRole/ClusterRoleBinding.
+
+8. **Chaos Mesh vauth.kb.io admission webhook requires the *creating* SA to have chaos permissions in the *target* namespace.** When `dlh-controlplane` creates chaos CRs via the Dynamic client, the vauth webhook performs a SubjectAccessReview for the controlplane SA. Add `dlh-controlplane` as a subject to the `dlh-argo-workflow-chaos-targets` ClusterRoleBinding (which grants `chaos-mesh.org/*` cluster-wide). Same requirement applies to the `argo-workflow` SA for chaos WTs that still create CRs directly.
+
+9. **`kind: Workflow` in `scenarios/` ≠ WorkflowTemplate for controlplane submission.** The controlplane's `Submitter` looks up `WorkflowTemplates` by `scenarioId`. The existing `scenarios/mysql-pod-delete.yaml` is `kind: Workflow`, not `kind: WorkflowTemplate` — the controlplane can't submit it by name. Add a matching `kind: WorkflowTemplate` file under `helm/dlh-test-fw/files/workflowtemplates/scenario/` with backtick-escaped Argo template expressions for the Helm renderer.
 - Decide on IdP for the first real environment that consumes this controlplane.

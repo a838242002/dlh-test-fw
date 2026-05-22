@@ -3,11 +3,17 @@ package api
 import (
 	"context"
 	"errors"
+	"strings"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/auth"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/model"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 )
 
 // Handlers implements the oapi-codegen StrictServerInterface.
@@ -69,6 +75,12 @@ func (h *Handlers) ListRuns(_ context.Context, req gen.ListRunsRequestObject) (g
 func (h *Handlers) GetRun(ctx context.Context, req gen.GetRunRequestObject) (gen.GetRunResponseObject, error) {
 	wf, err := h.deps.Workflows.Get(req.Id)
 	if err != nil {
+		// Workflow CR not found — fall back to MinIO manifest (TTL-collected case).
+		if h.deps.Manifests != nil {
+			if m, mErr := h.deps.Manifests.Read(ctx, req.Id); mErr == nil && m != nil {
+				return gen.GetRun200JSONResponse(runDetailFromManifest(*m)), nil
+			}
+		}
 		return gen.GetRun404Response{}, nil
 	}
 	detail := model.RunDetailFromWorkflow(wf)
@@ -97,4 +109,102 @@ func (h *Handlers) GetHealthz(_ context.Context, _ gen.GetHealthzRequestObject) 
 
 func (h *Handlers) GetReadyz(_ context.Context, _ gen.GetReadyzRequestObject) (gen.GetReadyzResponseObject, error) {
 	return gen.GetReadyz200Response{}, nil
+}
+
+// CreateRun — POST /api/runs
+func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject) (gen.CreateRunResponseObject, error) {
+	id, _ := auth.IdentityFromContext(ctx)
+	createdBy := ""
+	if id != nil {
+		createdBy = id.Subject
+	}
+	body := req.Body
+	if body == nil || body.ScenarioId == "" {
+		return gen.CreateRun400Response{}, nil
+	}
+	params := map[string]string{}
+	if body.Parameters != nil {
+		for k, v := range *body.Parameters {
+			params[k] = v
+		}
+	}
+	sr, err := h.deps.Submitter.Submit(ctx, runs.SubmitRequest{
+		ScenarioID: body.ScenarioId,
+		Parameters: params,
+		CreatedBy:  createdBy,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return gen.CreateRun404Response{}, nil
+		}
+		return nil, err
+	}
+	m := runs.Manifest{
+		RunID:        sr.RunID,
+		Scenario:     body.ScenarioId,
+		WorkflowName: sr.RunID,
+		Parameters:   params,
+		CreatedBy:    createdBy,
+		Status:       "Submitted",
+		StartedAt:    sr.StartedAt,
+	}
+	_ = h.deps.Manifests.Write(ctx, m) // best-effort; informer will write a manifest later anyway
+	resp := gen.Run{
+		Id:           sr.RunID,
+		Scenario:     body.ScenarioId,
+		Status:       gen.RunStatus("Submitted"),
+		StartedAt:    sr.StartedAt,
+		WorkflowName: stringPtr(sr.RunID),
+	}
+	return gen.CreateRun202JSONResponse(resp), nil
+}
+
+func stringPtr(s string) *string { return &s }
+
+// CancelRun — DELETE /api/runs/{id}
+func (h *Handlers) CancelRun(ctx context.Context, req gen.CancelRunRequestObject) (gen.CancelRunResponseObject, error) {
+	if _, err := h.deps.Workflows.Get(req.Id); err != nil {
+		return gen.CancelRun404Response{}, nil
+	}
+	// Best-effort chaos cleanup first.
+	if h.deps.Chaos != nil {
+		_ = h.deps.Chaos.DeleteByRun(ctx, req.Id)
+	}
+	// Argo's "shutdown=Terminate" annotation patch is the official cancel path.
+	patch := []byte(`{"spec":{"shutdown":"Terminate"}}`)
+	_, err := h.deps.ArgoClient.ArgoprojV1alpha1().Workflows(h.deps.Submitter.Namespace).Patch(
+		ctx, req.Id, types.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return gen.CancelRun202Response{}, nil
+}
+// Unreachable: /internal/chaos is mounted directly on chi outside the
+// strict-server chain. This stub satisfies the strict interface.
+func (h *Handlers) CreateChaos(_ context.Context, _ gen.CreateChaosRequestObject) (gen.CreateChaosResponseObject, error) {
+	return gen.CreateChaos500Response{}, nil
+}
+
+// Unreachable: see CreateChaos.
+func (h *Handlers) DeleteChaos(_ context.Context, _ gen.DeleteChaosRequestObject) (gen.DeleteChaosResponseObject, error) {
+	return gen.DeleteChaos401Response{}, nil
+}
+
+// runDetailFromManifest builds a RunDetail from a stored MinIO manifest.
+// Used as fallback when the Workflow CR has been TTL-collected by Argo.
+func runDetailFromManifest(m runs.Manifest) gen.RunDetail {
+	d := gen.RunDetail{
+		Id:           m.RunID,
+		Scenario:     m.Scenario,
+		Status:       gen.RunDetailStatus(m.Status),
+		StartedAt:    m.StartedAt,
+		WorkflowName: stringPtr(m.WorkflowName),
+	}
+	if m.FinishedAt != nil {
+		d.FinishedAt = m.FinishedAt
+	}
+	if m.Score != nil {
+		d.Score = m.Score
+	}
+	return d
 }

@@ -2,13 +2,16 @@ package api
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
+	wfake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 )
 
 // fakeTemplates implements k8s.TemplateLister backed by an in-memory slice.
@@ -99,5 +102,51 @@ func TestListRuns(t *testing.T) {
 	}
 	if len(out.Items) != 1 || out.Items[0].Id != "run-1" {
 		t.Errorf("got %+v", out.Items)
+	}
+}
+
+func TestCreateRun_Submits(t *testing.T) {
+	ns := "dlh-test-fw"
+	tmpl := &wfv1.WorkflowTemplate{ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns}}
+	argo := wfake.NewSimpleClientset(tmpl)
+
+	deps := &Deps{
+		Templates: &fakeTemplates{items: []wfv1.WorkflowTemplate{*tmpl}},
+		Submitter: &runs.Submitter{Argo: argo, Namespace: ns},
+		Manifests: &runs.ManifestWriter{Client: nil, Bucket: "artifacts"}, // nil-client → Write no-ops
+	}
+	h := &Handlers{deps: deps}
+
+	scenarioID := "mysql-pod-delete"
+	req := gen.CreateRunRequestObject{Body: &gen.CreateRunRequest{ScenarioId: scenarioID}}
+	resp, err := h.CreateRun(context.Background(), req)
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	out, ok := resp.(gen.CreateRun202JSONResponse)
+	if !ok {
+		t.Fatalf("unexpected response type: %T", resp)
+	}
+	if !strings.HasPrefix(out.Id, "mysql-pod-delete-") {
+		t.Errorf("RunID: %q", out.Id)
+	}
+}
+
+func TestCreateRun_404OnUnknownScenario(t *testing.T) {
+	argo := wfake.NewSimpleClientset()
+	deps := &Deps{
+		Templates: &fakeTemplates{},
+		Submitter: &runs.Submitter{Argo: argo, Namespace: "dlh-test-fw"},
+		Manifests: &runs.ManifestWriter{Bucket: "artifacts"},
+	}
+	h := &Handlers{deps: deps}
+	resp, err := h.CreateRun(context.Background(), gen.CreateRunRequestObject{
+		Body: &gen.CreateRunRequest{ScenarioId: "does-not-exist"},
+	})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	if _, ok := resp.(gen.CreateRun404Response); !ok {
+		t.Fatalf("expected 404, got %T", resp)
 	}
 }

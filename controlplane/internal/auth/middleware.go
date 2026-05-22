@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 	"strings"
 )
@@ -56,4 +57,20 @@ func RequireRole(want Role) func(http.Handler) http.Handler {
 func IdentityFromContext(ctx context.Context) (*Identity, bool) {
 	id, ok := ctx.Value(identityKey).(*Identity)
 	return id, ok
+}
+
+// InternalTokenMiddleware verifies X-Internal-Token matches the configured
+// shared secret. Used for /internal/* endpoints called by Workflow http steps.
+// ConstantTimeCompare avoids token-length side-channels.
+func InternalTokenMiddleware(expected string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got := r.Header.Get("X-Internal-Token")
+			if expected == "" || subtle.ConstantTimeCompare([]byte(got), []byte(expected)) != 1 {
+				http.Error(w, "bad internal token", http.StatusUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
