@@ -65,15 +65,9 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 	sseH := &SSEHandler{Workflows: deps.Workflows}
 	r.Get("/api/runs/{id}/events", sseH.Handle)
 
-	// Register all generated API routes (/api/scenarios, /api/runs, etc.)
-	// plus the generated /healthz + /readyz stubs.  The manually registered
-	// /healthz and /readyz above win because chi uses first-registered wins
-	// for identical patterns.
-	h := &Handlers{deps: deps}
-	strictSI := gen.NewStrictHandler(h, nil)
-	gen.HandlerFromMux(strictSI, r)
-
 	// /internal/chaos — chi-direct mount, X-Internal-Token auth (not OIDC).
+	// Must be registered BEFORE gen.HandlerFromMux; chi first-registered wins,
+	// and the generated stub for DELETE /internal/chaos/{ref} always returns 401.
 	if deps.Chaos != nil {
 		intH := &InternalChaosHandler{Chaos: deps.Chaos}
 		r.Route("/internal/chaos", func(ir chi.Router) {
@@ -82,6 +76,14 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 			ir.Delete("/{ref}", intH.Delete)
 		})
 	}
+
+	// Register all generated API routes (/api/scenarios, /api/runs, etc.)
+	// plus the generated /healthz + /readyz stubs.  The manually registered
+	// /healthz, /readyz, SSE, and /internal/chaos routes above win because
+	// chi uses first-registered wins for identical patterns.
+	h := &Handlers{deps: deps}
+	strictSI := gen.NewStrictHandler(h, nil)
+	gen.HandlerFromMux(strictSI, r)
 
 	// Embedded React SPA — catch-all after all API routes.
 	r.Handle("/*", UIHandler())
