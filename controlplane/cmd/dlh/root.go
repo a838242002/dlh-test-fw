@@ -34,11 +34,7 @@ func tokenDefault() string {
 	return os.Getenv("DLH_TOKEN")
 }
 
-// runCmd / runsCmd stubs — replaced in Tasks 17 and 18.
-func runCmd() *cobra.Command {
-	return &cobra.Command{Use: "run", Short: "stub — implemented in Task 17"}
-}
-
+// runsCmd stub — replaced in Task 18.
 func runsCmd() *cobra.Command {
 	return &cobra.Command{Use: "runs", Short: "stub — implemented in Task 18"}
 }
