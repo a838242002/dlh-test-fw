@@ -157,3 +157,6 @@ jobs:
       - name: go build
         run: go build ./...
         working-directory: controlplane
+      - name: go build (cli)
+        run: go build ./cmd/dlh
+        working-directory: controlplane
