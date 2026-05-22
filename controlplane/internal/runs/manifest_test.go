@@ -3,6 +3,7 @@ package runs
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -45,5 +46,18 @@ func TestWrite_NilClient_NoOp(t *testing.T) {
 	w := &ManifestWriter{Client: nil, Bucket: "artifacts"}
 	if err := w.Write(context.Background(), Manifest{RunID: "x"}); err != nil {
 		t.Errorf("nil-client write should no-op, got %v", err)
+	}
+}
+
+func TestManifest_HasTargetField(t *testing.T) {
+	m := Manifest{
+		RunID:    "x",
+		Scenario: "mysql-pod-delete",
+		Target:   "staging-mysql",
+		Status:   "Running",
+	}
+	raw, _ := json.Marshal(m)
+	if !strings.Contains(string(raw), `"target":"staging-mysql"`) {
+		t.Errorf("target field missing in JSON: %s", raw)
 	}
 }
