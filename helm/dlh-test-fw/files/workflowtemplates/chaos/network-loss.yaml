@@ -39,7 +39,9 @@ spec:
         template: cleanup-chaos
         arguments:
           parameters:
-          - { name: ref, value: '{{`{{steps.post.outputs.parameters.ref}}`}}' }
+          # Pass full JSON result; cleanup extracts ref with jq
+          # (Argo v3.6.x HTTP template does not populate outputs.parameters.valueFrom.jsonPath)
+          - { name: post_result, value: '{{`{{steps.post.outputs.result}}`}}' }
 
   - name: build-netchaos-body
     inputs:
@@ -87,10 +89,6 @@ spec:
     inputs:
       parameters:
       - name: body
-    outputs:
-      parameters:
-      - name: ref
-        valueFrom: { jsonPath: '$.ref' }
     http:
       url: 'http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos?runID={{`{{workflow.name}}`}}'
       method: POST
@@ -100,6 +98,7 @@ spec:
       - name: Content-Type
         value: application/json
       body: '{{`{{inputs.parameters.body}}`}}'
+      successCondition: 'response.statusCode == 201'
 
   - name: wait-window
     inputs:
@@ -114,10 +113,27 @@ spec:
   - name: cleanup-chaos
     inputs:
       parameters:
-      - name: ref
-    http:
-      url: 'http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos/{{`{{inputs.parameters.ref}}`}}'
-      method: DELETE
-      headers:
-      - name: X-Internal-Token
-        valueFrom: { secretKeyRef: { name: dlh-internal-token, key: token } }
+      - name: post_result
+    script:
+      image: alpine/k8s:1.30.0
+      command: [bash]
+      source: |
+        set -euo pipefail
+        TOKEN=$(cat /var/run/secrets/dlh-internal-token/token)
+        REF=$(echo '{{`{{inputs.parameters.post_result}}`}}' | jq -r '.ref')
+        if [ -z "$REF" ] || [ "$REF" = "null" ]; then
+          echo "No ref in post_result — nothing to clean up"
+          exit 0
+        fi
+        echo "Deleting chaos ref: $REF"
+        curl -fsSL -X DELETE \
+          "http://dlh-controlplane.dlh-test-fw.svc.cluster.local:80/internal/chaos/${REF}" \
+          -H "X-Internal-Token: ${TOKEN}" \
+          -o /dev/null -w "HTTP %{http_code}\n"
+      volumeMounts:
+      - name: dlh-internal-token-vol
+        mountPath: /var/run/secrets/dlh-internal-token
+    volumes:
+    - name: dlh-internal-token-vol
+      secret:
+        secretName: dlh-internal-token
