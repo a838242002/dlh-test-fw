@@ -65,14 +65,20 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 	sseH := &SSEHandler{Workflows: deps.Workflows}
 	r.Get("/api/runs/{id}/events", sseH.Handle)
 
+	// Register all generated API routes (/api/scenarios, /api/runs, etc.)
+	// plus the generated /healthz + /readyz stubs.  The manually registered
+	// /healthz and /readyz above win because chi uses first-registered wins
+	// for identical patterns.
+	h := &Handlers{deps: deps}
+	strictSI := gen.NewStrictHandler(h, nil)
+	gen.HandlerFromMux(strictSI, r)
+
 	// /internal/chaos — chi-direct mount, X-Internal-Token auth (not OIDC).
-	// Must be registered BEFORE gen.HandlerFromMux; chi first-registered wins,
-	// and the generated stub for DELETE /internal/chaos/{ref} always returns 401.
+	// MUST be registered AFTER gen.HandlerFromMux: HandlerFromMux uses r.Group
+	// which is merged into the routing tree. When we register AFTER the Group,
+	// our handler wins (last-registered wins for identical patterns in chi v5).
 	if deps.Chaos != nil {
 		intH := &InternalChaosHandler{Chaos: deps.Chaos}
-		// Mount chaos handlers directly. Wrap with InternalTokenMiddleware inline
-		// (avoid r.With which creates a detached sub-mux in some chi versions).
-		// Both /internal/chaos (no slash) and /internal/chaos/ (trailing slash) POST forms.
 		internalMW := auth.InternalTokenMiddleware(internalToken)
 		createH := internalMW(http.HandlerFunc(intH.Create))
 		deleteH := internalMW(http.HandlerFunc(intH.Delete))
@@ -80,14 +86,6 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 		r.Post("/internal/chaos/", createH.ServeHTTP)
 		r.Delete("/internal/chaos/{ref}", deleteH.ServeHTTP)
 	}
-
-	// Register all generated API routes (/api/scenarios, /api/runs, etc.)
-	// plus the generated /healthz + /readyz stubs.  The manually registered
-	// /healthz, /readyz, SSE, and /internal/chaos routes above win because
-	// chi uses first-registered wins for identical patterns.
-	h := &Handlers{deps: deps}
-	strictSI := gen.NewStrictHandler(h, nil)
-	gen.HandlerFromMux(strictSI, r)
 
 	// Embedded React SPA — catch-all after all API routes.
 	r.Handle("/*", UIHandler())
