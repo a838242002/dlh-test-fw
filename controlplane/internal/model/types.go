@@ -68,6 +68,9 @@ func RunFromWorkflow(wf *wfv1.Workflow) gen.Run {
 		t := wf.Status.FinishedAt.Time
 		r.FinishedAt = &t
 	}
+	if v := wf.Labels["dlh.target"]; v != "" {
+		r.Target = &v
+	}
 	name := wf.Name
 	r.WorkflowName = &name
 	return r
@@ -89,6 +92,9 @@ func RunDetailFromWorkflow(wf *wfv1.Workflow) gen.RunDetail {
 	if !wf.Status.FinishedAt.IsZero() {
 		t := wf.Status.FinishedAt.Time
 		d.FinishedAt = &t
+	}
+	if v := wf.Labels["dlh.target"]; v != "" {
+		d.Target = &v
 	}
 	name := wf.Name
 	d.WorkflowName = &name

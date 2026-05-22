@@ -14,6 +14,7 @@ import (
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/model"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
 )
 
 // Handlers implements the oapi-codegen StrictServerInterface.
@@ -49,6 +50,9 @@ func (h *Handlers) ListRuns(_ context.Context, req gen.ListRunsRequestObject) (g
 	f := k8s.WorkflowFilter{}
 	if req.Params.Scenario != nil {
 		f.Scenario = *req.Params.Scenario
+	}
+	if req.Params.Target != nil {
+		f.Target = *req.Params.Target
 	}
 	if req.Params.Status != nil {
 		f.Status = *req.Params.Status
@@ -128,8 +132,13 @@ func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 			params[k] = v
 		}
 	}
+	targetID := ""
+	if body.TargetId != nil {
+		targetID = *body.TargetId
+	}
 	sr, err := h.deps.Submitter.Submit(ctx, runs.SubmitRequest{
 		ScenarioID: body.ScenarioId,
+		TargetID:   targetID,
 		Parameters: params,
 		CreatedBy:  createdBy,
 	})
@@ -142,6 +151,7 @@ func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 	m := runs.Manifest{
 		RunID:        sr.RunID,
 		Scenario:     body.ScenarioId,
+		Target:       targetID,
 		WorkflowName: sr.RunID,
 		Parameters:   params,
 		CreatedBy:    createdBy,
@@ -155,6 +165,9 @@ func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 		Status:       gen.RunStatus("Submitted"),
 		StartedAt:    sr.StartedAt,
 		WorkflowName: stringPtr(sr.RunID),
+	}
+	if targetID != "" {
+		resp.Target = &targetID
 	}
 	return gen.CreateRun202JSONResponse(resp), nil
 }
@@ -188,6 +201,49 @@ func (h *Handlers) CreateChaos(_ context.Context, _ gen.CreateChaosRequestObject
 // Unreachable: see CreateChaos.
 func (h *Handlers) DeleteChaos(_ context.Context, _ gen.DeleteChaosRequestObject) (gen.DeleteChaosResponseObject, error) {
 	return gen.DeleteChaos401Response{}, nil
+}
+
+// Phase D — Task 9: real targets handlers backed by the registry.
+
+func (h *Handlers) ListTargets(_ context.Context, _ gen.ListTargetsRequestObject) (gen.ListTargetsResponseObject, error) {
+	if h.deps.Targets == nil {
+		return gen.ListTargets200JSONResponse{Items: []gen.Target{}}, nil
+	}
+	loaded := h.deps.Targets.List()
+	items := make([]gen.Target, 0, len(loaded))
+	for _, t := range loaded {
+		items = append(items, targetDTO(t))
+	}
+	return gen.ListTargets200JSONResponse{Items: items}, nil
+}
+
+func (h *Handlers) GetTarget(_ context.Context, req gen.GetTargetRequestObject) (gen.GetTargetResponseObject, error) {
+	if h.deps.Targets == nil {
+		return gen.GetTarget404Response{}, nil
+	}
+	t := h.deps.Targets.Get(req.Id)
+	if t == nil {
+		return gen.GetTarget404Response{}, nil
+	}
+	return gen.GetTarget200JSONResponse(targetDTO(t)), nil
+}
+
+func (h *Handlers) TestTargetConnection(ctx context.Context, req gen.TestTargetConnectionRequestObject) (gen.TestTargetConnectionResponseObject, error) {
+	if h.deps.Targets == nil {
+		return gen.TestTargetConnection404Response{}, nil
+	}
+	t := h.deps.Targets.Get(req.Id)
+	if t == nil {
+		return gen.TestTargetConnection404Response{}, nil
+	}
+	res := targets.Probe(ctx, t)
+	latencyNanos := res.Latency.Nanoseconds()
+	errStr := res.Error
+	return gen.TestTargetConnection200JSONResponse{
+		Ok:           res.OK,
+		LatencyNanos: &latencyNanos,
+		Error:        &errStr,
+	}, nil
 }
 
 // runDetailFromManifest builds a RunDetail from a stored MinIO manifest.

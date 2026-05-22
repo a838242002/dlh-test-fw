@@ -17,6 +17,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
 )
 
 func main() {
@@ -64,7 +65,14 @@ func main() {
 	syncer := &runs.Syncer{Source: wfLister, Manifests: manifests, Reports: reports}
 	go syncer.Run(ctx)
 
-	chaosClient := &chaos.LocalChaosClient{Dyn: clients.Dynamic, Namespace: cfg.K8sNamespace}
+	// Phase D: targets registry (must be built before chaosRouter).
+	targetsReg := targets.NewRegistry()
+	loader := &targets.Loader{Client: clients.Core, Namespace: cfg.K8sNamespace}
+	refresher := &targets.Refresher{Loader: loader, Registry: targetsReg, Interval: 30 * time.Second}
+	go refresher.Run(ctx)
+
+	localChaos := &chaos.LocalChaosClient{Dyn: clients.Dynamic, Namespace: cfg.K8sNamespace}
+	chaosRouter := &chaos.Router{Local: localChaos, Registry: targetsReg}
 
 	// Watchdog: reap orphaned chaos resources every 30s.
 	checker := chaos.RunsTerminalCheckerFunc(func(runID string) bool {
@@ -79,7 +87,7 @@ func main() {
 		}
 		return false
 	})
-	watchdog := &chaos.Watchdog{Chaos: chaosClient, RunsTerminal: checker, Interval: 30 * time.Second}
+	watchdog := &chaos.Watchdog{Chaos: chaosRouter, RunsTerminal: checker, Interval: 30 * time.Second}
 	go watchdog.Run(ctx)
 
 	var verifier auth.VerifierIface
@@ -107,7 +115,8 @@ func main() {
 		Submitter:  submitter,
 		Manifests:  manifests,
 		ArgoClient: clients.Argo,
-		Chaos:      chaosClient,
+		Chaos:      chaosRouter,
+		Targets:    targetsReg,
 	}
 	authMW := auth.Middleware(verifier, roles)
 	handler := api.NewRouter(deps, authMW, cfg.InternalToken)

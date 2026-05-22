@@ -16,6 +16,7 @@ import (
 type Manifest struct {
 	RunID        string            `json:"runId"`
 	Scenario     string            `json:"scenario"`
+	Target       string            `json:"target,omitempty"`
 	WorkflowName string            `json:"workflowName"`
 	Parameters   map[string]string `json:"parameters,omitempty"`
 	CreatedBy    string            `json:"createdBy,omitempty"`
@@ -33,8 +34,8 @@ type ManifestWriter struct {
 }
 
 // Write puts the manifest at runs/by-id/{runID}/manifest.json AND writes
-// a pointer copy under runs/index/by-scenario/{scenario}/{YYYY-MM-DD}/{runID}.json.
-// (Phase D will add by-target index — out of scope here.)
+// pointer copies under runs/index/by-scenario/{scenario}/{YYYY-MM-DD}/{runID}.json
+// and (if Target is non-empty) runs/index/by-target/{target}/{YYYY-MM-DD}/{runID}.json.
 func (w *ManifestWriter) Write(ctx context.Context, m Manifest) error {
 	if w == nil || w.Client == nil {
 		return nil // test-mode no-op
@@ -51,6 +52,12 @@ func (w *ManifestWriter) Write(ctx context.Context, m Manifest) error {
 	idx := fmt.Sprintf("runs/index/by-scenario/%s/%s/%s.json", sanitize(m.Scenario), day, m.RunID)
 	if err := w.putJSON(ctx, idx, body); err != nil {
 		return fmt.Errorf("put index: %w", err)
+	}
+	if m.Target != "" {
+		idxT := fmt.Sprintf("runs/index/by-target/%s/%s/%s.json", sanitize(m.Target), day, m.RunID)
+		if err := w.putJSON(ctx, idxT, body); err != nil {
+			return fmt.Errorf("put by-target index: %w", err)
+		}
 	}
 	return nil
 }

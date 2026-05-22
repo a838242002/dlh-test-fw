@@ -12,7 +12,7 @@ import (
 // InternalChaosHandler serves the /internal/chaos POST + DELETE routes.
 // Mounted directly on the root chi router after InternalTokenMiddleware.
 type InternalChaosHandler struct {
-	Chaos chaos.Client
+	Chaos *chaos.Router
 }
 
 func (h *InternalChaosHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -21,12 +21,13 @@ func (h *InternalChaosHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "runID query param required", http.StatusBadRequest)
 		return
 	}
+	targetID := r.URL.Query().Get("targetID") // optional; "" = local
 	var res chaos.Resource
 	if err := json.NewDecoder(r.Body).Decode(&res); err != nil {
 		http.Error(w, "invalid body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	ref, err := h.Chaos.Create(r.Context(), runID, res)
+	ref, err := h.Chaos.CreateForTarget(r.Context(), runID, targetID, res)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -38,6 +39,7 @@ func (h *InternalChaosHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"kind":      ref.Resource,
 		"name":      ref.Name,
 		"namespace": ref.Namespace,
+		"targetID":  targetID,
 	})
 }
 
@@ -47,12 +49,13 @@ func (h *InternalChaosHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ref required", http.StatusBadRequest)
 		return
 	}
+	targetID := r.URL.Query().Get("targetID")
 	ref, err := chaos.DecodeRef(refStr)
 	if err != nil {
 		http.Error(w, "invalid ref: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := h.Chaos.Delete(r.Context(), ref); err != nil {
+	if err := h.Chaos.DeleteForTarget(r.Context(), targetID, ref); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

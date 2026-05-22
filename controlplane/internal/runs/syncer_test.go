@@ -102,3 +102,34 @@ func TestSyncer_CoalescesIdenticalEvents(t *testing.T) {
 		t.Errorf("expected exactly 1 write after coalesce, got %d", len(got))
 	}
 }
+
+func TestSyncer_PropagatesTarget(t *testing.T) {
+	src := &fakeEventSource{ch: make(chan k8s.WorkflowEvent, 2)}
+	sink := &captureSink{}
+	s := &Syncer{Source: src, Manifests: sink}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go s.Run(ctx)
+
+	wf := &wfv1.Workflow{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "run-1",
+			Labels: map[string]string{
+				"dlh.run-id":   "run-1",
+				"dlh.scenario": "mysql-pod-delete",
+				"dlh.target":   "staging-mysql",
+			},
+			CreationTimestamp: metav1.NewTime(time.Now()),
+		},
+		Status: wfv1.WorkflowStatus{Phase: "Running"},
+	}
+	src.ch <- k8s.WorkflowEvent{Type: "ADDED", Workflow: wf}
+	time.Sleep(300 * time.Millisecond)
+	got := sink.snapshot()
+	if len(got) == 0 {
+		t.Fatal("no manifest written")
+	}
+	if got[len(got)-1].Target != "staging-mysql" {
+		t.Errorf("Target propagation: %q", got[len(got)-1].Target)
+	}
+}

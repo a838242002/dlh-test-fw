@@ -57,17 +57,30 @@ type CreateRunRequest struct {
 
 	// ScenarioId WorkflowTemplate name (e.g. mysql-pod-delete)
 	ScenarioId string `json:"scenarioId"`
+
+	// TargetId Optional remote target ID. Empty = inject chaos in framework cluster.
+	TargetId *string `json:"targetId,omitempty"`
+}
+
+// ProbeResult defines model for ProbeResult.
+type ProbeResult struct {
+	Error        *string `json:"error,omitempty"`
+	LatencyNanos *int64  `json:"latencyNanos,omitempty"`
+	Ok           bool    `json:"ok"`
 }
 
 // Run defines model for Run.
 type Run struct {
-	FinishedAt   *time.Time `json:"finishedAt,omitempty"`
-	Id           string     `json:"id"`
-	Scenario     string     `json:"scenario"`
-	Score        *float64   `json:"score"`
-	StartedAt    time.Time  `json:"startedAt"`
-	Status       RunStatus  `json:"status"`
-	WorkflowName *string    `json:"workflowName,omitempty"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+	Id         string     `json:"id"`
+	Scenario   string     `json:"scenario"`
+	Score      *float64   `json:"score"`
+	StartedAt  time.Time  `json:"startedAt"`
+	Status     RunStatus  `json:"status"`
+
+	// Target Remote target ID (Run was injected into a remote cluster). Empty = local.
+	Target       *string `json:"target,omitempty"`
+	WorkflowName *string `json:"workflowName,omitempty"`
 }
 
 // RunStatus defines model for Run.Status.
@@ -94,6 +107,9 @@ type RunDetail struct {
 		StartedAt  *time.Time `json:"startedAt,omitempty"`
 	} `json:"steps,omitempty"`
 
+	// Target Remote target ID (Run was injected into a remote cluster). Empty = local.
+	Target *string `json:"target,omitempty"`
+
 	// Verdict Decoded from MinIO report.json. Absent if no report yet.
 	Verdict      *map[string]interface{} `json:"verdict"`
 	WorkflowName *string                 `json:"workflowName,omitempty"`
@@ -117,9 +133,22 @@ type Scenario struct {
 	TargetType *string `json:"targetType,omitempty"`
 }
 
+// Target defines model for Target.
+type Target struct {
+	AllowedTargetTypes *[]string `json:"allowedTargetTypes,omitempty"`
+
+	// Configured True if a valid kubeconfig was loaded for this target.
+	Configured       *bool   `json:"configured,omitempty"`
+	DisplayName      *string `json:"displayName,omitempty"`
+	Id               string  `json:"id"`
+	KubeconfigSecret *string `json:"kubeconfigSecret,omitempty"`
+	Namespace        *string `json:"namespace,omitempty"`
+}
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	Scenario *string    `form:"scenario,omitempty" json:"scenario,omitempty"`
+	Target   *string    `form:"target,omitempty" json:"target,omitempty"`
 	Status   *string    `form:"status,omitempty" json:"status,omitempty"`
 	Since    *time.Time `form:"since,omitempty" json:"since,omitempty"`
 	Limit    *int       `form:"limit,omitempty" json:"limit,omitempty"`

@@ -16,11 +16,15 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "list", "watch"]
-    resourceNames: ["dlh-roles"]
+    resourceNames: ["dlh-roles", "dlh-targets"]
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get"]
-    resourceNames: ["dlh-internal-token"]
+    # 'get' on all secrets in the controlplane namespace so we can
+    # resolve dlh-target-* kubeconfig secrets (the set is dynamic; RBAC
+    # doesn't allow wildcard resourceNames). The framework cluster is
+    # responsible for ensuring no untrusted workloads share this
+    # namespace. dlh-internal-token is also covered by this rule.
+    verbs: ["get", "list", "watch"]
   - apiGroups: ["chaos-mesh.org"]
     resources: ["schedules", "podchaos", "networkchaos"]
     verbs: ["get", "list", "watch", "create", "delete"]

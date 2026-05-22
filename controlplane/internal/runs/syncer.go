@@ -83,6 +83,7 @@ func (s *Syncer) handle(ctx context.Context, ev k8s.WorkflowEvent) {
 	m := Manifest{
 		RunID:        runID,
 		Scenario:     wf.Labels["dlh.scenario"],
+		Target:       wf.Labels["dlh.target"],
 		WorkflowName: wf.Name,
 		Status:       status,
 		StartedAt:    wf.CreationTimestamp.Time,

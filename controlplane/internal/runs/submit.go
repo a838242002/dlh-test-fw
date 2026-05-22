@@ -20,6 +20,7 @@ type Submitter struct {
 // SubmitRequest is the inbound payload (one-step removed from the HTTP DTO).
 type SubmitRequest struct {
 	ScenarioID string
+	TargetID   string
 	Parameters map[string]string
 	CreatedBy  string // OIDC subject
 }
@@ -27,6 +28,7 @@ type SubmitRequest struct {
 // SubmitResult is what we return to the caller.
 type SubmitResult struct {
 	RunID     string
+	TargetID  string
 	StartedAt time.Time
 }
 
@@ -47,20 +49,28 @@ func (s *Submitter) Submit(ctx context.Context, req SubmitRequest) (*SubmitResul
 	now := time.Now().UTC()
 	runID := fmt.Sprintf("%s-%s", req.ScenarioID, now.Format("20060102-150405"))
 
-	params := make([]wfv1.Parameter, 0, len(req.Parameters))
+	labels := map[string]string{
+		"dlh.scenario": req.ScenarioID,
+		"dlh.run-id":   runID,
+	}
+	if req.TargetID != "" {
+		labels["dlh.target"] = req.TargetID
+	}
+
+	params := make([]wfv1.Parameter, 0, len(req.Parameters)+1)
 	for k, v := range req.Parameters {
 		val := wfv1.AnyString(v)
 		params = append(params, wfv1.Parameter{Name: k, Value: &val})
 	}
+	// Always add target_id (empty for local); chaos WT http steps reference it.
+	tidVal := wfv1.AnyString(req.TargetID)
+	params = append(params, wfv1.Parameter{Name: "target_id", Value: &tidVal})
 
 	wf := &wfv1.Workflow{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      runID,
 			Namespace: s.Namespace,
-			Labels: map[string]string{
-				"dlh.scenario": req.ScenarioID,
-				"dlh.run-id":   runID,
-			},
+			Labels:    labels,
 			Annotations: map[string]string{
 				"dlh.created-by": req.CreatedBy,
 			},
@@ -75,5 +85,5 @@ func (s *Submitter) Submit(ctx context.Context, req SubmitRequest) (*SubmitResul
 	if err != nil {
 		return nil, fmt.Errorf("create workflow: %w", err)
 	}
-	return &SubmitResult{RunID: created.Name, StartedAt: created.CreationTimestamp.Time}, nil
+	return &SubmitResult{RunID: created.Name, TargetID: req.TargetID, StartedAt: created.CreationTimestamp.Time}, nil
 }

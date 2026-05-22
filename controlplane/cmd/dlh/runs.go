@@ -24,6 +24,7 @@ func runsCmd() *cobra.Command {
 func runsLsCmd() *cobra.Command {
 	var (
 		scenario string
+		target   string
 		status   string
 		limit    int
 	)
@@ -34,6 +35,9 @@ func runsLsCmd() *cobra.Command {
 			q := url.Values{}
 			if scenario != "" {
 				q.Set("scenario", scenario)
+			}
+			if target != "" {
+				q.Set("target", target)
 			}
 			if status != "" {
 				q.Set("status", status)
@@ -52,20 +56,21 @@ func runsLsCmd() *cobra.Command {
 				return err
 			}
 			tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "RUN ID\tSCENARIO\tSTATUS\tSTARTED\tSCORE")
+			fmt.Fprintln(tw, "RUN ID\tSCENARIO\tTARGET\tSTATUS\tSTARTED\tSCORE")
 			for _, r := range resp.Items {
 				started, _ := r["startedAt"].(string)
 				score := "—"
 				if v, ok := r["score"].(float64); ok {
 					score = fmt.Sprintf("%.2f", v)
 				}
-				fmt.Fprintf(tw, "%v\t%v\t%v\t%v\t%s\n",
-					r["id"], r["scenario"], r["status"], started, score)
+				fmt.Fprintf(tw, "%v\t%v\t%v\t%v\t%v\t%s\n",
+					r["id"], r["scenario"], stringOrDash(r["target"]), r["status"], started, score)
 			}
 			return tw.Flush()
 		},
 	}
 	c.Flags().StringVar(&scenario, "scenario", "", "Filter by scenario id")
+	c.Flags().StringVar(&target, "target", "", "Filter by target id")
 	c.Flags().StringVar(&status, "status", "", "Filter by status")
 	c.Flags().IntVar(&limit, "limit", 50, "Max rows")
 	return c
@@ -137,4 +142,11 @@ func runsCancelCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func stringOrDash(v any) string {
+	if s, ok := v.(string); ok && s != "" {
+		return s
+	}
+	return "—"
 }

@@ -44,6 +44,7 @@ export function RunDetailPage() {
       <header className="flex items-baseline gap-3">
         <h1 className="text-xl font-semibold">{run.id}</h1>
         <StatusBadge status={status} />
+        {run.target && <span className="text-xs text-slate-500">target: {run.target}</span>}
       </header>
       <div>
         <h2 className="mb-2 font-medium">Scenario</h2>
