@@ -26,12 +26,16 @@ rules:
   resources: ["configmaps"]
   verbs: ["create", "get", "list", "watch", "update", "patch"]
 # Plan 16 (2026-05-22): Argo's HTTP-template agent (argoexec agent) runs
-# under the argo-workflow SA and watches WorkflowTaskSets to receive task
-# assignments and push results back.  Without get+watch the agent pod exits
-# immediately with a "forbidden" error and every http step stays Pending.
+# under the argo-workflow SA and needs:
+#   - get+watch on workflowtasksets: to receive task assignments from ctrl
+#   - patch on workflowtasksets/status: to push http result back to ctrl
+# Without these every http step stays Pending indefinitely.
 - apiGroups: ["argoproj.io"]
   resources: ["workflowtasksets"]
   verbs: ["get", "watch"]
+- apiGroups: ["argoproj.io"]
+  resources: ["workflowtasksets/status"]
+  verbs: ["patch"]
 - apiGroups: ["argoproj.io"]
   resources: ["workflowtaskresults"]
   verbs: ["create", "patch"]
@@ -94,4 +98,11 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: argo-workflow
+  namespace: {{ include "dlh.namespace" . }}
+# Plan 16 (2026-05-22): dlh-controlplane also creates chaos CRs on behalf
+# of workflows (via /internal/chaos). Chaos Mesh's vauth.kb.io webhook
+# performs the same SubjectAccessReview against the creating SA, so the
+# controlplane SA needs the same cluster-wide permissions as argo-workflow.
+- kind: ServiceAccount
+  name: dlh-controlplane
   namespace: {{ include "dlh.namespace" . }}
