@@ -3,6 +3,7 @@ package targets
 import (
 	"context"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -102,5 +103,30 @@ users:
 	}
 	if got["staging-mysql"].DisplayName != "staging-mysql" {
 		t.Errorf("DisplayName default: %q", got["staging-mysql"].DisplayName)
+	}
+}
+
+func TestRefresher_TickPopulatesRegistry(t *testing.T) {
+	ns := "dlh-test-fw"
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "dlh-targets", Namespace: ns},
+		Data: map[string]string{
+			"targets.yaml": `
+targets:
+  - id: a
+    kubeconfigSecret: missing-secret
+`,
+		},
+	}
+	client := fake.NewSimpleClientset(cm)
+	reg := NewRegistry()
+	rf := &Refresher{
+		Loader:   &Loader{Client: client, Namespace: ns},
+		Registry: reg,
+		Interval: 10 * time.Millisecond,
+	}
+	rf.tick(context.Background())
+	if reg.Get("a") == nil {
+		t.Errorf("registry not populated after tick")
 	}
 }

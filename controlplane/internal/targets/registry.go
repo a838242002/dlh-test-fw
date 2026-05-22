@@ -8,6 +8,7 @@ package targets
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -145,4 +146,42 @@ func (l *Loader) loadKubeconfig(ctx context.Context, secretName string) (*rest.C
 		return nil, fmt.Errorf("parse kubeconfig: %w", err)
 	}
 	return cfg, nil
+}
+
+// Refresher repeatedly Loads + Replaces into the registry every interval
+// until ctx is cancelled. First refresh runs synchronously so the registry
+// is populated before Run returns control to its goroutine.
+type Refresher struct {
+	Loader   *Loader
+	Registry *Registry
+	Interval time.Duration // defaults to 30s
+}
+
+func (r *Refresher) Run(ctx context.Context) {
+	interval := r.Interval
+	if interval == 0 {
+		interval = 30 * time.Second
+	}
+	// First tick immediately so the registry is populated before Run
+	// returns control to the caller's goroutine.
+	r.tick(ctx)
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			r.tick(ctx)
+		}
+	}
+}
+
+func (r *Refresher) tick(ctx context.Context) {
+	loaded, err := r.Loader.Load(ctx)
+	if err != nil {
+		slog.Warn("targets refresh failed", "err", err)
+		return
+	}
+	r.Registry.Replace(loaded)
 }
