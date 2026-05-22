@@ -3,12 +3,13 @@ module github.com/dlh/dlh-test-fw/controlplane
 go 1.26.3
 
 require (
-	github.com/argoproj/argo-workflows/v3 v3.6.19
+	github.com/argoproj/argo-workflows/v3 v3.6.5
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/getkin/kin-openapi v0.127.0
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/minio/minio-go/v7 v7.0.89
 	github.com/oapi-codegen/runtime v1.4.1
+	github.com/spf13/cobra v1.8.1
 	k8s.io/api v0.32.2
 	k8s.io/apimachinery v0.32.2
 	k8s.io/client-go v0.32.2
@@ -35,6 +36,7 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/invopop/yaml v0.3.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

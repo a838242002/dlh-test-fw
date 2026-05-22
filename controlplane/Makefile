@@ -4,7 +4,7 @@ SHELL := /usr/bin/env bash
 
 IMG ?= ghcr.io/dlh/dlh-controlplane:0.1.0
 
-.PHONY: test lint build ui-build ui-install image load-image reload-minikube codegen clean
+.PHONY: test lint build ui-build ui-install image load-image reload-minikube codegen clean cli
 
 test:
 	go test ./...
@@ -45,3 +45,6 @@ reload-minikube: image
 
 clean:
 	rm -rf bin web/dist
+
+cli:
+	CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/dlh ./cmd/dlh
