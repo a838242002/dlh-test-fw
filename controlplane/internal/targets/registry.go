@@ -6,10 +6,16 @@
 package targets
 
 import (
+	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/yaml"
 )
 
 // Target describes one remote cluster the controlplane can talk to.
@@ -68,4 +74,75 @@ func (r *Registry) Replace(targets map[string]*LoadedTarget) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.loaded = targets
+}
+
+// Loader fetches the dlh-targets ConfigMap and per-target Secrets and
+// builds a fresh LoadedTarget map.
+type Loader struct {
+	Client    kubernetes.Interface
+	Namespace string
+	// ConfigMapName defaults to "dlh-targets".
+	ConfigMapName string
+}
+
+// Load reads the configmap + secrets and returns the current target set.
+func (l *Loader) Load(ctx context.Context) (map[string]*LoadedTarget, error) {
+	cmName := l.ConfigMapName
+	if cmName == "" {
+		cmName = "dlh-targets"
+	}
+	cm, err := l.Client.CoreV1().ConfigMaps(l.Namespace).Get(ctx, cmName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get configmap %s/%s: %w", l.Namespace, cmName, err)
+	}
+	rawYAML, ok := cm.Data["targets.yaml"]
+	if !ok {
+		// Empty registry — chart ships an empty default, this is fine.
+		return map[string]*LoadedTarget{}, nil
+	}
+	var doc struct {
+		Targets []Target `yaml:"targets"`
+	}
+	if err := yaml.Unmarshal([]byte(rawYAML), &doc); err != nil {
+		return nil, fmt.Errorf("parse targets.yaml: %w", err)
+	}
+	out := map[string]*LoadedTarget{}
+	for i := range doc.Targets {
+		t := doc.Targets[i]
+		if t.ID == "" || t.KubeconfigSecret == "" {
+			continue // skip malformed entries
+		}
+		if t.Namespace == "" {
+			t.Namespace = "dlh-test-fw"
+		}
+		if t.DisplayName == "" {
+			t.DisplayName = t.ID
+		}
+		now := metav1.Now().Time
+		cfg, kcErr := l.loadKubeconfig(ctx, t.KubeconfigSecret)
+		if kcErr != nil {
+			// Don't fail the whole load — surface partial results so a
+			// single broken secret doesn't disable the registry.
+			out[t.ID] = &LoadedTarget{Target: t, LastSeen: now}
+			continue
+		}
+		out[t.ID] = &LoadedTarget{Target: t, RestConfig: cfg, LastSeen: now}
+	}
+	return out, nil
+}
+
+func (l *Loader) loadKubeconfig(ctx context.Context, secretName string) (*rest.Config, error) {
+	sec, err := l.Client.CoreV1().Secrets(l.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get secret %s/%s: %w", l.Namespace, secretName, err)
+	}
+	raw, ok := sec.Data["kubeconfig"]
+	if !ok {
+		return nil, fmt.Errorf("secret %s missing 'kubeconfig' key", secretName)
+	}
+	cfg, err := clientcmd.RESTConfigFromKubeConfig(raw)
+	if err != nil {
+		return nil, fmt.Errorf("parse kubeconfig: %w", err)
+	}
+	return cfg, nil
 }
