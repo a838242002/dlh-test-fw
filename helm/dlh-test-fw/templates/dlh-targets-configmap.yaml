@@ -1,0 +1,17 @@
+# Placeholder catalog of remote target clusters. Operators register a
+# target by adding an entry under .data.targets.yaml and committing a
+# matching dlh-target-<id> Secret (key: kubeconfig). Both are
+# Argo-CD-synced. See docs/operations/register-target.md.
+#
+# On a fresh install this ConfigMap is empty (no entries); the
+# controlplane behaves exactly like Phase C when the registry is empty.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlh-targets
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/part-of: dlh-test-fw
+data:
+  targets.yaml: |
+    targets: []
