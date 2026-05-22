@@ -70,13 +70,15 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 	// and the generated stub for DELETE /internal/chaos/{ref} always returns 401.
 	if deps.Chaos != nil {
 		intH := &InternalChaosHandler{Chaos: deps.Chaos}
-		// Mount chaos sub-router with InternalToken middleware.
-		// Register POST at both /internal/chaos and /internal/chaos/ so the WT
-		// can call either form (chi's Route sub-router only matches the slash form).
+		// Mount chaos handlers directly. Wrap with InternalTokenMiddleware inline
+		// (avoid r.With which creates a detached sub-mux in some chi versions).
+		// Both /internal/chaos (no slash) and /internal/chaos/ (trailing slash) POST forms.
 		internalMW := auth.InternalTokenMiddleware(internalToken)
-		r.With(internalMW).Post("/internal/chaos", intH.Create)
-		r.With(internalMW).Post("/internal/chaos/", intH.Create)
-		r.With(internalMW).Delete("/internal/chaos/{ref}", intH.Delete)
+		createH := internalMW(http.HandlerFunc(intH.Create))
+		deleteH := internalMW(http.HandlerFunc(intH.Delete))
+		r.Post("/internal/chaos", createH.ServeHTTP)
+		r.Post("/internal/chaos/", createH.ServeHTTP)
+		r.Delete("/internal/chaos/{ref}", deleteH.ServeHTTP)
 	}
 
 	// Register all generated API routes (/api/scenarios, /api/runs, etc.)
