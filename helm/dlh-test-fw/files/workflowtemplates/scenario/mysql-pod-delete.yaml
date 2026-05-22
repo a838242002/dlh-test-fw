@@ -44,6 +44,9 @@ spec:
     # ===== table prep =====
     - { name: load_table_name,   value: "dlh_load" }
     - { name: load_table_schema, value: "id BIGINT AUTO_INCREMENT PRIMARY KEY, ts DATETIME NOT NULL" }
+    # ===== remote target (Plan 17 Phase D) =====
+    # Empty string means "local framework cluster"; set to a registered target ID for remote chaos.
+    - { name: target_id, value: "" }
 
   templates:
   - name: main
@@ -80,6 +83,7 @@ spec:
           - { name: target_pod_selector, value: "app=mysql" }
           - { name: duration,            value: '{{`{{workflow.parameters.chaos_duration}}`}}' }
           - { name: interval,            value: '{{`{{workflow.parameters.chaos_interval}}`}}' }
+          - { name: target_id,           value: '{{`{{workflow.parameters.target_id}}`}}' }
       - name: load
         templateRef: { name: load-k6-run, template: main }
         arguments:
