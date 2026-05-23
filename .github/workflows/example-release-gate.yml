@@ -1,0 +1,51 @@
+# Example release-gating workflow demonstrating .github/actions/dlh-run.
+#
+# Adapt for your team: copy this file under .github/workflows/, set
+# DLH_ENDPOINT as a repository secret, register `ci-repo:<owner>/<repo>`
+# in the controlplane's dlh-roles ConfigMap as a `runner`.
+#
+# This file is committed as an EXAMPLE; the dlh-test-fw repo itself does
+# not run release-gating against its own controlplane. Operators copy + rename.
+name: example-release-gate
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'helm/**'
+      - 'controlplane/**'
+      - 'scenarios/**'
+
+permissions:
+  id-token: write  # required for GH Actions OIDC
+  contents: read
+
+jobs:
+  smoke:
+    name: 'dlh smoke (mysql-pod-delete)'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build the dlh CLI from this checkout so it's in PATH for the action.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: controlplane/go.mod
+          cache: true
+          cache-dependency-path: controlplane/go.sum
+      - name: Build dlh CLI
+        run: |
+          cd controlplane
+          go build -o /usr/local/bin/dlh ./cmd/dlh
+
+      - uses: ./.github/actions/dlh-run
+        with:
+          endpoint: ${{ secrets.DLH_ENDPOINT }}
+          scenario: mysql-pod-delete
+          target: ''  # framework cluster
+          params: |
+            vus=5
+            load_duration=30s
+            chaos_duration=15s
+          wait: 'true'
