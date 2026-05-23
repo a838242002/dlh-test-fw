@@ -192,6 +192,13 @@ step_seed_minio() {
   log_ok "fixture seeded to dlh-local/fixtures/mysql-users.sql"
 }
 
+step_mysql_target() {
+  log_step 7 "Deploying the mysql target"
+  kubectl apply -f targets/mysql/deploy.yaml
+  kubectl -n mysql-sys rollout status deploy/mysql --timeout=120s
+  log_ok "mysql target ready"
+}
+
 step_crds() {
   if kubectl get crd podchaos.chaos-mesh.org >/dev/null 2>&1; then
     log_skip 1 "Pre-install CRDs" "chaos-mesh CRDs already present"
@@ -223,6 +230,7 @@ main() {
   step_controlplane
   step_cli
   step_seed_minio
+  step_mysql_target
 }
 
 main "$@"
