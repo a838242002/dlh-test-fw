@@ -108,6 +108,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	sessionIssuer := &auth.SessionIssuer{
+		Key:      []byte(cfg.SessionSigningKey),
+		Lifetime: time.Hour,
+	}
+	exchanger := &auth.Exchanger{
+		TrustedIssuers:   cfg.CITrustedIssuers,
+		RequiredAudience: cfg.CIAudience,
+	}
+
 	deps := &api.Deps{
 		Templates:  tmplLister,
 		Workflows:  wfLister,
@@ -117,8 +126,16 @@ func main() {
 		ArgoClient: clients.Argo,
 		Chaos:      chaosRouter,
 		Targets:    targetsReg,
+		SessionIssuer: sessionIssuer,
+		Exchanger:     exchanger,
+		AuthInfo: api.AuthInfoConfig{
+			OIDCIssuer:   cfg.OIDCIssuerURL,
+			OIDCClientID: cfg.OIDCClientID,
+			CIAudience:   cfg.CIAudience,
+			AuthDisabled: cfg.AuthDisabled,
+		},
 	}
-	authMW := auth.Middleware(verifier, roles, nil) // session issuer wired in Task 7
+	authMW := auth.Middleware(verifier, roles, sessionIssuer)
 	handler := api.NewRouter(deps, authMW, cfg.InternalToken)
 
 	srv := &http.Server{
