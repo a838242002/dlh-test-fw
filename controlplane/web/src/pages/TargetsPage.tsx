@@ -1,98 +1,98 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { api } from "../api/client";
 import type { components } from "../api/gen";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorState } from "@/components/ErrorState";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type Target = components["schemas"]["Target"];
 
 export function TargetsPage() {
   const [items, setItems] = useState<Target[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [testing, setTesting] = useState<string | null>(null);
-  const [results, setResults] = useState<Record<string, string>>({});
-
-  const reload = () =>
-    api.GET("/api/targets", {}).then(({ data, error }) => {
-      if (error) setError(JSON.stringify(error));
-      else setItems(data?.items ?? []);
-    });
 
   useEffect(() => {
-    reload();
+    api.GET("/api/targets", {}).then(({ data, error }) => {
+      if (error) setError(error);
+      else setItems(data?.items ?? []);
+    });
   }, []);
 
   const testConn = async (id: string) => {
     setTesting(id);
     try {
-      const { data, error } = await api.POST("/api/targets/{id}/test", {
-        params: { path: { id } },
-      });
+      const { data, error } = await api.POST("/api/targets/{id}/test", { params: { path: { id } } });
       if (error) {
-        setResults((r) => ({ ...r, [id]: `error: ${JSON.stringify(error)}` }));
+        toast.error(`Test failed: ${id}`, { description: JSON.stringify(error) });
+      } else if (data?.ok) {
+        toast.success(`${id} OK (${Math.round((data.latencyNanos ?? 0) / 1_000_000)} ms)`);
       } else {
-        setResults((r) => ({
-          ...r,
-          [id]: data?.ok
-            ? `OK (${Math.round((data.latencyNanos ?? 0) / 1_000_000)} ms)`
-            : `FAIL: ${data?.error ?? "unknown"}`,
-        }));
+        toast.error(`${id} unreachable`, { description: data?.error ?? "unknown" });
       }
     } finally {
       setTesting(null);
     }
   };
 
-  if (error) return <p className="text-rose-700">Error: {error}</p>;
-  if (!items) return <p>Loading…</p>;
+  if (error) return <ErrorState message="Failed to load targets" details={error} />;
+
   return (
     <section>
-      <h1 className="mb-4 text-xl font-semibold">Targets</h1>
-      {items.length === 0 ? (
-        <p className="text-slate-600">
-          No targets registered. Targets are added by PR — see{" "}
-          <code>docs/operations/register-target.md</code>.
-        </p>
+      <PageHeader title="Targets" />
+      {!items ? (
+        <p className="text-muted-foreground">Loading…</p>
+      ) : items.length === 0 ? (
+        <EmptyState
+          message="No targets registered"
+          hint={<>Targets are added by PR — see <code>docs/operations/register-target.md</code>.</>}
+        />
       ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 text-left text-slate-600">
-              <th className="py-2">ID</th>
-              <th>Display Name</th>
-              <th>Namespace</th>
-              <th>Allowed Types</th>
-              <th>Configured</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((t) => (
-              <tr key={t.id} className="border-b border-slate-100">
-                <td className="py-2">{t.id}</td>
-                <td>{t.displayName ?? t.id}</td>
-                <td>{t.namespace ?? "—"}</td>
-                <td>{(t.allowedTargetTypes ?? []).join(", ") || "—"}</td>
-                <td>
-                  {t.configured ? (
-                    <span className="text-emerald-700">✓</span>
-                  ) : (
-                    <span className="text-rose-700">✗</span>
-                  )}
-                </td>
-                <td>
-                  <button
-                    onClick={() => testConn(t.id)}
-                    disabled={testing === t.id}
-                    className="rounded border border-slate-300 px-2 py-0.5 text-xs hover:bg-slate-100"
-                  >
-                    {testing === t.id ? "testing…" : "test"}
-                  </button>
-                  {results[t.id] && (
-                    <span className="ml-2 text-xs text-slate-600">{results[t.id]}</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Display Name</TableHead>
+                <TableHead>Namespace</TableHead>
+                <TableHead>Allowed Types</TableHead>
+                <TableHead>Configured</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell className="font-medium">{t.id}</TableCell>
+                  <TableCell>{t.displayName ?? t.id}</TableCell>
+                  <TableCell className="text-muted-foreground">{t.namespace ?? "—"}</TableCell>
+                  <TableCell>{(t.allowedTargetTypes ?? []).join(", ") || "—"}</TableCell>
+                  <TableCell>
+                    {t.configured ? (
+                      <Badge className="bg-status-success/15 text-status-success" variant="outline">
+                        configured
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-status-failed/15 text-status-failed">
+                        missing
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="outline" size="sm" disabled={testing === t.id} onClick={() => testConn(t.id)}>
+                      {testing === t.id ? "Testing…" : "Test"}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </section>
   );
