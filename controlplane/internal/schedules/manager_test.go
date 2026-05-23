@@ -194,3 +194,34 @@ func TestPause_NotFound(t *testing.T) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
+
+func TestCreate_WorkflowMetadataPropagatesToChildWorkflows(t *testing.T) {
+	// Verify that the CronWorkflow's spec.workflowMetadata.labels
+	// includes everything the Syncer needs — dlh.scenario AND dlh.target.
+	// Argo's CronController stamps these labels onto every fired Workflow,
+	// so Plan 17's Syncer (which reads dlh.target from Workflow labels)
+	// continues to work for scheduled runs.
+	tmpl := &wfv1.WorkflowTemplate{ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: "dlh-test-fw"}}
+	argo := wfake.NewSimpleClientset(tmpl)
+	m := &Manager{Argo: argo, Namespace: "dlh-test-fw"}
+	got, err := m.Create(context.Background(), CreateRequest{
+		Name: "nightly-staging", ScenarioID: "mysql-pod-delete",
+		TargetID: "staging-mysql", Cron: "0 2 * * *",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if got.Spec.WorkflowMetadata == nil {
+		t.Fatal("workflowMetadata not set")
+	}
+	wantLabels := map[string]string{
+		"dlh.scenario": "mysql-pod-delete",
+		"dlh.target":   "staging-mysql",
+	}
+	for k, v := range wantLabels {
+		if got.Spec.WorkflowMetadata.Labels[k] != v {
+			t.Errorf("workflowMetadata.label[%s]: got %q, want %q",
+				k, got.Spec.WorkflowMetadata.Labels[k], v)
+		}
+	}
+}
