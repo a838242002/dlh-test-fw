@@ -16,12 +16,14 @@ func TestAddLinks_PopulatesArgoAndGrafana(t *testing.T) {
 	}}}
 	wf := "mysql-pod-delete-20260523-130331"
 	end := time.Date(2026, 5, 23, 13, 7, 47, 0, time.UTC)
+	verdict := map[string]interface{}{"overall": true}
 	d := gen.RunDetail{
 		Id:           wf,
 		Scenario:     "mysql-pod-delete",
 		WorkflowName: &wf,
 		StartedAt:    time.Date(2026, 5, 23, 13, 3, 31, 0, time.UTC),
 		FinishedAt:   &end,
+		Verdict:      &verdict, // a verdict means SLO/load metrics exist → Grafana links
 	}
 	h.addLinks(&d)
 
@@ -33,6 +35,32 @@ func TestAddLinks_PopulatesArgoAndGrafana(t *testing.T) {
 	}
 	if (*d.GrafanaUrls)[0].Label != "Run dashboard" || (*d.GrafanaUrls)[1].Label != "MySQL dashboard" {
 		t.Errorf("labels = %v", *d.GrafanaUrls)
+	}
+}
+
+func TestAddLinks_ChaosOnlyRunGetsArgoButNoGrafana(t *testing.T) {
+	h := &Handlers{deps: &Deps{Links: links.Config{
+		ArgoBaseURL:    "https://argo.example.com",
+		GrafanaBaseURL: "https://grafana.example.com",
+		Namespace:      "dlh-test-fw",
+	}}}
+	wf := "chaos-kafka-broker-partition-20260523-175130"
+	end := time.Date(2026, 5, 23, 17, 53, 32, 0, time.UTC)
+	// Bare chaos run: no Verdict, no Score → no k6/SLO metrics.
+	d := gen.RunDetail{
+		Id:           wf,
+		Scenario:     "chaos-kafka-broker-partition",
+		WorkflowName: &wf,
+		StartedAt:    time.Date(2026, 5, 23, 17, 51, 30, 0, time.UTC),
+		FinishedAt:   &end,
+	}
+	h.addLinks(&d)
+
+	if d.ArgoUrl == nil {
+		t.Errorf("expected Argo link for chaos run, got nil")
+	}
+	if d.GrafanaUrls != nil {
+		t.Errorf("expected NO grafana links for chaos-only run, got %v", *d.GrafanaUrls)
 	}
 }
 

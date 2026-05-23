@@ -259,6 +259,12 @@ type grafanaEntry = struct {
 
 // addLinks enriches a RunDetail with Argo/Grafana deep links from configured
 // base URLs. No-op for any link whose base URL is unset.
+//
+// The Argo link is added for every run (every run is a Workflow). Grafana links
+// are added only for runs that produced SLO/load metrics — i.e. a verdict or a
+// score is present. Bare chaos-only runs (e.g. chaos-kafka-broker-partition) run
+// no k6 load and have no verdict, so their dashboards would be empty; we omit the
+// buttons rather than link to "No data".
 func (h *Handlers) addLinks(d *gen.RunDetail) {
 	lc := h.deps.Links
 	wfName := ""
@@ -267,6 +273,10 @@ func (h *Handlers) addLinks(d *gen.RunDetail) {
 	}
 	if u := links.ArgoURL(lc.ArgoBaseURL, lc.Namespace, wfName); u != "" {
 		d.ArgoUrl = &u
+	}
+	hasMetrics := d.Verdict != nil || d.Score != nil
+	if !hasMetrics {
+		return
 	}
 	if urls := links.GrafanaURLs(lc.GrafanaBaseURL, d.Scenario, wfName, d.StartedAt, d.FinishedAt); len(urls) > 0 {
 		arr := make([]grafanaEntry, 0, len(urls))
