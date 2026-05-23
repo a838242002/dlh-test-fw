@@ -21,21 +21,27 @@ the framework cluster. This document is the operator runbook.
 1. Create a Secret named `dlh-target-<id>` in the framework cluster's
    `dlh-test-fw` namespace, with key `kubeconfig` containing the bytes
    of the kubeconfig.
-2. Add an entry to the `dlh-targets` ConfigMap in the same namespace:
+2. Add an entry to **`.Values.targets`** — the chart renders it into the
+   `dlh-targets` ConfigMap (`templates/dlh-targets-configmap.yaml`). Do NOT
+   edit the live ConfigMap directly; a `helm upgrade` would revert it.
 
    ```yaml
-   data:
-     targets.yaml: |
-       targets:
-         - id: staging-mysql
-           displayName: "Staging MySQL"
-           kubeconfigSecret: dlh-target-staging-mysql
-           allowedTargetTypes: [mysql]
-           namespace: dlh-test-fw  # chaos namespace on the target
+   # values overlay (prod) or values-minikube.yaml (local dev)
+   targets:
+     - id: staging-mysql
+       displayName: "Staging MySQL"
+       kubeconfigSecret: dlh-target-staging-mysql
+       allowedTargetTypes: [mysql]
+       namespace: dlh-test-fw  # chaos namespace on the target
    ```
 
 3. Commit + push the change. Argo CD reconciles within ~30s; the
    controlplane refreshes its registry within another 30s.
+
+> **Local-dev shortcut:** `values-minikube.yaml` ships a `local-demo` target
+> (the framework cluster itself). It still needs its `dlh-target-local-demo`
+> Secret + the `dlh-controlplane-remote` SA/RBAC created out-of-band; until
+> then the controlplane shows it as `configured: false`.
 
 ## Verify
 

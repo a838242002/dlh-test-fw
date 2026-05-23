@@ -32,3 +32,14 @@ argo-workflows:
     resources:
       requests: { cpu: 50m, memory: 64Mi }
       limits:   { cpu: 200m, memory: 128Mi }
+
+# Local-dev demo target: the framework cluster itself, reached via an in-cluster
+# kubeconfig. Requires the dlh-target-local-demo Secret + dlh-controlplane-remote
+# SA/RBAC (created out-of-band; see docs/operations/register-target.md). Without
+# the Secret the controlplane simply shows it as configured: false.
+targets:
+  - id: local-demo
+    displayName: "Local cluster (demo)"
+    kubeconfigSecret: dlh-target-local-demo
+    allowedTargetTypes: [mysql, kafka, doris]
+    namespace: dlh-test-fw

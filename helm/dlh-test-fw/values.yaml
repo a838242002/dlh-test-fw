@@ -121,3 +121,10 @@ grafana:
     dashboards:
       enabled: true                     # Plan 5 will drop dashboards as ConfigMaps with label
       label: dlh-dashboard
+
+# Remote target clusters registered with the controlplane (rendered into the
+# dlh-targets ConfigMap). Each entry needs a matching dlh-target-<id> Secret
+# (key: kubeconfig) created out-of-band — see docs/operations/register-target.md.
+# Empty by default; register per-environment via a values overlay.
+# Entry shape: { id, displayName?, kubeconfigSecret, allowedTargetTypes?, namespace? }
+targets: []
