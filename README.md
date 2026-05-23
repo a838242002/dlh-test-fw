@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/a838242002/dlh-test-fw/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/a838242002/dlh-test-fw/actions/workflows/ci.yml)
 
+*Last revised: 2026-05-24 — controlplane UI refresh + optimization, Run-detail Argo/Grafana deep links, kafka-broker-partition SLO + target.*
+
 Chaos + load test platform that runs on Kubernetes. Submit a `Workflow`
 that **prepares an SLO → loads a fixture → injects chaos in parallel with
 real-protocol load → evaluates the SLO**, get back a machine-readable
@@ -36,6 +38,10 @@ with the run's metrics.
                             ▼
                          Grafana
               dlh-history · dlh-run-detail · dlh-mysql · dlh-kafka · dlh-doris
+                            ▲
+              dlh-controlplane (Go API + shadcn React UI + dlh CLI)
+        Runs / Scenarios / Targets / Schedules; Run detail deep-links to
+              the Argo Workflows UI and the Grafana dashboards above
 ```
 
 The platform itself is one umbrella Helm chart; everything below runs in a
