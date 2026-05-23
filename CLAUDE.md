@@ -232,6 +232,14 @@ Fake tokens for `DLH_AUTH_DISABLED=true` mode:
   Scenarios by derived category, redesigned Run detail (meta strip, verdict-first,
   Argo group-node steps hidden). Pure logic in `src/lib/{time,category,run,runsFilter,steps,format}.ts`
   is Vitest-tested. `deriveCategory`/`deriveTargetType` are heuristic on scenario id.
+- Run detail deep-links (Plan `2026-05-23-02`): the backend assembles Argo +
+  Grafana links into `RunDetail.argoUrl` / `grafanaUrls` from `DLH_ARGO_BASE_URL`
+  and `DLH_GRAFANA_BASE_URL` (set in `controlplane/deploy/deployment.yaml`; empty
+  = buttons hidden). URL logic + the `dlh_scenario` var + dashboard UIDs
+  (`dlh-run`/`dlh-mysql`/`dlh-kafka`/`dlh-doris`) live in `internal/links`
+  (Go-tested). The Grafana dashboard contract couples to `dashboards/grafana/`.
+  `deriveTargetType` is duplicated in Go (`internal/links`) + TS
+  (`web/src/lib/category.ts`) — keep the two rule lists in sync.
 
 ## Image build + minikube reload
 
