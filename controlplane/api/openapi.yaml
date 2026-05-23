@@ -425,6 +425,9 @@ components:
               nullable: true
               description: "Decoded from MinIO report.json. Absent if no report yet."
               additionalProperties: true
+            argoUrl:
+              type: string
+              description: "Deep link to the Argo Workflows UI for this run. Absent when DLH_ARGO_BASE_URL is unset."
             grafanaUrls:
               type: array
               items:

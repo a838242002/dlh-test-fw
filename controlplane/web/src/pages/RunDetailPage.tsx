@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Circle, Loader2, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, ExternalLink, Loader2, XCircle } from "lucide-react";
 import { api } from "../api/client";
 import type { components } from "../api/gen";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -88,6 +88,22 @@ export function RunDetailPage() {
         </div>
         <h1 className="font-mono text-lg font-semibold">{run.id}</h1>
         <StatusBadge status={status} />
+        {(run.argoUrl || (run.grafanaUrls && run.grafanaUrls.length > 0)) && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {run.argoUrl && (
+              <a href={run.argoUrl} target="_blank" rel="noreferrer"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground">
+                <ExternalLink className="h-3.5 w-3.5" /> Argo
+              </a>
+            )}
+            {(run.grafanaUrls ?? []).map((g) => (
+              <a key={g.url} href={g.url} target="_blank" rel="noreferrer"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground">
+                <ExternalLink className="h-3.5 w-3.5" /> {g.label}
+              </a>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-x-10 gap-y-3 rounded-lg border bg-card px-5 py-4">

@@ -15,6 +15,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/chaos"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/config"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/schedules"
@@ -136,6 +137,11 @@ func main() {
 			OIDCClientID: cfg.OIDCClientID,
 			CIAudience:   cfg.CIAudience,
 			AuthDisabled: cfg.AuthDisabled,
+		},
+		Links: links.Config{
+			ArgoBaseURL:    cfg.ArgoBaseURL,
+			GrafanaBaseURL: cfg.GrafanaBaseURL,
+			Namespace:      cfg.K8sNamespace,
 		},
 	}
 	authMW := auth.Middleware(verifier, roles, sessionIssuer)

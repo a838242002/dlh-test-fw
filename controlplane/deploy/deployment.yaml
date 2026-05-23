@@ -34,6 +34,13 @@ spec:
               value: ":8080"
             - name: DLH_K8S_NAMESPACE
               value: "dlh-test-fw"
+            # Optional deep-link base URLs. Empty = Run detail hides the buttons.
+            # Set per-environment (prod ingress hosts). Local minikube can leave
+            # these empty or point them at a port-forward.
+            - name: DLH_ARGO_BASE_URL
+              value: ""
+            - name: DLH_GRAFANA_BASE_URL
+              value: ""
             - name: DLH_ROLES_NAMESPACE
               value: "dlh-test-fw"
             - name: DLH_ROLES_CONFIGMAP

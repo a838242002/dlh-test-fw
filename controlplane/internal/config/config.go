@@ -33,6 +33,9 @@ type Config struct {
 	SessionSigningKey string
 	CITrustedIssuers  []string
 	CIAudience        string
+	// Optional deep-link base URLs. Empty = that link is omitted from RunDetail.
+	ArgoBaseURL    string
+	GrafanaBaseURL string
 }
 
 // Load reads env vars and returns a populated Config or an error if any
@@ -58,6 +61,8 @@ func Load() (*Config, error) {
 		SessionSigningKey:    os.Getenv("DLH_SESSION_SIGNING_KEY"),
 		CITrustedIssuers:     parseCSV(getenv("DLH_CI_TRUSTED_ISSUERS", "https://token.actions.githubusercontent.com")),
 		CIAudience:           getenv("DLH_CI_AUDIENCE", "dlh-controlplane"),
+		ArgoBaseURL:    os.Getenv("DLH_ARGO_BASE_URL"),
+		GrafanaBaseURL: os.Getenv("DLH_GRAFANA_BASE_URL"),
 	}
 	if !c.AuthDisabled {
 		if c.OIDCIssuerURL == "" {

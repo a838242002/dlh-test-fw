@@ -141,6 +141,8 @@ type RunStatus string
 
 // RunDetail defines model for RunDetail.
 type RunDetail struct {
+	// ArgoUrl Deep link to the Argo Workflows UI for this run. Absent when DLH_ARGO_BASE_URL is unset.
+	ArgoUrl     *string    `json:"argoUrl,omitempty"`
 	FinishedAt  *time.Time `json:"finishedAt,omitempty"`
 	GrafanaUrls *[]struct {
 		Label string `json:"label"`

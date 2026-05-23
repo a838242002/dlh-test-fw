@@ -11,6 +11,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/auth"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/chaos"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/schedules"
@@ -31,6 +32,7 @@ type Deps struct {
 	Exchanger     *auth.Exchanger      // Phase E — wired in Task 7
 	AuthInfo      AuthInfoConfig       // Phase E — wired in Task 7
 	Schedules     *schedules.Manager   // Phase F — wired in Task 6
+	Links links.Config // deep-link base URLs (Argo/Grafana)
 }
 
 // AuthInfoConfig holds the IdP configuration exposed via GET /api/auth/info.
