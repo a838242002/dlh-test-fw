@@ -15,7 +15,6 @@ set -euo pipefail
 # already up (run scripts/minikube-up.sh first); never resets the cluster.
 
 NS=dlh-test-fw
-# shellcheck disable=SC2034  # used by later bootstrap steps
 DLH_TOKEN='fake:dev:dev@example.com:dlh-admins'
 REBUILD=false
 # shellcheck disable=SC2034  # used by later bootstrap steps
@@ -192,6 +191,16 @@ step_seed_minio() {
   log_ok "fixture seeded to dlh-local/fixtures/mysql-users.sql"
 }
 
+step_run() {
+  log_step 8 "Submitting mysql-pod-delete (lightened → PASS)"
+  port_forward dlh-controlplane 8080 80
+  export DLH_ENDPOINT="http://localhost:8080"
+  export DLH_TOKEN
+  dlh run mysql-pod-delete --wait \
+    -p load_duration=180s -p chaos_duration=15s -p chaos_start_after=60s
+  log_ok "run complete"
+}
+
 step_mysql_target() {
   log_step 7 "Deploying the mysql target"
   kubectl apply -f targets/mysql/deploy.yaml
@@ -231,6 +240,7 @@ main() {
   step_cli
   step_seed_minio
   step_mysql_target
+  step_run
 }
 
 main "$@"
