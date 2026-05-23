@@ -17,6 +17,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/schedules"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
 )
 
@@ -116,6 +117,7 @@ func main() {
 		TrustedIssuers:   cfg.CITrustedIssuers,
 		RequiredAudience: cfg.CIAudience,
 	}
+	scheduleMgr := &schedules.Manager{Argo: clients.Argo, Namespace: cfg.K8sNamespace}
 
 	deps := &api.Deps{
 		Templates:  tmplLister,
@@ -128,6 +130,7 @@ func main() {
 		Targets:    targetsReg,
 		SessionIssuer: sessionIssuer,
 		Exchanger:     exchanger,
+		Schedules:     scheduleMgr,
 		AuthInfo: api.AuthInfoConfig{
 			OIDCIssuer:   cfg.OIDCIssuerURL,
 			OIDCClientID: cfg.OIDCClientID,

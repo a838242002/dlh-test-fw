@@ -13,6 +13,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/schedules"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
 )
 
@@ -29,6 +30,7 @@ type Deps struct {
 	SessionIssuer *auth.SessionIssuer  // Phase E — wired in Task 7
 	Exchanger     *auth.Exchanger      // Phase E — wired in Task 7
 	AuthInfo      AuthInfoConfig       // Phase E — wired in Task 7
+	Schedules     *schedules.Manager   // Phase F — wired in Task 6
 }
 
 // AuthInfoConfig holds the IdP configuration exposed via GET /api/auth/info.
