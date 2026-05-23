@@ -103,17 +103,16 @@ the one that matches your environment.
 
 ### Local-dev (laptop minikube)
 
-Use the existing shell scripts. They're annotated `# LOCAL-DEV ONLY` at
-the top:
+After Plan 18, only `scripts/minikube-up.sh` remains. Everything else is
+covered by the `dlh` CLI + standard `helm` commands:
 
-- `scripts/minikube-up.sh` — destructive cluster reset
-- `scripts/platform-up.sh` — `helm upgrade --install` the umbrella chart
-- `scripts/platform-down.sh` — `helm uninstall`
-- `scripts/platform-verify.sh` — `helm test` + ingress reachability
-- `scripts/verify-templates.sh` — WorkflowTemplate presence check
-
-`scripts/run-scenario.sh` is the local-dev scenario submission path.
-(The companion spec replaces it with `dlh` CLI + controlplane API.)
+- `scripts/minikube-up.sh` — destructive cluster reset (only remaining script)
+- `cd controlplane && make ui-build && make build` — build the binary
+- `helm upgrade --install dlh helm/dlh-test-fw -f helm/dlh-test-fw/values.yaml -f helm/dlh-test-fw/values-minikube.yaml -n dlh-test-fw --create-namespace` — install the chart (replaces `platform-up.sh`)
+- `helm uninstall dlh -n dlh-test-fw` — teardown (replaces `platform-down.sh`)
+- `helm test dlh -n dlh-test-fw` — verify (replaces `platform-verify.sh`)
+- `kubectl -n dlh-test-fw get workflowtemplates` — list scenarios (replaces `verify-templates.sh`)
+- `dlh run mysql-pod-delete --wait` — submit a scenario (replaces `run-scenario.sh`)
 
 ### Production / shared cluster (GitOps via Argo CD)
 
@@ -142,8 +141,8 @@ Full procedure: `docs/operations/bootstrap-via-argocd.md`.
 
 After Plan 15, `controlplane/` is a Go service that exposes the framework
 cluster's runtime state via REST + an embedded React UI. Phase B is
-read-only — `run-scenario.sh` still submits scenarios. Phase C will
-add submission.
+read-only — Phase C added `POST /api/runs` and the `dlh run` CLI.
+Phase E (Plan 18) removed `run-scenario.sh` entirely.
 
 ### Layout
 
@@ -248,7 +247,7 @@ Plan 7 switches `load/k6-run` WorkflowTemplate's `runner.image` from `grafana/k6
 
 8. **Datasource UIDs must be pinned in chart values** — without explicit `uid:` in `grafana.datasources.datasources.yaml`, Grafana auto-assigns random UIDs and dashboards' `datasource.uid` references break.
 
-9. **Workflow names are timestamps** — `scripts/run-scenario.sh` rewrites scenario `metadata.generateName: <prefix>-` to `metadata.name: <prefix>-YYYYMMDD-HHMMSS`. Sortable; no random Argo suffixes.
+9. **Workflow names are timestamps** — the controlplane `Submitter` sets `metadata.name: <prefix>-YYYYMMDD-HHMMSS` (previously done by `run-scenario.sh`, removed in Plan 18). Sortable; no random Argo suffixes.
 
 ---
 

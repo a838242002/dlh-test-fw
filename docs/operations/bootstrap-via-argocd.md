@@ -5,9 +5,10 @@ entirely through GitOps. After step 4, no `helm` / `kubectl apply`
 commands are needed for platform operations — Argo CD reconciles
 everything from this repo.
 
-For local-minikube development, use `scripts/platform-up.sh` instead;
-this document targets a production-shaped cluster where shell access
-is restricted.
+For local-minikube development, use `helm upgrade --install` directly
+(Plan 14's `platform-up.sh` was removed in Plan 18; see CLAUDE.md's
+local-dev section for the equivalent commands). This document targets a
+production-shaped cluster where shell access is restricted.
 
 ## Prerequisites
 
