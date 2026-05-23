@@ -353,6 +353,8 @@ export interface components {
             verdict?: {
                 [key: string]: unknown;
             } | null;
+            /** @description Deep link to the Argo Workflows UI for this run. Absent when DLH_ARGO_BASE_URL is unset. */
+            argoUrl?: string;
             grafanaUrls?: {
                 label: string;
                 url: string;
