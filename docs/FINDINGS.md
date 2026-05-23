@@ -922,4 +922,26 @@ four environment gaps and two code bugs.
    left as-is because sensible defaults need real pod selectors; fix when
    a demo requires running them directly.
 
+8. **Grafana deep links must use `var-scenario` + `var-workflow`, not the
+   label names.** The `dlh-run`/`dlh-mysql`/`dlh-kafka`/`dlh-doris` dashboards
+   define template variables literally named `scenario` and `workflow`
+   (populated from `label_values(... , dlh_scenario)` / `dlh_workflow`). The
+   controlplane's first deep-link build used `var-dlh_scenario=` and omitted
+   workflow entirely, so every panel matched zero series. Fix:
+   `internal/links.GrafanaURLs` emits `var-scenario` + `var-workflow`
+   (url-escaped) + the run's `from`/`to` epoch-ms window.
+
+9. **Kafka dashboard empty = no kafka data, not a dashboard bug.** Two
+   prerequisites were missing: (a) **no Kafka broker** was deployed
+   (`targets/kafka/deploy.yaml` was never applied — only `mysql-sys`
+   existed), so the k6 kafka load produced no `k6_dlh_kafka_*` metrics; and
+   (b) the `broker-partition.yaml` SLO library entry was **missing** from
+   `files/slos/` (only `network-loss.yaml` + `pod-delete.yaml` existed), so
+   the full `kafka-broker-partition` scenario failed at `prep-slo` with
+   `SLO library entry 'broker-partition.yaml' not in dlh-slos CM`. SLO files
+   are generic `${VAR}` templates (the three are identical); `broker-partition.yaml`
+   is a copy. Fix: `kubectl apply -f targets/kafka/deploy.yaml`, add
+   `files/slos/broker-partition.yaml`, re-render the `dlh-slos` CM, re-run.
+   Scenario→SLO map: mysql→pod-delete, kafka→broker-partition, doris→network-loss.
+
 - Stop strategy (`spec.stopStrategy`) — Argo 3.6's "stop scheduling after N successes" pattern is unused but supported by the underlying CRD.
