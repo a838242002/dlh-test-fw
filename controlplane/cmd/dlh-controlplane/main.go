@@ -118,7 +118,7 @@ func main() {
 		Chaos:      chaosRouter,
 		Targets:    targetsReg,
 	}
-	authMW := auth.Middleware(verifier, roles)
+	authMW := auth.Middleware(verifier, roles, nil) // session issuer wired in Task 7
 	handler := api.NewRouter(deps, authMW, cfg.InternalToken)
 
 	srv := &http.Server{
