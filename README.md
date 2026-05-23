@@ -59,8 +59,10 @@ single Kubernetes namespace (`dlh-test-fw`) on minikube.
 
 ## Quickstart
 
-Requires `minikube`, `kubectl`, `helm`, `docker`, `make`, `jq`, `curl`,
-`bash`, `argo` CLI v4+. On Apple Silicon minikube uses the docker driver.
+Requires `minikube`, `kubectl`, `helm`, `docker`, `make`, `go` 1.26+,
+`pnpm` (Node 20+), `jq`, `bash`. On Apple Silicon minikube uses the
+docker driver. (No `argo` CLI needed — scenario submission goes through
+the controlplane API / `dlh` CLI since Plan 18.)
 
 ```bash
 # 1. Bring up minikube (6 CPU / 12 GiB; idempotent)
@@ -71,18 +73,28 @@ make fixture-images        # mysql / kafka / doris fixture-shells
 make k6-image              # custom dlh-k6 (xk6-sql + xk6-kafka + baked runners)
 ( cd verdict-job && make load-image )
 
-# 3. Install / upgrade the platform
+# 3. Install / upgrade the platform (creates the dlh-test-fw namespace,
+#    the MinIO/Grafana dev-credential secrets, and the scenario WTs)
 make platform-up           # helm dependency update + helm upgrade --install dlh ...
 make platform-verify       # in-cluster smoke; expects PASS
 
-# 4. Build + start the controlplane (binary lands at bin/dlh-controlplane)
-cd controlplane && make ui-build && make build && make cli
-DLH_AUTH_DISABLED=true ./bin/dlh-controlplane &
-# In another shell, point the dlh CLI at it (or rely on the :8080 default):
-#   export DLH_ENDPOINT=http://localhost:8080
-#   export PATH="$PWD/controlplane/bin:$PATH"
+# 4. Build the controlplane image + dlh CLI; force-load the image into minikube
+cd controlplane
+make reload-minikube       # builds ghcr.io/dlh/dlh-controlplane:0.1.0 + loads it
+make cli                   # builds bin/dlh
+export PATH="$PWD/bin:$PATH"
+cd ..
 
-# 5. Submit the sample scenarios (dlh CLI built in step 4)
+# 5. Deploy the controlplane into the cluster (local-dev: auth disabled).
+#    deploy/ is plain YAML (the same manifests Argo CD syncs in prod).
+kubectl -n dlh-test-fw apply -f controlplane/deploy/
+kubectl -n dlh-test-fw set env deployment/dlh-controlplane DLH_AUTH_DISABLED=true
+kubectl -n dlh-test-fw rollout status deployment/dlh-controlplane --timeout=120s
+kubectl -n dlh-test-fw port-forward svc/dlh-controlplane 8080:80 &
+
+# 6. Submit the sample scenarios (auth disabled → any fake token works)
+export DLH_ENDPOINT=http://localhost:8080
+export DLH_TOKEN='fake:dev:dev@example.com:dlh-admins'
 dlh run mysql-pod-delete --wait
 dlh run kafka-broker-partition --wait
 ```
@@ -94,14 +106,12 @@ dlh run mysql-pod-delete --wait -p vus=50 -p chaos_duration=120s -p mysql_op_mix
 ```
 
 Submissions to the same target serialise via Argo `synchronization.semaphores`
-(per-target keys in `dlh-scenario-locks`). Submissions to different targets run
-in parallel. Within a queue, higher `spec.priority` wins; override at submit time
-via `--priority N`:
+(per-target keys in `dlh-scenario-locks`), and run in parallel across different
+targets. Each scenario WorkflowTemplate carries a fixed `spec.priority` (100) —
+priority is baked into the scenario, not a submit-time flag.
 
-```bash
-dlh run mysql-pod-delete --priority 200
-# The controlplane prints "Queued" state in `dlh runs ls` output when blocked.
-```
+The controlplane is also reachable in the browser at `http://localhost:8080/`
+(Scenarios / Runs / Targets / Schedules pages) once the port-forward is up.
 
 To tear down: `make platform-down` (helm uninstall) and `minikube delete`.
 

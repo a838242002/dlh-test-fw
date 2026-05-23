@@ -42,16 +42,19 @@ spec:
               value: "dlh-minio.dlh-test-fw.svc.cluster.local:9000"
             - name: DLH_MINIO_BUCKET
               value: "artifacts"
+            # minio-artifact-creds is created by the umbrella chart
+            # (helm/.../templates/secrets.yaml) — the same creds the
+            # artifact-repository + verdict-job use.
             - name: DLH_MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: dlh-minio-credentials
-                  key: rootUser
+                  name: minio-artifact-creds
+                  key: accesskey
             - name: DLH_MINIO_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: dlh-minio-credentials
-                  key: rootPassword
+                  name: minio-artifact-creds
+                  key: secretkey
             - name: DLH_OIDC_ISSUER_URL
               value: "REPLACE-OIDC-ISSUER"
             - name: DLH_OIDC_CLIENT_ID
