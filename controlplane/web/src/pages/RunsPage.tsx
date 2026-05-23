@@ -1,51 +1,123 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { components } from "../api/gen";
-import { StatusBadge } from "../components/StatusBadge";
+import { StatusBadge } from "@/components/StatusBadge";
+import { StatCard } from "@/components/StatCard";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorState } from "@/components/ErrorState";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { computeStats } from "@/lib/stats";
 
 type Run = components["schemas"]["Run"];
+type Schedule = components["schemas"]["Schedule"];
+
+const POLL_MS = 5000;
 
 export function RunsPage() {
-  const [items, setItems] = useState<Run[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const [runs, setRuns] = useState<Run[] | null>(null);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [error, setError] = useState<unknown>(null);
+  const [secondsAgo, setSecondsAgo] = useState(0);
 
-  useEffect(() => {
-    api.GET("/api/runs", { params: { query: { limit: 100 } } }).then(({ data, error }) => {
-      if (error) setError(JSON.stringify(error));
-      else setItems(data?.items ?? []);
+  const reload = useCallback(() => {
+    api.GET("/api/runs", {}).then(({ data: runsData, error: runsError }) => {
+      if (runsError) {
+        setError(runsError);
+        return;
+      }
+      setRuns(runsData?.items ?? []);
+      setSecondsAgo(0);
+      setError(null);
+    });
+    api.GET("/api/schedules", {}).then(({ data: schedData }) => {
+      setSchedules(schedData?.items ?? []);
     });
   }, []);
 
-  if (error) return <p className="text-rose-700">Error: {error}</p>;
-  if (!items) return <p>Loading…</p>;
+  useEffect(() => {
+    reload();
+    const poll = setInterval(reload, POLL_MS);
+    const tick = setInterval(() => setSecondsAgo((n) => n + 1), 1000);
+    return () => {
+      clearInterval(poll);
+      clearInterval(tick);
+    };
+  }, [reload]);
+
+  if (error) return <ErrorState message="Failed to load runs" details={error} />;
+
+  const stats = runs ? computeStats(runs, schedules) : null;
+
   return (
     <section>
-      <h1 className="mb-4 text-xl font-semibold">Runs</h1>
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 text-left text-slate-600">
-            <th className="py-2">Scenario</th>
-            <th>Target</th>
-            <th>Status</th>
-            <th>Started</th>
-            <th>Score</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((r) => (
-            <tr key={r.id} className="border-b border-slate-100">
-              <td className="py-2">{r.scenario}</td>
-              <td>{r.target ?? "local"}</td>
-              <td><StatusBadge status={String(r.status)} /></td>
-              <td className="text-slate-600">{new Date(r.startedAt).toLocaleString()}</td>
-              <td>{r.score?.toFixed(2) ?? "—"}</td>
-              <td><Link className="text-blue-600 hover:underline" to={`/runs/${r.id}`}>view</Link></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <PageHeader title="Runs" />
+
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard
+          label="Pass rate (7d)"
+          value={stats == null ? "—" : stats.passRate7d == null ? "—" : `${Math.round(stats.passRate7d * 100)}%`}
+          accent="success"
+        />
+        <StatCard label="Runs today" value={stats == null ? "—" : String(stats.runsToday)} />
+        <StatCard label="Running now" value={stats == null ? "—" : String(stats.runningNow)} accent="running" />
+        <StatCard label="Active schedules" value={stats == null ? "—" : String(stats.activeSchedules)} />
+      </div>
+
+      <Card>
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <span className="font-medium">Recent runs</span>
+          {runs && (
+            <span className="text-xs text-muted-foreground">● live · updated {secondsAgo}s ago</span>
+          )}
+        </div>
+        {!runs ? (
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-full" />
+            ))}
+          </div>
+        ) : runs.length === 0 ? (
+          <div className="p-4">
+            <EmptyState message="No runs yet" hint="Submit a scenario from the Scenarios page." />
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Scenario</TableHead>
+                <TableHead>Target</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Started</TableHead>
+                <TableHead>Score</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {runs.map((r) => (
+                <TableRow
+                  key={r.id}
+                  className="cursor-pointer"
+                  onClick={() => navigate(`/runs/${r.id}`)}
+                >
+                  <TableCell className="font-medium">{r.scenario}</TableCell>
+                  <TableCell className="text-muted-foreground">{r.target || "local"}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={String(r.status)} />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(r.startedAt).toLocaleString()}
+                  </TableCell>
+                  <TableCell>{r.score == null ? "—" : r.score.toFixed(2)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
     </section>
   );
 }
