@@ -7,6 +7,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/getkin/kin-openapi v0.127.0
 	github.com/go-chi/chi/v5 v5.1.0
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/minio/minio-go/v7 v7.0.89
 	github.com/oapi-codegen/runtime v1.4.1
 	github.com/spf13/cobra v1.8.1
