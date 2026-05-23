@@ -365,7 +365,7 @@ grep-able in `git log --first-parent`.
 | Plan 16 | `abf407d` | dlh-controlplane Phase C — `/internal/chaos` endpoint + watchdog reconciler; chaos WTs rewired from kubectl-in-script to HTTP API; `dlh` CLI (`dlh run` + `dlh runs ls/show/logs/cancel`); `run-scenario.sh` deprecated as shim (removed in Plan 18); end-to-end smoke test against minikube |
 | Plan 17 | `e9d73b6` | dlh-controlplane Phase D (remote targets) — Target registry from ConfigMap+Secrets; RemoteChaosClient + Router; /api/targets + UI TargetsPage + TargetPicker; dlh run --target; chaos WTs forward target_id |
 | Plan 18 | `a402cbb` | dlh-controlplane Phase E (CI integration + cleanup) — POST /api/oidc/exchange + GET /api/auth/info; dlh login device-code; GH Actions composite + example release-gate workflow; kafka+doris promoted to chart-managed WTs; 5 shell scripts deleted |
-| Plan 19 | `XXXXXXX` | dlh-controlplane Phase F (Schedules) — POST/GET/DELETE /api/schedules + pause/resume; dlh schedule CLI; UI Schedules page; Run.triggeredBy surfaces parent CronWorkflow |
+| Plan 19 | `50a265b` | dlh-controlplane Phase F (Schedules) — POST/GET/DELETE /api/schedules + pause/resume; dlh schedule CLI; UI Schedules page; Run.triggeredBy surfaces parent CronWorkflow |
 
 Each plan's source-of-truth document lives under
 `docs/superpowers/plans/` and the deviations from those plans are noted
