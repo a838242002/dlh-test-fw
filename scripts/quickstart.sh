@@ -17,7 +17,6 @@ set -euo pipefail
 NS=dlh-test-fw
 DLH_TOKEN='fake:dev:dev@example.com:dlh-admins'
 REBUILD=false
-# shellcheck disable=SC2034  # used by later bootstrap steps
 WITH_KAFKA=false
 
 # Resolve repo root so the script works regardless of cwd.
@@ -71,7 +70,6 @@ Assumes minikube is already running (run scripts/minikube-up.sh first).
 EOF
 }
 
-# shellcheck disable=SC2034  # REBUILD/WITH_KAFKA used by later bootstrap steps
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --rebuild)    REBUILD=true ;;
@@ -228,6 +226,15 @@ mysql-pod-delete is heavier and FAILs the SLO on purpose (all steps still run).
 EOF
 }
 
+step_kafka() {
+  [[ "$WITH_KAFKA" == true ]] || return 0
+  log_step 9 "Optional: kafka scenario"
+  kubectl apply -f targets/kafka/deploy.yaml
+  kubectl -n kafka-sys rollout status statefulset/kafka --timeout=240s
+  dlh run kafka-broker-partition --wait
+  log_ok "kafka run complete"
+}
+
 step_mysql_target() {
   log_step 7 "Deploying the mysql target"
   kubectl apply -f targets/mysql/deploy.yaml
@@ -268,6 +275,7 @@ main() {
   step_seed_minio
   step_mysql_target
   step_run
+  step_kafka
   step_next_steps
 }
 
