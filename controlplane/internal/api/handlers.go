@@ -268,7 +268,7 @@ func (h *Handlers) addLinks(d *gen.RunDetail) {
 	if u := links.ArgoURL(lc.ArgoBaseURL, lc.Namespace, wfName); u != "" {
 		d.ArgoUrl = &u
 	}
-	if urls := links.GrafanaURLs(lc.GrafanaBaseURL, d.Scenario, d.StartedAt, d.FinishedAt); len(urls) > 0 {
+	if urls := links.GrafanaURLs(lc.GrafanaBaseURL, d.Scenario, wfName, d.StartedAt, d.FinishedAt); len(urls) > 0 {
 		arr := make([]grafanaEntry, 0, len(urls))
 		for _, u := range urls {
 			arr = append(arr, grafanaEntry{Label: u.Label, Url: u.URL})

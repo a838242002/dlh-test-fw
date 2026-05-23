@@ -37,7 +37,7 @@ func TestArgoURL(t *testing.T) {
 }
 
 func TestGrafanaURLs(t *testing.T) {
-	if got := GrafanaURLs("", "mysql-pod-delete", time.Now(), nil); got != nil {
+	if got := GrafanaURLs("", "mysql-pod-delete", "wf", time.Now(), nil); got != nil {
 		t.Errorf("empty base should yield nil, got %v", got)
 	}
 
@@ -45,32 +45,35 @@ func TestGrafanaURLs(t *testing.T) {
 	end := time.Date(2026, 5, 23, 13, 7, 47, 0, time.UTC)
 	fromMs := start.UnixMilli()
 	toMs := end.UnixMilli()
+	wf := "mysql-pod-delete-20260523-130331"
 
-	urls := GrafanaURLs("https://grafana.example.com/", "mysql-pod-delete", start, &end)
+	urls := GrafanaURLs("https://grafana.example.com/", "mysql-pod-delete", wf, start, &end)
 	if len(urls) != 2 {
 		t.Fatalf("want 2 urls, got %d (%v)", len(urls), urls)
 	}
 	if urls[0].Label != "Run dashboard" {
 		t.Errorf("first label = %q, want Run dashboard", urls[0].Label)
 	}
-	wantRun := "https://grafana.example.com/d/dlh-run/dlh-run?var-dlh_scenario=mysql-pod-delete&from=" +
-		itoa(fromMs) + "&to=" + itoa(toMs)
+	wantRun := "https://grafana.example.com/d/dlh-run/dlh-run?var-scenario=mysql-pod-delete&var-workflow=" +
+		wf + "&from=" + itoa(fromMs) + "&to=" + itoa(toMs)
 	if urls[0].URL != wantRun {
 		t.Errorf("run url = %q, want %q", urls[0].URL, wantRun)
 	}
 	if urls[1].Label != "MySQL dashboard" {
 		t.Errorf("second label = %q, want MySQL dashboard", urls[1].Label)
 	}
-	if urls[1].URL != "https://grafana.example.com/d/dlh-mysql/dlh-mysql?var-dlh_scenario=mysql-pod-delete&from="+itoa(fromMs)+"&to="+itoa(toMs) {
-		t.Errorf("mysql url wrong: %q", urls[1].URL)
+	wantMysql := "https://grafana.example.com/d/dlh-mysql/dlh-mysql?var-scenario=mysql-pod-delete&var-workflow=" +
+		wf + "&from=" + itoa(fromMs) + "&to=" + itoa(toMs)
+	if urls[1].URL != wantMysql {
+		t.Errorf("mysql url = %q, want %q", urls[1].URL, wantMysql)
 	}
 
-	gen := GrafanaURLs("https://grafana.example.com", "load-k6-run", start, &end)
+	gen := GrafanaURLs("https://grafana.example.com", "load-k6-run", "load-k6-run-x", start, &end)
 	if len(gen) != 1 {
 		t.Errorf("generic want 1 url, got %d", len(gen))
 	}
 
-	run := GrafanaURLs("https://grafana.example.com", "mysql-pod-delete", start, nil)
+	run := GrafanaURLs("https://grafana.example.com", "mysql-pod-delete", wf, start, nil)
 	if run[0].URL[len(run[0].URL)-7:] != "&to=now" {
 		t.Errorf("running url should end with &to=now, got %q", run[0].URL)
 	}

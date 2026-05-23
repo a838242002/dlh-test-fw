@@ -5,6 +5,7 @@ package links
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -23,11 +24,11 @@ type NamedURL struct {
 	URL   string
 }
 
-// These couple to dashboards/grafana/ — keep in sync (FINDINGS #1, #8).
-const (
-	runDashboardUID = "dlh-run"
-	scenarioVar     = "dlh_scenario"
-)
+// runDashboardUID couples to dashboards/grafana/dlh-run-detail.json (FINDINGS #8).
+// The dashboards' template variables are named `scenario` and `workflow`
+// (populated from the dlh_scenario / dlh_workflow metric labels) — the deep link
+// must set var-scenario + var-workflow, NOT var-dlh_scenario.
+const runDashboardUID = "dlh-run"
 
 var targetDashboards = map[string]struct{ uid, label string }{
 	"mysql": {"dlh-mysql", "MySQL dashboard"},
@@ -60,8 +61,10 @@ func ArgoURL(base, namespace, workflowName string) string {
 }
 
 // GrafanaURLs builds the run dashboard link plus a per-target-type dashboard link
-// (when recognized), scoped to the run's time window. Returns nil if base is empty.
-func GrafanaURLs(base, scenario string, start time.Time, end *time.Time) []NamedURL {
+// (when recognized), scoped to the run's time window. The dashboards filter by the
+// `scenario` + `workflow` template variables, so both are set. Returns nil if base
+// is empty.
+func GrafanaURLs(base, scenario, workflowName string, start time.Time, end *time.Time) []NamedURL {
 	if base == "" {
 		return nil
 	}
@@ -71,8 +74,10 @@ func GrafanaURLs(base, scenario string, start time.Time, end *time.Time) []Named
 	if end != nil {
 		toPart = strconv.FormatInt(end.UnixMilli(), 10)
 	}
+	sc := url.QueryEscape(scenario)
+	wf := url.QueryEscape(workflowName)
 	q := func(uid string) string {
-		return fmt.Sprintf("%s/d/%s/%s?var-%s=%s&from=%s&to=%s", b, uid, uid, scenarioVar, scenario, fromMs, toPart)
+		return fmt.Sprintf("%s/d/%s/%s?var-scenario=%s&var-workflow=%s&from=%s&to=%s", b, uid, uid, sc, wf, fromMs, toPart)
 	}
 	urls := []NamedURL{{Label: "Run dashboard", URL: q(runDashboardUID)}}
 	if d, ok := targetDashboards[DeriveTargetType(scenario)]; ok {
