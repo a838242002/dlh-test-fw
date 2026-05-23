@@ -5,6 +5,7 @@ import type { components } from "../api/gen";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
+import { relativeTime } from "@/lib/time";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -158,8 +159,8 @@ export function SchedulesPage() {
                   <TableCell>{s.scenario}</TableCell>
                   <TableCell>{s.target ?? "local"}</TableCell>
                   <TableCell className="font-mono text-xs">{s.cron}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {s.lastScheduledAt ? new Date(s.lastScheduledAt).toLocaleString() : "—"}
+                  <TableCell className="text-xs text-muted-foreground" title={s.lastScheduledAt ? new Date(s.lastScheduledAt).toLocaleString() : undefined}>
+                    {s.lastScheduledAt ? relativeTime(s.lastScheduledAt) : "—"}
                   </TableCell>
                   <TableCell>{s.activeCount ?? 0}</TableCell>
                   <TableCell>

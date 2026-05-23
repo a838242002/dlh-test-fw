@@ -1,15 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
+import { ArrowLeft, CheckCircle2, Circle, Loader2, XCircle } from "lucide-react";
 import { api } from "../api/client";
 import type { components } from "../api/gen";
 import { StatusBadge } from "@/components/StatusBadge";
+import { CategoryIcon } from "@/components/CategoryIcon";
 import { ErrorState } from "@/components/ErrorState";
 import { VerdictView } from "@/components/VerdictView";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { relativeTime, formatDuration } from "@/lib/time";
+import { deriveCategory } from "@/lib/category";
+import { namedSteps } from "@/lib/steps";
 
 type RunDetail = components["schemas"]["RunDetail"];
+
+function StepIcon({ phase }: { phase: string }) {
+  if (phase === "Succeeded") return <CheckCircle2 className="h-4 w-4 text-status-success" />;
+  if (phase === "Failed" || phase === "Error") return <XCircle className="h-4 w-4 text-status-failed" />;
+  if (phase === "Running") return <Loader2 className="h-4 w-4 text-status-running" />;
+  return <Circle className="h-4 w-4 text-status-pending" />;
+}
+
+function Meta({ label, value, title, children }: { label: string; value?: string; title?: string; children?: ReactNode }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="font-medium" title={title}>{children ?? value}</div>
+    </div>
+  );
+}
 
 export function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,8 +48,8 @@ export function RunDetailPage() {
     const es = new EventSource(`/api/runs/${id}/events`);
     const onEvent = (e: MessageEvent) => {
       try {
-        const data = JSON.parse(e.data);
-        if (data.phase) setLiveStatus(data.phase);
+        const d = JSON.parse(e.data);
+        if (d.phase) setLiveStatus(d.phase);
       } catch {
         /* ignore */
       }
@@ -51,33 +72,50 @@ export function RunDetailPage() {
   }
 
   const status = liveStatus ?? String(run.status ?? "Unknown");
+  const allSteps = run.steps ?? [];
+  const visibleSteps = namedSteps(allSteps, run.id);
+  const hidden = allSteps.length - visibleSteps.length;
 
   return (
-    <section className="space-y-6">
-      <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">{run.id}</h1>
+    <section className="space-y-5">
+      <Link to="/runs" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" /> Runs
+      </Link>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+          <CategoryIcon category={deriveCategory(run.scenario)} />
+        </div>
+        <h1 className="font-mono text-lg font-semibold">{run.id}</h1>
         <StatusBadge status={status} />
-        {run.target && <span className="text-xs text-muted-foreground">target: {run.target}</span>}
-        {run.triggeredBy?.id && (
-          <Link to="/schedules" className="text-xs text-primary hover:underline">
-            Triggered by schedule: {run.triggeredBy.id}
-          </Link>
-        )}
-      </header>
+      </div>
+
+      <div className="flex flex-wrap gap-x-10 gap-y-3 rounded-lg border bg-card px-5 py-4">
+        <Meta label="Scenario" value={run.scenario} />
+        <Meta label="Target" value={run.target || "local"} />
+        <Meta label="Started" value={relativeTime(run.startedAt)} title={new Date(run.startedAt).toLocaleString()} />
+        <Meta label="Duration" value={formatDuration(run.startedAt, run.finishedAt)} />
+        <Meta label="Triggered by">
+          {run.triggeredBy?.id ? (
+            <Link to="/schedules" className="text-primary hover:underline">{run.triggeredBy.id}</Link>
+          ) : (
+            <span className="text-muted-foreground">manual</span>
+          )}
+        </Meta>
+      </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Scenario</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">{run.scenario}</p>
-        </CardContent>
+        <CardHeader><CardTitle className="text-base">Verdict</CardTitle></CardHeader>
+        <CardContent><VerdictView verdict={run.verdict} /></CardContent>
       </Card>
 
-      {run.steps && run.steps.length > 0 && (
+      {visibleSteps.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Steps</CardTitle>
+            <span className="text-xs text-muted-foreground">
+              {visibleSteps.length} steps{hidden > 0 ? " · group nodes hidden" : ""}
+            </span>
           </CardHeader>
           <CardContent>
             <Table>
@@ -85,13 +123,18 @@ export function RunDetailPage() {
                 <TableRow>
                   <TableHead>Step</TableHead>
                   <TableHead>Phase</TableHead>
+                  <TableHead>Duration</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {run.steps.map((s, i) => (
+                {visibleSteps.map((s, i) => (
                   <TableRow key={i}>
-                    <TableCell>{s.name}</TableCell>
+                    <TableCell className="flex items-center gap-2 font-medium">
+                      <StepIcon phase={s.phase} />
+                      {s.name}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{s.phase}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDuration(s.startedAt, s.finishedAt)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -99,15 +142,6 @@ export function RunDetailPage() {
           </CardContent>
         </Card>
       )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Verdict</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <VerdictView verdict={run.verdict} />
-        </CardContent>
-      </Card>
     </section>
   );
 }
