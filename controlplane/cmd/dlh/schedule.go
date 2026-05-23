@@ -139,7 +139,50 @@ func scheduleShowCmd() *cobra.Command {
 	}
 }
 
-// Stubs — replaced in Task 9.
-func schedulePauseCmd() *cobra.Command  { return &cobra.Command{Use: "pause", Hidden: true} }
-func scheduleResumeCmd() *cobra.Command { return &cobra.Command{Use: "resume", Hidden: true} }
-func scheduleDeleteCmd() *cobra.Command { return &cobra.Command{Use: "delete", Hidden: true} }
+func schedulePauseCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "pause <id>",
+		Short: "Pause a schedule (sets spec.suspend=true)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			_, _, err := newClient().do("POST", "/api/schedules/"+url.PathEscape(args[0])+"/pause", nil, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Println("paused")
+			return nil
+		},
+	}
+}
+
+func scheduleResumeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "resume <id>",
+		Short: "Resume a paused schedule (sets spec.suspend=false)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			_, _, err := newClient().do("POST", "/api/schedules/"+url.PathEscape(args[0])+"/resume", nil, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Println("resumed")
+			return nil
+		},
+	}
+}
+
+func scheduleDeleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete a schedule",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			_, _, err := newClient().do("DELETE", "/api/schedules/"+url.PathEscape(args[0]), nil, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Println("deleted")
+			return nil
+		},
+	}
+}
