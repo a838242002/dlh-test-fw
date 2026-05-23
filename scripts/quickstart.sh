@@ -86,8 +86,37 @@ done
 
 cd "$REPO_ROOT"
 
+# --- preflight -------------------------------------------------------------
+preflight() {
+  log_step 0 "Preflight checks"
+
+  # 1. Required tools.
+  local missing=()
+  for tool in kubectl helm docker make go pnpm mc jq minikube nc; do
+    command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+  done
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    die "missing required tools: ${missing[*]}"
+  fi
+
+  # 2. minikube must already be running (we never reset it for you).
+  if ! minikube status >/dev/null 2>&1; then
+    die "minikube is not running. Run scripts/minikube-up.sh first."
+  fi
+
+  # 3. Context safety gate — refuse to touch a non-minikube cluster.
+  local ctx
+  ctx="$(kubectl config current-context 2>/dev/null || true)"
+  if [[ "$ctx" != "minikube" ]]; then
+    die "kube-context is '$ctx', expected 'minikube'. Refusing to run against a shared cluster."
+  fi
+
+  log_ok "preflight passed (context: $ctx)"
+}
+
 main() {
   printf '%sQuickstart: running minikube → green VERDICT: PASS%s\n' "$C_BLUE" "$C_RESET"
+  preflight
 }
 
 main "$@"
