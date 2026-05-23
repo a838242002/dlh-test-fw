@@ -364,7 +364,7 @@ grep-able in `git log --first-parent`.
 | Plan 15 | `01d3f5e` | dlh-controlplane Phase B (read-only) — Go service + embedded React UI + OIDC auth + scoped RBAC + Workflow informer + MinIO report.json reader + SSE event stream; `controlplane/deploy/` manifests; `dlh-controlplane` Argo CD Application activated |
 | Plan 16 | `abf407d` | dlh-controlplane Phase C — `/internal/chaos` endpoint + watchdog reconciler; chaos WTs rewired from kubectl-in-script to HTTP API; `dlh` CLI (`dlh run` + `dlh runs ls/show/logs/cancel`); `run-scenario.sh` deprecated as shim (removed in Plan 18); end-to-end smoke test against minikube |
 | Plan 17 | `e9d73b6` | dlh-controlplane Phase D (remote targets) — Target registry from ConfigMap+Secrets; RemoteChaosClient + Router; /api/targets + UI TargetsPage + TargetPicker; dlh run --target; chaos WTs forward target_id |
-| Plan 18 | `XXXXXXX` | dlh-controlplane Phase E (CI integration + cleanup) — POST /api/oidc/exchange + GET /api/auth/info; dlh login device-code; GH Actions composite + example release-gate workflow; kafka+doris promoted to chart-managed WTs; 5 shell scripts deleted |
+| Plan 18 | `a402cbb` | dlh-controlplane Phase E (CI integration + cleanup) — POST /api/oidc/exchange + GET /api/auth/info; dlh login device-code; GH Actions composite + example release-gate workflow; kafka+doris promoted to chart-managed WTs; 5 shell scripts deleted |
 
 Each plan's source-of-truth document lives under
 `docs/superpowers/plans/` and the deviations from those plans are noted
