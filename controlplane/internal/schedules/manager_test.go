@@ -161,3 +161,36 @@ func TestCreate_ListGetDelete_Roundtrip(t *testing.T) {
 		t.Errorf("expected ErrNotFound after delete, got %v", err)
 	}
 }
+
+func TestPause_Resume_Roundtrip(t *testing.T) {
+	tmpl := &wfv1.WorkflowTemplate{ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: "dlh-test-fw"}}
+	argo := wfake.NewSimpleClientset(tmpl)
+	m := &Manager{Argo: argo, Namespace: "dlh-test-fw"}
+	_, err := m.Create(context.Background(), CreateRequest{
+		Name: "nightly", ScenarioID: "mysql-pod-delete", Cron: "0 2 * * *",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := m.Pause(context.Background(), "nightly"); err != nil {
+		t.Errorf("Pause: %v", err)
+	}
+	got, _ := m.Get(context.Background(), "nightly")
+	if !got.Spec.Suspend {
+		t.Errorf("expected suspend=true after Pause, got false")
+	}
+	if err := m.Resume(context.Background(), "nightly"); err != nil {
+		t.Errorf("Resume: %v", err)
+	}
+	got, _ = m.Get(context.Background(), "nightly")
+	if got.Spec.Suspend {
+		t.Errorf("expected suspend=false after Resume, got true")
+	}
+}
+
+func TestPause_NotFound(t *testing.T) {
+	m := &Manager{Argo: wfake.NewSimpleClientset(), Namespace: "dlh-test-fw"}
+	if err := m.Pause(context.Background(), "nope"); err != ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}

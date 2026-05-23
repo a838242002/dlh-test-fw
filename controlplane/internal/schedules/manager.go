@@ -13,6 +13,7 @@ import (
 	wfclient "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // Manager owns CronWorkflow lifecycle: create, list, get, delete, pause/resume.
@@ -156,6 +157,27 @@ func (m *Manager) Delete(ctx context.Context, name string) error {
 	err := m.Argo.ArgoprojV1alpha1().CronWorkflows(m.Namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if apierrors.IsNotFound(err) {
 		return nil
+	}
+	return err
+}
+
+// Pause toggles spec.suspend=true via JSON-merge patch. Idempotent.
+func (m *Manager) Pause(ctx context.Context, name string) error {
+	return m.setSuspend(ctx, name, true)
+}
+
+// Resume toggles spec.suspend=false. Idempotent.
+func (m *Manager) Resume(ctx context.Context, name string) error {
+	return m.setSuspend(ctx, name, false)
+}
+
+func (m *Manager) setSuspend(ctx context.Context, name string, suspend bool) error {
+	patch := []byte(fmt.Sprintf(`{"spec":{"suspend":%t}}`, suspend))
+	_, err := m.Argo.ArgoprojV1alpha1().CronWorkflows(m.Namespace).Patch(
+		ctx, name, types.MergePatchType, patch, metav1.PatchOptions{},
+	)
+	if apierrors.IsNotFound(err) {
+		return ErrNotFound
 	}
 	return err
 }
