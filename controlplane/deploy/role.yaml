@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/part-of: dlh-test-fw
 rules:
   - apiGroups: ["argoproj.io"]
-    resources: ["workflows"]
+    resources: ["workflows", "cronworkflows"]
     verbs: ["get", "list", "watch", "create", "patch", "delete"]
   - apiGroups: ["argoproj.io"]
     resources: ["workflowtemplates"]
