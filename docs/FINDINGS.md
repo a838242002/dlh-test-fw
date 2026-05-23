@@ -848,4 +848,60 @@ Branch: feat/plan16-controlplane-submission
 - Schedule edit endpoint (PATCH /api/schedules/{id}) — v1 ships create-only; users must delete-then-create to change a schedule.
 - Multi-cron (`spec.schedules: []string`) support for "every weekday at 2am AND noon" patterns.
 - Schedule run history view in the UI — for now, navigate to `/runs?scenario=<scenario>` and filter visually.
+
+---
+
+## Post-Plan-19 Quickstart verification (2026-05-23)
+
+End-to-end run of the Quickstart on a clean minikube cluster revealed
+four environment gaps and two code bugs.
+
+### Environment gaps fixed
+
+1. **CRD size limit on clean cluster.** `make platform-up` fails on first
+   install because several Chaos Mesh CRDs exceed Helm's 256 KB
+   client-side-apply annotation limit. Fix: `make platform-crds`
+   (server-side apply + Helm ownership stamp) before `make platform-up`.
+   Added as Quickstart step 2.
+
+2. **`make k6-image` builds but does not load into minikube.** The root
+   Makefile's `k6-image` target only calls `fixture-images/k6 image`
+   (Docker build); it never runs `minikube image load`. Added `make
+   k6-reload` (wraps `fixture-images/k6 reload-minikube`) for the
+   Quickstart. Old `k6-image` target kept for CI use.
+
+3. **`ingress.yaml` had `host: dlh.REPLACE-DOMAIN`** — an invalid RFC 1123
+   hostname — causing `kubectl apply -f controlplane/deploy/` to fail.
+   Changed placeholder to `dlh.local` (valid; inert for local-dev
+   port-forward). Prod deploys replace with the real domain.
+
+4. **`mysql-creds` only in `mysql-sys`, not in `dlh-test-fw`.** The
+   fixture-minio-load-mysql WT pod runs in `dlh-test-fw` and mounts
+   `mysql-creds` as a secretKeyRef — which must be in the pod's namespace.
+   Added a mirror Secret in `dlh-test-fw` to `targets/mysql/deploy.yaml`.
+
+### Code bugs fixed
+
+5. **`readScore` always returned `(0, false)`.** `syncer.go:readScore`
+   looked for `r["score"].(float64)` but the verdict binary writes
+   `"overall": bool`. Score was nil in every run manifest → UI never
+   showed pass/fail scores. Fix: read `"overall"` and map true→1.0,
+   false→0.0. Tests added: `TestReadScore_*` (5 cases) +
+   `TestSyncer_PopulatesScoreOnSucceeded`.
+
+6. **`chaos` step i/o timeout — Service port mismatch.** The chaos
+   WorkflowTemplate POSTs to `http://dlh-controlplane.dlh-test-fw.svc.
+   cluster.local:80/internal/chaos`. The live Service had `port: 8080`
+   (from an earlier stale apply) while `controlplane/deploy/service.yaml`
+   specifies `port: 80`. Symptom: `dial tcp <ClusterIP>:80: i/o timeout`
+   on every run; chaos never fires; the scenario runs without chaos
+   injection, reports a falsely clean p95-latency-chaos (near-zero because
+   no failed queries → no latency samples to average), and the
+   `continueOn: {failed: true}` lets the workflow succeed anyway.
+   Fix: `kubectl replace -f controlplane/deploy/service.yaml`.
+   **Note:** `kubectl apply` cannot update a Service port number — the
+   strategic merge key for `spec.ports` is `port` (the number), so
+   applying a manifest with a different port number ADDS a duplicate port
+   rather than replacing it. Use `kubectl replace` when correcting port
+   numbers on an existing Service.
 - Stop strategy (`spec.stopStrategy`) — Argo 3.6's "stop scheduling after N successes" pattern is unused but supported by the underlying CRD.
