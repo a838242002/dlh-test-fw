@@ -201,6 +201,33 @@ step_run() {
   log_ok "run complete"
 }
 
+step_next_steps() {
+  log_step 9 "Done"
+  local guser gpass
+  guser="$(kubectl -n "$NS" get secret grafana-admin-credentials -o jsonpath='{.data.admin-user}' | base64 -d)"
+  gpass="$(kubectl -n "$NS" get secret grafana-admin-credentials -o jsonpath='{.data.admin-password}' | base64 -d)"
+  cat <<EOF
+
+${C_GREEN}✓ Quickstart complete.${C_RESET}
+
+Ongoing access (run in a spare terminal):
+  Controlplane UI : kubectl -n ${NS} port-forward svc/dlh-controlplane 8080:80
+                    → http://localhost:8080
+  Grafana         : kubectl -n ${NS} port-forward svc/dlh-grafana 3001:80
+                    → http://localhost:3001   (${guser} / ${gpass})
+
+Use the dlh CLI:
+  export PATH="\$PWD/controlplane/bin:\$PATH"
+  export DLH_ENDPOINT=http://localhost:8080
+  export DLH_TOKEN='${DLH_TOKEN}'
+  dlh run mysql-pod-delete --wait                          # defaults FAIL the SLO by design
+  dlh run mysql-pod-delete --wait -p chaos_duration=15s    # lightened → PASS
+
+Note: this quickstart ran lightened chaos so the verdict is PASS. The default
+mysql-pod-delete is heavier and FAILs the SLO on purpose (all steps still run).
+EOF
+}
+
 step_mysql_target() {
   log_step 7 "Deploying the mysql target"
   kubectl apply -f targets/mysql/deploy.yaml
@@ -241,6 +268,7 @@ main() {
   step_seed_minio
   step_mysql_target
   step_run
+  step_next_steps
 }
 
 main "$@"
