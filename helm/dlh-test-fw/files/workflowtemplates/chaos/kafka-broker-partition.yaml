@@ -18,9 +18,12 @@ spec:
   - name: main
     inputs:
       parameters:
-      - name: kafka_namespace
-      - name: broker_id
-      - name: duration
+      # Defaults make this chaos template runnable directly (e.g. the
+      # controlplane "Run" button on the chaos-kafka-broker-partition
+      # scenario). The scenario/* orchestrator overrides these.
+      - { name: kafka_namespace, value: "kafka-sys" }
+      - { name: broker_id, value: "0" }
+      - { name: duration, value: "60s" }
       - { name: target_id, value: "" }
     steps:
     - - name: build-body

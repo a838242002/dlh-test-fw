@@ -904,4 +904,22 @@ four environment gaps and two code bugs.
    applying a manifest with a different port number ADDS a duplicate port
    rather than replacing it. Use `kubectl replace` when correcting port
    numbers on an existing Service.
+
+7. **Bare `chaos-*` WorkflowTemplates had no input defaults — instant
+   `invalid spec: ... was not supplied` on direct submit.** The
+   `chaos-kafka-broker-partition` template's `main` inputs
+   (`kafka_namespace`, `broker_id`, `duration`) had no defaults, so
+   running it directly (controlplane "Run" button, no params) failed at
+   Argo spec validation in 0s — every `chaos-kafka-broker-partition` run
+   showed `Failed`. The `scenario/*` orchestrators
+   (`kafka-broker-partition`, `mysql-pod-delete`) supply these params, so
+   those scenarios work; the bare `chaos/*` building blocks did not.
+   Fix: added defaults (`kafka_namespace: kafka-sys`, `broker_id: 0`,
+   `duration: 60s`) to `files/workflowtemplates/chaos/kafka-broker-partition.yaml`.
+   **Latent:** `chaos-pod-delete` and `chaos-network-loss` have the same
+   missing-default pattern (params like `target_namespace`,
+   `target_pod_selector`) — they still fail on direct submit. They were
+   left as-is because sensible defaults need real pod selectors; fix when
+   a demo requires running them directly.
+
 - Stop strategy (`spec.stopStrategy`) — Argo 3.6's "stop scheduling after N successes" pattern is unused but supported by the underlying CRD.
