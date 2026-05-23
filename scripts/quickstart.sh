@@ -42,8 +42,8 @@ die()      { printf '%s✗ %s%s\n' "$C_RED" "$1" "$C_RESET" >&2; exit 1; }
 # --- ephemeral port-forwards (trap-cleaned) --------------------------------
 PF_PIDS=()
 cleanup() {
-  for pid in "${PF_PIDS[@]:-}"; do
-    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+  for pid in "${PF_PIDS[@]+"${PF_PIDS[@]}"}"; do
+    kill "$pid" 2>/dev/null || true
   done
 }
 trap cleanup EXIT
@@ -79,7 +79,7 @@ while [[ $# -gt 0 ]]; do
     --rebuild)    REBUILD=true ;;
     --with-kafka) WITH_KAFKA=true ;;
     --help|-h)    usage; exit 0 ;;
-    *)            usage; die "unknown argument: $1" ;;
+    *)            usage >&2; die "unknown argument: $1" ;;
   esac
   shift
 done
@@ -88,7 +88,7 @@ cd "$REPO_ROOT"
 
 # --- preflight -------------------------------------------------------------
 preflight() {
-  log_step 0 "Preflight checks"
+  printf '%s▶ Preflight checks%s\n' "$C_BLUE" "$C_RESET"
 
   # 1. Required tools.
   local missing=()
