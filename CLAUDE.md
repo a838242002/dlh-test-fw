@@ -109,10 +109,15 @@ the one that matches your environment.
 
 ### Local-dev (laptop minikube)
 
-After Plan 18, only `scripts/minikube-up.sh` remains. Everything else is
-covered by the `dlh` CLI + standard `helm` commands:
+After Plan 18, only `scripts/minikube-up.sh` and `scripts/quickstart.sh`
+remain. Everything else is covered by the `dlh` CLI + standard `helm` commands:
 
 - `scripts/minikube-up.sh` — destructive cluster reset (only remaining script)
+- `scripts/quickstart.sh` — one-command bootstrap on a *running* minikube
+  (CRDs → images → helm → controlplane → fixture → mysql target → lightened
+  run → green VERDICT). Idempotent; `--rebuild` / `--with-kafka` flags. A
+  deliberate second sanctioned script (like `minikube-up.sh`, bootstrap needs
+  control flow Make can't express).
 - `cd controlplane && make ui-build && make build` — build the binary
 - `helm upgrade --install dlh helm/dlh-test-fw -f helm/dlh-test-fw/values.yaml -f helm/dlh-test-fw/values-minikube.yaml -n dlh-test-fw --create-namespace` — install the chart (replaces `platform-up.sh`)
 - `helm uninstall dlh -n dlh-test-fw` — teardown (replaces `platform-down.sh`)
