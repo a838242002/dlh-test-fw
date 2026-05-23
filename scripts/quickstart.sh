@@ -155,6 +155,14 @@ step_platform() {
   log_ok "platform installed"
 }
 
+step_controlplane() {
+  log_step 4 "Deploying the controlplane"
+  kubectl -n "$NS" apply -f controlplane/deploy/
+  kubectl -n "$NS" set env deployment/dlh-controlplane DLH_AUTH_DISABLED=true
+  kubectl -n "$NS" rollout status deployment/dlh-controlplane --timeout=120s
+  log_ok "controlplane ready"
+}
+
 step_crds() {
   if kubectl get crd podchaos.chaos-mesh.org >/dev/null 2>&1; then
     log_skip 1 "Pre-install CRDs" "chaos-mesh CRDs already present"
@@ -183,6 +191,7 @@ main() {
   step_crds
   step_images
   step_platform
+  step_controlplane
 }
 
 main "$@"
