@@ -194,9 +194,30 @@ step_run() {
   port_forward dlh-controlplane 8080 80
   export DLH_ENDPOINT="http://localhost:8080"
   export DLH_TOKEN
+  local tmp run_id score
+  tmp="$(mktemp)"
+  # `dlh run --wait` prints `submitted: <id>` then streams status; tee keeps the
+  # live output visible while we capture the run id from it.
   dlh run mysql-pod-delete --wait \
-    -p load_duration=180s -p chaos_duration=15s -p chaos_start_after=60s
-  log_ok "run complete"
+    -p load_duration=180s -p chaos_duration=15s -p chaos_start_after=60s | tee "$tmp"
+  run_id="$(sed -n 's/^submitted: //p' "$tmp")"
+  rm -f "$tmp"
+  [[ -n "$run_id" ]] || die "could not determine run id from dlh output"
+
+  # The verdict (Run.score: 1=PASS, 0=FAIL, null=none) is synced by the
+  # controlplane shortly after the workflow finishes — poll briefly for it.
+  score=""
+  for _ in {1..15}; do
+    score="$(dlh runs show "$run_id" | jq -r '.score // empty')"
+    [[ -n "$score" ]] && break
+    sleep 2
+  done
+
+  case "$score" in
+    1|1.0) log_ok "VERDICT: PASS (run $run_id, score=$score)" ;;
+    "")    die "run $run_id finished with no verdict (score null). Inspect: dlh runs show $run_id" ;;
+    *)     die "VERDICT: FAIL (run $run_id, score=$score) — the lightened run was expected to PASS. Inspect: dlh runs show $run_id" ;;
+  esac
 }
 
 step_next_steps() {
@@ -235,6 +256,7 @@ step_kafka() {
   kubectl -n kafka-sys rollout status statefulset/kafka --timeout=240s
   dlh run kafka-broker-partition --wait
   log_ok "kafka run complete"
+  log_info "note: kafka-broker-partition uses heavy defaults and may report VERDICT: FAIL by design"
 }
 
 step_mysql_target() {
