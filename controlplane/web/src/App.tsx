@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Routes, Route, NavLink } from "react-router-dom";
-import { Moon, Sun } from "lucide-react";
+import { Activity, Clock, Crosshair, LayoutGrid, Moon, Sun } from "lucide-react";
 import { ScenariosPage } from "./pages/ScenariosPage";
 import { RunsPage } from "./pages/RunsPage";
 import { RunDetailPage } from "./pages/RunDetailPage";
@@ -16,10 +16,10 @@ const TOKEN_KEY = "dlh-token";
 const FAKE_TOKEN = "fake:admin:admin@local:dlh-admin";
 
 const NAV = [
-  { to: "/runs", label: "Runs" },
-  { to: "/scenarios", label: "Scenarios" },
-  { to: "/targets", label: "Targets" },
-  { to: "/schedules", label: "Schedules" },
+  { to: "/runs", label: "Runs", Icon: Activity },
+  { to: "/scenarios", label: "Scenarios", Icon: LayoutGrid },
+  { to: "/targets", label: "Targets", Icon: Crosshair },
+  { to: "/schedules", label: "Schedules", Icon: Clock },
 ];
 
 function ThemeToggle() {
@@ -78,7 +78,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b bg-card">
-        <nav className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-3 text-sm">
+        <nav className="mx-auto flex max-w-7xl items-center gap-4 px-6 py-3 text-sm">
           <span className="font-semibold text-primary">◆ dlh</span>
           {NAV.map((n) => (
             <NavLink
@@ -86,13 +86,14 @@ export default function App() {
               to={n.to}
               className={({ isActive }) =>
                 cn(
-                  "border-b-2 pb-0.5 transition-colors",
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-1 transition-colors",
                   isActive
-                    ? "border-primary font-medium text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    ? "bg-primary/15 font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 )
               }
             >
+              <n.Icon className="h-4 w-4" />
               {n.label}
             </NavLink>
           ))}
@@ -102,7 +103,7 @@ export default function App() {
           </div>
         </nav>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-6 py-8">
         <Routes>
           <Route path="/" element={<RunsPage />} />
           <Route path="/scenarios" element={<ScenariosPage />} />
