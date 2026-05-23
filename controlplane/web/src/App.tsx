@@ -3,6 +3,7 @@ import { ScenariosPage } from "./pages/ScenariosPage";
 import { RunsPage } from "./pages/RunsPage";
 import { RunDetailPage } from "./pages/RunDetailPage";
 import { TargetsPage } from "./pages/TargetsPage";
+import { SchedulesPage } from "./pages/SchedulesPage";
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
           <Link to="/scenarios" className="text-slate-600 hover:text-slate-900">Scenarios</Link>
           <Link to="/runs" className="text-slate-600 hover:text-slate-900">Runs</Link>
           <Link to="/targets" className="text-slate-600 hover:text-slate-900">Targets</Link>
+          <Link to="/schedules" className="text-slate-600 hover:text-slate-900">Schedules</Link>
         </nav>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">
@@ -22,6 +24,7 @@ export default function App() {
           <Route path="/runs" element={<RunsPage />} />
           <Route path="/runs/:id" element={<RunDetailPage />} />
           <Route path="/targets" element={<TargetsPage />} />
+          <Route path="/schedules" element={<SchedulesPage />} />
         </Routes>
       </main>
     </div>
