@@ -17,7 +17,6 @@ set -euo pipefail
 NS=dlh-test-fw
 # shellcheck disable=SC2034  # used by later bootstrap steps
 DLH_TOKEN='fake:dev:dev@example.com:dlh-admins'
-# shellcheck disable=SC2034  # used by later bootstrap steps
 REBUILD=false
 # shellcheck disable=SC2034  # used by later bootstrap steps
 WITH_KAFKA=false
@@ -114,6 +113,38 @@ preflight() {
   log_ok "preflight passed (context: $ctx)"
 }
 
+# build_and_load <tag> <build-command...> — skip if tag present unless --rebuild.
+build_and_load() {
+  local tag="$1"; shift
+  if [[ "$REBUILD" == false ]] && minikube image ls 2>/dev/null | grep -q "$tag"; then
+    log_info "image present: $tag (skip)"
+    return 0
+  fi
+  log_info "building + loading: $tag"
+  "$@"
+}
+
+step_images() {
+  log_step 2 "Building + loading images"
+  # Fixture shells: the root target builds+loads all three in one shot. Only
+  # invoke it if any of the three is missing (or --rebuild).
+  if [[ "$REBUILD" == true ]] \
+     || ! minikube image ls 2>/dev/null | grep -q "dlh-fixture-mysql:0.1.0" \
+     || ! minikube image ls 2>/dev/null | grep -q "dlh-fixture-kafka:0.1.0" \
+     || ! minikube image ls 2>/dev/null | grep -q "dlh-fixture-doris:0.1.0"; then
+    log_info "building + loading: dlh-fixture-{mysql,kafka,doris}:0.1.0"
+    make fixture-images
+  else
+    log_info "fixture images present (skip)"
+  fi
+
+  build_and_load "ghcr.io/dlh/dlh-k6:0.1.0"           make k6-reload
+  build_and_load "ghcr.io/dlh/dlh-verdict:0.1.0"      make -C verdict-job load-image
+  build_and_load "ghcr.io/dlh/dlh-controlplane:0.1.0" make -C controlplane reload-minikube
+
+  log_ok "images ready"
+}
+
 step_crds() {
   if kubectl get crd podchaos.chaos-mesh.org >/dev/null 2>&1; then
     log_skip 1 "Pre-install CRDs" "chaos-mesh CRDs already present"
@@ -140,6 +171,7 @@ main() {
   printf '%sQuickstart: running minikube → green VERDICT: PASS%s\n' "$C_BLUE" "$C_RESET"
   preflight
   step_crds
+  step_images
 }
 
 main "$@"
