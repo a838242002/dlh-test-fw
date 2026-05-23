@@ -192,6 +192,21 @@ Fake tokens for `DLH_AUTH_DISABLED=true` mode:
   arguments block (Plan 17 fixed mysql-pod-delete; the kafka + doris
   scenarios may need the same pattern — see Plan 17 FINDING #10).
 
+### Phase F additions (Plan 19)
+
+- Schedules (Argo `CronWorkflow`) are first-class resources via the
+  controlplane:
+  - `POST /api/schedules` + `GET /api/schedules{,/<id>}` + `DELETE` +
+    `POST /api/schedules/<id>/{pause,resume}`.
+  - `dlh schedule create / ls / show / pause / resume / delete`.
+  - UI Schedules page with inline create form.
+- A scheduled run carries `dlh.scenario` + `dlh.target` labels via
+  `spec.workflowMetadata.labels` on the CronWorkflow — Plan 17 Syncer
+  picks it up automatically; no submitter changes needed.
+- Run detail surfaces `triggeredBy.{kind, id}` when the firing
+  Workflow has a CronWorkflow owner reference; UI links to /schedules.
+- Role extended to grant cronworkflows alongside workflows verbs.
+
 ## Image build + minikube reload
 
 We have three local images (`dlh-verdict`, `dlh-k6`, plus the three fixture images). They live at `ghcr.io/dlh/*:<tag>` but are never pushed — they're built locally and `minikube image load`-ed.

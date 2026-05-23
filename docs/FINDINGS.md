@@ -815,3 +815,37 @@ Branch: feat/plan16-controlplane-submission
 - Notification hooks (Slack, email) for run completion remain unimplemented (interface stub in Plan 15 design).
 - The controlplane UI doesn't yet show a "logged in as ..." indicator. Easy to add: GET /api/auth/info during boot, then a small badge in the nav.
 - `dlh login` doesn't refresh expired tokens — re-running `dlh login` is required after 1h. A refresh-token flow could close this.
+
+---
+
+## Plan 19 — controlplane Phase F (Schedules) (2026-05-24)
+
+### What landed
+
+- `controlplane/internal/schedules/` — `Manager` wraps Argo's `CronWorkflow`: Create / List / Get / Delete / Pause / Resume.
+- `POST /api/schedules`, `GET /api/schedules`, `GET /api/schedules/{id}`, `DELETE /api/schedules/{id}`, `POST /api/schedules/{id}/pause`, `POST /api/schedules/{id}/resume`.
+- `dlh schedule create / ls / show / pause / resume / delete`.
+- UI Schedules page with inline create form + pause/resume/delete actions.
+- Run detail surfaces `triggeredBy.{kind, id}` when the Run has a CronWorkflow owner reference; UI shows a "Triggered by schedule" link.
+- Role extended: cronworkflows alongside workflows verbs.
+
+### Operational pitfalls discovered
+
+1. **`workflowMetadata.labels` is the only way to propagate labels to fired Workflows.** `CronWorkflow.metadata.labels` apply only to the CronWorkflow itself, not the Workflows it spawns. The Manager sets `dlh.scenario` + `dlh.target` in BOTH places — the cron-level labels make the Schedule queryable; the workflow-level labels keep Plan 17's Syncer working for scheduled runs.
+
+2. **CronWorkflow pause is `spec.suspend`, not a status field.** Argo's argocli walks the same merge-patch pattern; the controlplane mirrors it. Idempotent — patching `suspend=true` on an already-paused schedule is a no-op.
+
+3. **Argo CronWorkflow does not enforce single-cron-vs-schedules mutual exclusion.** If both `spec.schedule` (singular) AND `spec.schedules` (plural) are set, Argo prefers `schedules`. The Manager only writes `spec.schedule`; the older field is universally supported and v1 only needs single-cron.
+
+4. **`OwnerReferences` on Workflows fired by CronWorkflows includes a single entry with `Kind: CronWorkflow`.** The model converter walks the list and stops at the first match — there's no nested-owner case in practice for Argo's cron-fired Workflows.
+
+5. **OpenAPI `Run.triggeredBy` is a nested anonymous object** in our codegen output. If we wanted a named type (`TriggeredBy`), we'd need a top-level schema entry. v1 keeps it inline; future plans can promote it.
+
+6. **Schedules + Argo TTL.** CronWorkflows fire and Workflows go into the Argo TTL pool (existing behavior). Plan 15's Phase B GetRun manifest fallback already handles TTL'd workflows for scheduled runs — no new work required.
+
+### Carry-forward for future plans
+
+- Schedule edit endpoint (PATCH /api/schedules/{id}) — v1 ships create-only; users must delete-then-create to change a schedule.
+- Multi-cron (`spec.schedules: []string`) support for "every weekday at 2am AND noon" patterns.
+- Schedule run history view in the UI — for now, navigate to `/runs?scenario=<scenario>` and filter visually.
+- Stop strategy (`spec.stopStrategy`) — Argo 3.6's "stop scheduling after N successes" pattern is unused but supported by the underlying CRD.

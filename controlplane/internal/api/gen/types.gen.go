@@ -72,6 +72,27 @@ type CreateRunRequest struct {
 	TargetId *string `json:"targetId,omitempty"`
 }
 
+// CreateScheduleRequest defines model for CreateScheduleRequest.
+type CreateScheduleRequest struct {
+	// Cron Standard 5-field cron expression.
+	Cron string `json:"cron"`
+
+	// Id Schedule identifier. Lowercase alphanumeric + '-' + '.' (k8s name rules).
+	Id string `json:"id"`
+
+	// Parameters Optional WorkflowTemplate parameter overrides.
+	Parameters *map[string]string `json:"parameters,omitempty"`
+
+	// ScenarioId WorkflowTemplate name (e.g. mysql-pod-delete)
+	ScenarioId string `json:"scenarioId"`
+
+	// TargetId Optional remote target ID. Empty = framework cluster.
+	TargetId *string `json:"targetId,omitempty"`
+
+	// Timezone IANA tz name (e.g. Asia/Tokyo). Empty = UTC.
+	Timezone *string `json:"timezone,omitempty"`
+}
+
 // ExchangeRequest defines model for ExchangeRequest.
 type ExchangeRequest struct {
 	// Token External OIDC token (GH Actions JWT, etc.)
@@ -104,7 +125,14 @@ type Run struct {
 	Status     RunStatus  `json:"status"`
 
 	// Target Remote target ID (Run was injected into a remote cluster). Empty = local.
-	Target       *string `json:"target,omitempty"`
+	Target *string `json:"target,omitempty"`
+
+	// TriggeredBy Set when the run was fired by a Schedule (CronWorkflow).
+	TriggeredBy *struct {
+		// Id Schedule id (CronWorkflow name)
+		Id   *string `json:"id,omitempty"`
+		Kind *string `json:"kind,omitempty"`
+	} `json:"triggeredBy,omitempty"`
 	WorkflowName *string `json:"workflowName,omitempty"`
 }
 
@@ -135,6 +163,13 @@ type RunDetail struct {
 	// Target Remote target ID (Run was injected into a remote cluster). Empty = local.
 	Target *string `json:"target,omitempty"`
 
+	// TriggeredBy Set when the run was fired by a Schedule (CronWorkflow).
+	TriggeredBy *struct {
+		// Id Schedule id (CronWorkflow name)
+		Id   *string `json:"id,omitempty"`
+		Kind *string `json:"kind,omitempty"`
+	} `json:"triggeredBy,omitempty"`
+
 	// Verdict Decoded from MinIO report.json. Absent if no report yet.
 	Verdict      *map[string]interface{} `json:"verdict"`
 	WorkflowName *string                 `json:"workflowName,omitempty"`
@@ -156,6 +191,22 @@ type Scenario struct {
 
 	// TargetType e.g. mysql, kafka, doris
 	TargetType *string `json:"targetType,omitempty"`
+}
+
+// Schedule defines model for Schedule.
+type Schedule struct {
+	ActiveCount     *int32             `json:"activeCount,omitempty"`
+	CreatedBy       *string            `json:"createdBy,omitempty"`
+	Cron            string             `json:"cron"`
+	FailedCount     *int64             `json:"failedCount,omitempty"`
+	Id              string             `json:"id"`
+	LastScheduledAt *time.Time         `json:"lastScheduledAt,omitempty"`
+	Parameters      *map[string]string `json:"parameters,omitempty"`
+	Scenario        string             `json:"scenario"`
+	SuccessfulCount *int64             `json:"successfulCount,omitempty"`
+	Suspended       *bool              `json:"suspended,omitempty"`
+	Target          *string            `json:"target,omitempty"`
+	Timezone        *string            `json:"timezone,omitempty"`
 }
 
 // Target defines model for Target.
@@ -184,6 +235,9 @@ type OidcExchangeJSONRequestBody = ExchangeRequest
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = CreateRunRequest
+
+// CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
+type CreateScheduleJSONRequestBody = CreateScheduleRequest
 
 // CreateChaosJSONRequestBody defines body for CreateChaos for application/json ContentType.
 type CreateChaosJSONRequestBody = ChaosResource

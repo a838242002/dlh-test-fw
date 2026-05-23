@@ -271,3 +271,22 @@ func (h *Handlers) OidcExchange(ctx context.Context, req gen.OidcExchangeRequest
 func (h *Handlers) GetAuthInfo(_ context.Context, _ gen.GetAuthInfoRequestObject) (gen.GetAuthInfoResponseObject, error) {
 	return h.handleAuthInfo(), nil
 }
+
+func (h *Handlers) ListSchedules(ctx context.Context, _ gen.ListSchedulesRequestObject) (gen.ListSchedulesResponseObject, error) {
+	return h.handleListSchedules(ctx)
+}
+func (h *Handlers) CreateSchedule(ctx context.Context, req gen.CreateScheduleRequestObject) (gen.CreateScheduleResponseObject, error) {
+	return h.handleCreateSchedule(ctx, req)
+}
+func (h *Handlers) GetSchedule(ctx context.Context, req gen.GetScheduleRequestObject) (gen.GetScheduleResponseObject, error) {
+	return h.handleGetSchedule(ctx, req)
+}
+func (h *Handlers) DeleteSchedule(ctx context.Context, req gen.DeleteScheduleRequestObject) (gen.DeleteScheduleResponseObject, error) {
+	return h.handleDeleteSchedule(ctx, req)
+}
+func (h *Handlers) PauseSchedule(ctx context.Context, req gen.PauseScheduleRequestObject) (gen.PauseScheduleResponseObject, error) {
+	return h.handlePauseSchedule(ctx, req)
+}
+func (h *Handlers) ResumeSchedule(ctx context.Context, req gen.ResumeScheduleRequestObject) (gen.ResumeScheduleResponseObject, error) {
+	return h.handleResumeSchedule(ctx, req)
+}

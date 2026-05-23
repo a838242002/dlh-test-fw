@@ -71,6 +71,17 @@ func RunFromWorkflow(wf *wfv1.Workflow) gen.Run {
 	if v := wf.Labels["dlh.target"]; v != "" {
 		r.Target = &v
 	}
+	for _, owner := range wf.OwnerReferences {
+		if owner.Kind == "CronWorkflow" {
+			kind := "Schedule"
+			idVal := owner.Name
+			r.TriggeredBy = &struct {
+				Id   *string `json:"id,omitempty"`
+				Kind *string `json:"kind,omitempty"`
+			}{Id: &idVal, Kind: &kind}
+			break
+		}
+	}
 	name := wf.Name
 	r.WorkflowName = &name
 	return r
@@ -95,6 +106,17 @@ func RunDetailFromWorkflow(wf *wfv1.Workflow) gen.RunDetail {
 	}
 	if v := wf.Labels["dlh.target"]; v != "" {
 		d.Target = &v
+	}
+	for _, owner := range wf.OwnerReferences {
+		if owner.Kind == "CronWorkflow" {
+			kind := "Schedule"
+			idVal := owner.Name
+			d.TriggeredBy = &struct {
+				Id   *string `json:"id,omitempty"`
+				Kind *string `json:"kind,omitempty"`
+			}{Id: &idVal, Kind: &kind}
+			break
+		}
 	}
 	name := wf.Name
 	d.WorkflowName = &name
