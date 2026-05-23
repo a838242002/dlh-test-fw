@@ -32,6 +32,16 @@ const (
 	RunDetailStatusUnknown   RunDetailStatus = "Unknown"
 )
 
+// AuthInfo defines model for AuthInfo.
+type AuthInfo struct {
+	AuthDisabled *bool `json:"authDisabled,omitempty"`
+
+	// CiAudience Audience CI workflows should request when minting OIDC tokens
+	CiAudience   *string `json:"ciAudience,omitempty"`
+	OidcClientId string  `json:"oidcClientId"`
+	OidcIssuer   string  `json:"oidcIssuer"`
+}
+
 // ChaosResource defines model for ChaosResource.
 type ChaosResource struct {
 	ApiVersion string                 `json:"apiVersion"`
@@ -60,6 +70,21 @@ type CreateRunRequest struct {
 
 	// TargetId Optional remote target ID. Empty = inject chaos in framework cluster.
 	TargetId *string `json:"targetId,omitempty"`
+}
+
+// ExchangeRequest defines model for ExchangeRequest.
+type ExchangeRequest struct {
+	// Token External OIDC token (GH Actions JWT, etc.)
+	Token string `json:"token"`
+}
+
+// ExchangeResponse defines model for ExchangeResponse.
+type ExchangeResponse struct {
+	// AccessToken Short-lived controlplane session JWT. Send as Bearer.
+	AccessToken string    `json:"accessToken"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+	Groups      *[]string `json:"groups,omitempty"`
+	Subject     *string   `json:"subject,omitempty"`
 }
 
 // ProbeResult defines model for ProbeResult.
@@ -153,6 +178,9 @@ type ListRunsParams struct {
 	Since    *time.Time `form:"since,omitempty" json:"since,omitempty"`
 	Limit    *int       `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// OidcExchangeJSONRequestBody defines body for OidcExchange for application/json ContentType.
+type OidcExchangeJSONRequestBody = ExchangeRequest
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = CreateRunRequest

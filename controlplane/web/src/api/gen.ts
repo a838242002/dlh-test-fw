@@ -202,6 +202,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/oidc/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["oidcExchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAuthInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -300,6 +332,25 @@ export interface components {
             /** Format: int64 */
             latencyNanos?: number;
             error?: string;
+        };
+        ExchangeRequest: {
+            /** @description External OIDC token (GH Actions JWT, etc.) */
+            token: string;
+        };
+        ExchangeResponse: {
+            /** @description Short-lived controlplane session JWT. Send as Bearer. */
+            accessToken: string;
+            /** Format: date-time */
+            expiresAt: string;
+            subject?: string;
+            groups?: string[];
+        };
+        AuthInfo: {
+            oidcIssuer: string;
+            oidcClientId: string;
+            /** @description Audience CI workflows should request when minting OIDC tokens */
+            ciAudience?: string;
+            authDisabled?: boolean;
         };
     };
     responses: never;
@@ -698,6 +749,64 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    oidcExchange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description short-lived session token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExchangeResponse"];
+                };
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description token rejected */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAuthInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description client-facing auth config */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthInfo"];
+                };
             };
         };
     };

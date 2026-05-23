@@ -264,3 +264,11 @@ func runDetailFromManifest(m runs.Manifest) gen.RunDetail {
 	}
 	return d
 }
+
+// Phase E stubs. Real implementations land in Task 7.
+func (h *Handlers) OidcExchange(_ context.Context, _ gen.OidcExchangeRequestObject) (gen.OidcExchangeResponseObject, error) {
+	return gen.OidcExchange401Response{}, nil
+}
+func (h *Handlers) GetAuthInfo(_ context.Context, _ gen.GetAuthInfoRequestObject) (gen.GetAuthInfoResponseObject, error) {
+	return gen.GetAuthInfo200JSONResponse{}, nil
+}

@@ -240,6 +240,35 @@ paths:
               schema: { $ref: "#/components/schemas/ProbeResult" }
         "404":
           description: not found
+  /api/oidc/exchange:
+    post:
+      operationId: oidcExchange
+      security: []   # public endpoint — token validated by Exchanger
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExchangeRequest" }
+      responses:
+        "200":
+          description: short-lived session token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExchangeResponse" }
+        "400":
+          description: invalid request
+        "401":
+          description: token rejected
+  /api/auth/info:
+    get:
+      operationId: getAuthInfo
+      security: []   # public — clients consult this before logging in
+      responses:
+        "200":
+          description: client-facing auth config
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthInfo" }
 components:
   securitySchemes:
     bearerAuth:
@@ -367,5 +396,35 @@ components:
         ok:           { type: boolean }
         latencyNanos: { type: integer, format: int64 }
         error:        { type: string }
+    ExchangeRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: "External OIDC token (GH Actions JWT, etc.)"
+    ExchangeResponse:
+      type: object
+      required: [accessToken, expiresAt]
+      properties:
+        accessToken:
+          type: string
+          description: "Short-lived controlplane session JWT. Send as Bearer."
+        expiresAt:
+          type: string
+          format: date-time
+        subject:
+          type: string
+        groups:
+          type: array
+          items: { type: string }
+    AuthInfo:
+      type: object
+      required: [oidcIssuer, oidcClientId]
+      properties:
+        oidcIssuer:    { type: string }
+        oidcClientId:  { type: string }
+        ciAudience:    { type: string, description: "Audience CI workflows should request when minting OIDC tokens" }
+        authDisabled:  { type: boolean }
 security:
   - bearerAuth: []
