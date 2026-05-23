@@ -100,7 +100,9 @@ func (s *Syncer) handle(ctx context.Context, ev k8s.WorkflowEvent) {
 	}
 }
 
-// readScore pulls a numeric score from report.json's top-level `score` field.
+// readScore derives a numeric score from report.json.
+// The verdict binary writes "overall": bool (true = PASS, false = FAIL);
+// we map that to 1.0 / 0.0 for the run manifest's Score field.
 func readScore(ctx context.Context, src ReportSource, workflowName string) (float64, bool) {
 	if src == nil {
 		return 0, false
@@ -111,8 +113,11 @@ func readScore(ctx context.Context, src ReportSource, workflowName string) (floa
 	if err != nil || r == nil {
 		return 0, false
 	}
-	if v, ok := r["score"].(float64); ok {
-		return v, true
+	if v, ok := r["overall"].(bool); ok {
+		if v {
+			return 1.0, true
+		}
+		return 0.0, true
 	}
 	return 0, false
 }

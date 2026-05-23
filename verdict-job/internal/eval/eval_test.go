@@ -2,6 +2,7 @@ package eval
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -87,6 +88,48 @@ func TestEvaluatePopulatesChaosWindow(t *testing.T) {
 	}
 	if !r.ChaosWindowEnd.Equal(wantEnd) {
 		t.Errorf("ChaosWindowEnd = %v, want %v", r.ChaosWindowEnd, wantEnd)
+	}
+}
+
+func TestEvaluateRawPromQLFail(t *testing.T) {
+	s := &slo.SLO{
+		RawPromQL: "Q_fail",
+		RawWindow: slo.WindowChaos,
+	}
+	// RawPromQL returns 0 (not 1) → RawPromQLPass=false → Overall=false.
+	fake := &prom.Fake{Values: map[string]float64{"Q_fail": 0}}
+	p := window.Params{
+		LoadStart:       time.Now(),
+		ChaosStartAfter: 10 * time.Second,
+		ChaosDuration:   30 * time.Second,
+		LoadDuration:    120 * time.Second,
+	}
+	r, err := Evaluate(context.Background(), s, fake, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Overall {
+		t.Error("expected Overall=false when rawPromQL returns 0")
+	}
+	if r.RawPromQLPass {
+		t.Error("expected RawPromQLPass=false")
+	}
+}
+
+func TestEvaluateQueryError(t *testing.T) {
+	s := &slo.SLO{Thresholds: []slo.Threshold{
+		{Metric: "lat", Query: "Q1", LT: ptr(0.5), Window: slo.WindowChaos},
+	}}
+	fake := &prom.FakeError{Err: errors.New("prom unavailable")}
+	p := window.Params{
+		LoadStart:       time.Now(),
+		ChaosStartAfter: 10 * time.Second,
+		ChaosDuration:   30 * time.Second,
+		LoadDuration:    120 * time.Second,
+	}
+	_, err := Evaluate(context.Background(), s, fake, p)
+	if err == nil {
+		t.Error("expected error when QueryAt fails")
 	}
 }
 

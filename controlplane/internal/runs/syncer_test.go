@@ -2,6 +2,7 @@ package runs
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -100,6 +101,98 @@ func TestSyncer_CoalescesIdenticalEvents(t *testing.T) {
 	got := sink.snapshot()
 	if len(got) != 1 {
 		t.Errorf("expected exactly 1 write after coalesce, got %d", len(got))
+	}
+}
+
+// fakeReportSource implements ReportSource for testing Score population.
+type fakeReportSource struct {
+	data map[string]any
+	err  error
+}
+
+func (f *fakeReportSource) Read(_ context.Context, _ string) (map[string]any, error) {
+	return f.data, f.err
+}
+
+func TestReadScore_PassVerdict(t *testing.T) {
+	src := &fakeReportSource{data: map[string]any{"overall": true}}
+	v, ok := readScore(context.Background(), src, "wf-1")
+	if !ok {
+		t.Fatal("expected ok=true for overall:true")
+	}
+	if v != 1.0 {
+		t.Errorf("score = %v, want 1.0", v)
+	}
+}
+
+func TestReadScore_FailVerdict(t *testing.T) {
+	src := &fakeReportSource{data: map[string]any{"overall": false}}
+	v, ok := readScore(context.Background(), src, "wf-1")
+	if !ok {
+		t.Fatal("expected ok=true for overall:false")
+	}
+	if v != 0.0 {
+		t.Errorf("score = %v, want 0.0", v)
+	}
+}
+
+func TestReadScore_NilSrc(t *testing.T) {
+	_, ok := readScore(context.Background(), nil, "wf-1")
+	if ok {
+		t.Error("expected ok=false for nil source")
+	}
+}
+
+func TestReadScore_ReadError(t *testing.T) {
+	src := &fakeReportSource{err: errors.New("minio unavailable")}
+	_, ok := readScore(context.Background(), src, "wf-1")
+	if ok {
+		t.Error("expected ok=false when Read returns error")
+	}
+}
+
+func TestReadScore_MissingOverallField(t *testing.T) {
+	src := &fakeReportSource{data: map[string]any{"thresholds": []any{}}}
+	_, ok := readScore(context.Background(), src, "wf-1")
+	if ok {
+		t.Error("expected ok=false when overall field is absent")
+	}
+}
+
+func TestSyncer_PopulatesScoreOnSucceeded(t *testing.T) {
+	src := &fakeEventSource{ch: make(chan k8s.WorkflowEvent, 2)}
+	sink := &captureSink{}
+	reports := &fakeReportSource{data: map[string]any{"overall": true}}
+	s := &Syncer{Source: src, Manifests: sink, Reports: reports}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go s.Run(ctx)
+
+	wf := &wfv1.Workflow{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "score-run",
+			Labels:            map[string]string{"dlh.run-id": "score-run", "dlh.scenario": "mysql-pod-delete"},
+			CreationTimestamp: metav1.NewTime(time.Now()),
+		},
+		Status: wfv1.WorkflowStatus{
+			Phase:      "Succeeded",
+			FinishedAt: metav1.NewTime(time.Now()),
+		},
+	}
+	src.ch <- k8s.WorkflowEvent{Type: "MODIFIED", Workflow: wf}
+
+	time.Sleep(200 * time.Millisecond)
+	got := sink.snapshot()
+	if len(got) == 0 {
+		t.Fatal("no manifest written")
+	}
+	last := got[len(got)-1]
+	if last.Score == nil {
+		t.Fatal("Score should be non-nil for a Succeeded workflow with a verdict report")
+	}
+	if *last.Score != 1.0 {
+		t.Errorf("Score = %v, want 1.0", *last.Score)
 	}
 }
 
