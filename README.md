@@ -114,6 +114,12 @@ kubectl -n mysql-sys rollout status deploy/mysql --timeout=120s
 export DLH_ENDPOINT=http://localhost:8080
 export DLH_TOKEN='fake:dev:dev@example.com:dlh-admins'
 dlh run mysql-pod-delete --wait
+
+# 10. (optional) Kafka scenario — deploy the single-broker target, then run the
+#     full load + chaos + verdict orchestrator (produces the dlh-kafka dashboard).
+kubectl apply -f targets/kafka/deploy.yaml
+kubectl -n kafka-sys rollout status statefulset/kafka --timeout=240s
+dlh run kafka-broker-partition --wait
 ```
 
 A successful run streams `Running` status for ~3 minutes and ends with
@@ -139,7 +145,13 @@ targets. Each scenario WorkflowTemplate carries a fixed `spec.priority` (100) �
 priority is baked into the scenario, not a submit-time flag.
 
 The controlplane is also reachable in the browser at `http://localhost:8080/`
-(Scenarios / Runs / Targets / Schedules pages) once the port-forward is up.
+once the port-forward is up. The UI is a shadcn/ui SPA (dark-default, light
+toggle): a dashboard-forward **Runs** landing (stat cards + filter bar:
+search / status / category / time / failed-only), category-grouped
+**Scenarios**, **Targets** (with inline test-connection), **Schedules**
+(create/pause/delete), and a redesigned **Run detail** (meta strip,
+verdict-first, Argo group-node steps hidden) that deep-links out to the
+**Argo Workflows UI** and **Grafana** dashboards — see below.
 
 To tear down: `make platform-down` (helm uninstall) and `minikube delete`.
 
@@ -194,6 +206,19 @@ Five dashboards ship by default (sidecar picks them up via
 - **dlh-kafka** — per-run kafka-specific panels (xk6-kafka produce/consume)
 - **dlh-doris** — per-run doris panels (Stream Load + query; deferred target)
 
+**Deep links from Run detail.** When the controlplane is configured with
+`DLH_ARGO_BASE_URL` and/or `DLH_GRAFANA_BASE_URL` (env on the controlplane
+Deployment; empty = buttons hidden), a run's detail page shows **Open in
+Argo** + **Grafana dashboard** buttons. The backend (`internal/links`)
+builds them: Argo → `{base}/workflows/{ns}/{workflowName}`; Grafana → the
+`dlh-run` dashboard plus the per-target-type dashboard
+(`dlh-mysql`/`dlh-kafka`/`dlh-doris`), scoped to the run via
+`var-scenario` + `var-workflow` and the run's `from`/`to` window. Links are
+only emitted for runs that produced SLO/load metrics (a verdict/score);
+bare `chaos-*` runs get the Argo link only. Point the two env vars at
+whatever your browser can reach (e.g. `http://localhost:2746` /
+`http://localhost:3000` against local port-forwards, or ingress hosts).
+
 ### Add a new scenario
 
 Look at `helm/dlh-test-fw/files/workflowtemplates/scenario/mysql-pod-delete.yaml`
@@ -202,8 +227,9 @@ chart-managed `WorkflowTemplate`s, so `dlh run <scenario>` can target them).
 A scenario WorkflowTemplate composes:
 
 1. `util-write-slo` — picks an SLO library entry from `dlh-slos`
-   ConfigMap (`pod-delete` or `network-loss`) and renders per-workflow
-   `dlh-slo-<wf>` CM using the scenario's `slo_vars` block.
+   ConfigMap (`pod-delete`, `network-loss`, or `broker-partition`) and
+   renders per-workflow `dlh-slo-<wf>` CM using the scenario's `slo_vars`
+   block.
 2. (Optional) a fixture step — `fixture-minio-load-{mysql,doris}` or
    `fixture-kafka-topic-seed`.
 3. (mysql only) `util-ensure-mysql-table` — parameterised CREATE TABLE.
@@ -242,15 +268,17 @@ dlh-test-fw/
 │   ├── values.yaml                # Defaults
 │   ├── values-minikube.yaml       # Local-dev overlay
 │   ├── files/
-│   │   ├── workflowtemplates/     # 10 reusable Argo WorkflowTemplates
+│   │   ├── workflowtemplates/     # 13 Argo WorkflowTemplates
 │   │   │   ├── chaos/             #   pod-delete, network-loss, kafka-broker-partition (Chaos Mesh)
+│   │   │   ├── scenario/          #   mysql-pod-delete, kafka-broker-partition, doris-be-network-loss (orchestrators, Plan 18)
 │   │   │   ├── fixture/           #   kafka-topic-seed, minio-load-mysql, minio-load-doris
 │   │   │   ├── load/k6-run.yaml   #   k6 TestRun (dlh-k6 image) → prom-rw to VM
 │   │   │   ├── util/              #   write-slo, ensure-mysql-table  (Plan 9)
 │   │   │   └── verdict/slo-eval.yaml
 │   │   ├── slos/                  # SLO template library → ConfigMap dlh-slos (Plan 9)
-│   │   │   ├── pod-delete.yaml
-│   │   │   └── network-loss.yaml
+│   │   │   ├── pod-delete.yaml    #   mysql-pod-delete
+│   │   │   ├── network-loss.yaml  #   doris-be-network-loss
+│   │   │   └── broker-partition.yaml  #   kafka-broker-partition
 │   │   └── dashboards/            # Grafana dashboards (chart-embedded copies)
 │   └── templates/                 # Our own ns, RBAC, minio, slos CM, scenario-locks CM, ...
 ├── verdict-job/                   # Plan 3: the verdict Go binary
@@ -372,9 +400,12 @@ Out of scope (deferred): image publish to GHCR, KinD-based E2E scenario runs.
   protocol load (xk6-sql, xk6-kafka) against the in-cluster targets,
   inject Chaos Mesh chaos in parallel, and produce a verdict in both
   MinIO and VM.
-- 10 WorkflowTemplates registered: `fixture-*` (3), `chaos-*` (3),
-  `load-k6-run`, `verdict-slo-eval`, `util-write-slo`,
-  `util-ensure-mysql-table`.
+- 13 WorkflowTemplates registered: `scenario/*` orchestrators (3:
+  mysql-pod-delete, kafka-broker-partition, doris-be-network-loss),
+  `fixture-*` (3), `chaos-*` (3), `load-k6-run`, `verdict-slo-eval`,
+  `util-write-slo`, `util-ensure-mysql-table`. (Bare `chaos-*` building
+  blocks are also directly runnable — defaults added so a no-param submit
+  validates.)
 - All scenario tunables (load, chaos, workload, SLO thresholds) are
   top-level workflow parameters; any can be overridden via
   `dlh run <scenario> -p key=value`.
@@ -388,8 +419,9 @@ Out of scope (deferred): image publish to GHCR, KinD-based E2E scenario runs.
   no-auth / emptyDir; rotate before any shared deploy).
 - k6-operator's `PrivateLoadZone` CRD is installed by the subchart but
   unused.
-- SLO library only has two entries (`pod-delete`, `network-loss`),
-  byte-identical for now — kept separate for future divergence.
+- SLO library has three entries (`pod-delete`, `network-loss`,
+  `broker-partition`), byte-identical for now — kept separate per scenario
+  for future divergence.
 
 ---
 
@@ -418,6 +450,9 @@ grep-able in `git log --first-parent`.
 | Plan 17 | `e9d73b6` | dlh-controlplane Phase D (remote targets) — Target registry from ConfigMap+Secrets; RemoteChaosClient + Router; /api/targets + UI TargetsPage + TargetPicker; dlh run --target; chaos WTs forward target_id |
 | Plan 18 | `a402cbb` | dlh-controlplane Phase E (CI integration + cleanup) — POST /api/oidc/exchange + GET /api/auth/info; dlh login device-code; GH Actions composite + example release-gate workflow; kafka+doris promoted to chart-managed WTs; 5 shell scripts deleted |
 | Plan 19 | `50a265b` | dlh-controlplane Phase F (Schedules) — POST/GET/DELETE /api/schedules + pause/resume; dlh schedule CLI; UI Schedules page; Run.triggeredBy surfaces parent CronWorkflow |
+| UI refresh | `20ad262` | Controlplane UI refresh — shadcn/ui design system, dark-default theme + light toggle, dashboard-forward Runs landing, readable VerdictView; Vitest for pure logic |
+| UI optimization | `0a06dde` | Controlplane UI optimization (web-only) — nav icons + active pill, Runs filter bar (search/status/category/time/failed-only) + Duration/Verdict columns, category-grouped Scenarios, redesigned Run detail (verdict-first, Argo group-node steps hidden) |
+| Deep-links | `ec577f4` | Run-detail Argo/Grafana deep links — backend-assembled `argoUrl` + `grafanaUrls` (run + per-target-type dashboard) from `DLH_ARGO_BASE_URL` / `DLH_GRAFANA_BASE_URL`; new `internal/links` package (Go-tested) |
 
 Each plan's source-of-truth document lives under
 `docs/superpowers/plans/` and the deviations from those plans are noted
