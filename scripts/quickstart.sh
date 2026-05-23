@@ -200,7 +200,7 @@ step_run() {
 }
 
 step_next_steps() {
-  log_step 9 "Done"
+  log_step "$TOTAL_STEPS" "Done"
   local guser gpass
   guser="$(kubectl -n "$NS" get secret grafana-admin-credentials -o jsonpath='{.data.admin-user}' | base64 -d)"
   gpass="$(kubectl -n "$NS" get secret grafana-admin-credentials -o jsonpath='{.data.admin-password}' | base64 -d)"
@@ -229,6 +229,8 @@ EOF
 step_kafka() {
   [[ "$WITH_KAFKA" == true ]] || return 0
   log_step 9 "Optional: kafka scenario"
+  # Reuses the controlplane port-forward + DLH_ENDPOINT that step_run opens;
+  # step_run always runs immediately before step_kafka in main().
   kubectl apply -f targets/kafka/deploy.yaml
   kubectl -n kafka-sys rollout status statefulset/kafka --timeout=240s
   dlh run kafka-broker-partition --wait
@@ -256,7 +258,7 @@ step_crds() {
     | awk '/^---/{p=0} /kind: CustomResourceDefinition/{p=1} p{print}' \
     > /tmp/dlh-crds.yaml
   kubectl apply --server-side --force-conflicts -f /tmp/dlh-crds.yaml
-  kubectl wait --for=condition=Established crd --all --timeout=120s
+  kubectl wait --for=condition=Established -f /tmp/dlh-crds.yaml --timeout=120s
   kubectl label -f /tmp/dlh-crds.yaml app.kubernetes.io/managed-by=Helm --overwrite
   kubectl annotate -f /tmp/dlh-crds.yaml \
     meta.helm.sh/release-name=dlh \
@@ -265,6 +267,7 @@ step_crds() {
 }
 
 main() {
+  [[ "$WITH_KAFKA" == true ]] && TOTAL_STEPS=10
   printf '%sQuickstart: running minikube → green VERDICT: PASS%s\n' "$C_BLUE" "$C_RESET"
   preflight
   step_crds
