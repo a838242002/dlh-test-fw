@@ -163,6 +163,17 @@ step_controlplane() {
   log_ok "controlplane ready"
 }
 
+step_cli() {
+  if [[ "$REBUILD" == false && -x controlplane/bin/dlh ]]; then
+    log_skip 5 "Building the dlh CLI" "binary present"
+  else
+    log_step 5 "Building the dlh CLI"
+    make -C controlplane cli
+    log_ok "dlh CLI built"
+  fi
+  export PATH="$REPO_ROOT/controlplane/bin:$PATH"
+}
+
 step_crds() {
   if kubectl get crd podchaos.chaos-mesh.org >/dev/null 2>&1; then
     log_skip 1 "Pre-install CRDs" "chaos-mesh CRDs already present"
@@ -192,6 +203,7 @@ main() {
   step_images
   step_platform
   step_controlplane
+  step_cli
 }
 
 main "$@"
