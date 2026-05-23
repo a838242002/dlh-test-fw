@@ -1,6 +1,7 @@
 import { CheckCircle2, XCircle } from "lucide-react";
 import { parseVerdict } from "@/lib/verdict";
 import { cn } from "@/lib/utils";
+import { formatMetricValue } from "@/lib/format";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export function VerdictView({ verdict }: { verdict: Record<string, unknown> | null | undefined }) {
@@ -36,7 +37,7 @@ export function VerdictView({ verdict }: { verdict: Record<string, unknown> | nu
             {parsed.thresholds.map((t) => (
               <TableRow key={t.metric}>
                 <TableCell className="font-medium">{t.metric}</TableCell>
-                <TableCell className="font-mono text-xs">{t.value}</TableCell>
+                <TableCell className="font-mono text-xs">{formatMetricValue(t.value)}</TableCell>
                 <TableCell className="font-mono text-xs">{t.bound}</TableCell>
                 <TableCell className={t.passed ? "text-status-success" : "text-status-failed"}>
                   {t.passed ? "pass" : "fail"}
@@ -51,6 +52,7 @@ export function VerdictView({ verdict }: { verdict: Record<string, unknown> | nu
         <div className="text-sm">
           <span className="text-muted-foreground">Raw PromQL: </span>
           <code className="font-mono text-xs">{parsed.rawPromQL.query}</code>{" "}
+          <span className="font-mono text-xs text-muted-foreground">= {formatMetricValue(parsed.rawPromQL.value)}</span>{" "}
           <span className={parsed.rawPromQL.passed ? "text-status-success" : "text-status-failed"}>
             ({parsed.rawPromQL.passed ? "pass" : "fail"})
           </span>
