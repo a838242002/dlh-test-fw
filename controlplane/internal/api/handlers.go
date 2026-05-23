@@ -264,3 +264,10 @@ func runDetailFromManifest(m runs.Manifest) gen.RunDetail {
 	}
 	return d
 }
+
+func (h *Handlers) OidcExchange(ctx context.Context, req gen.OidcExchangeRequestObject) (gen.OidcExchangeResponseObject, error) {
+	return h.handleOidcExchange(ctx, req.Body)
+}
+func (h *Handlers) GetAuthInfo(_ context.Context, _ gen.GetAuthInfoRequestObject) (gen.GetAuthInfoResponseObject, error) {
+	return h.handleAuthInfo(), nil
+}

@@ -75,28 +75,29 @@ make k6-image              # custom dlh-k6 (xk6-sql + xk6-kafka + baked runners)
 make platform-up           # helm dependency update + helm upgrade --install dlh ...
 make platform-verify       # in-cluster smoke; expects PASS
 
-# 4. Submit the sample scenarios
-make run-mysql             # mysql-pod-delete
-make run-kafka             # kafka-broker-partition
+# 4. Start the controlplane
+cd controlplane && make ui-build && make build
+DLH_AUTH_DISABLED=true ./dlh-controlplane
+
+# 5. Submit the sample scenarios
+dlh run mysql-pod-delete --wait
+dlh run kafka-broker-partition --wait
 ```
 
-`make run-{mysql,kafka}` wrap `scripts/run-scenario.sh`, which submits via
-`argo submit` then blocks on `argo wait`, and forwards extra args. Override
-any scenario parameter at submit time:
+Scenario parameters are overridable at submit time with `-p key=value`:
 
 ```bash
-scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml \
-    -p vus=50 -p chaos_duration=120s -p mysql_op_mix=read:100
+dlh run mysql-pod-delete --wait -p vus=50 -p chaos_duration=120s -p mysql_op_mix=read:100
 ```
 
 Submissions to the same target serialise via Argo `synchronization.semaphores`
 (per-target keys in `dlh-scenario-locks`). Submissions to different targets run
 in parallel. Within a queue, higher `spec.priority` wins; override at submit time
-via `argo submit --priority N`:
+via `--priority N`:
 
 ```bash
-scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml --priority 200
-# Prints "Queued: waiting for semaphore .../mysql (priority 200)" if blocked.
+dlh run mysql-pod-delete --priority 200
+# The controlplane prints "Queued" state in `dlh runs ls` output when blocked.
 ```
 
 To tear down: `make platform-down` (helm uninstall) and `minikube delete`.
@@ -108,15 +109,15 @@ To tear down: `make platform-down` (helm uninstall) and `minikube delete`.
 ### Run an existing scenario
 
 ```bash
-make run-mysql
+dlh run mysql-pod-delete --wait
 # or, with overrides:
-scripts/run-scenario.sh scenarios/mysql-pod-delete.yaml -p vus=20 -p load_duration=300s
+dlh run mysql-pod-delete --wait -p vus=20 -p load_duration=300s
 ```
 
-The script:
-- timestamps `metadata.generateName` into `metadata.name: <prefix>-YYYYMMDD-HHMMSS`
-- `argo submit`s, then probes once for queue state, then `argo wait`s
-- prints `Queued: waiting for semaphore <name> (priority N)` if the workflow is held back by a per-target semaphore
+The controlplane:
+- timestamps `metadata.name` to `<scenarioID>-YYYYMMDD-HHMMSS`
+- submits the WorkflowTemplate and streams status when `--wait` is passed
+- prints queue position when the workflow is held back by a per-target semaphore
 - exits 0 iff phase is `Succeeded`
 
 ### Read the verdict
@@ -172,7 +173,7 @@ an Argo `Workflow` that composes:
    success — no separate chaos verdict CR read.
 
 Every tunable lives in the scenario's top-level `arguments.parameters`
-block and is overridable via `scripts/run-scenario.sh -p key=value`.
+block and is overridable via `dlh run <scenario> -p key=value`.
 
 You do NOT need to ship a k6 script ConfigMap — the dlh-k6 image bakes
 runners at `/scripts/runners/{mysql,kafka,doris}.js`. `load/k6-run`
@@ -308,9 +309,9 @@ Out of scope (deferred): image publish to GHCR, KinD-based E2E scenario runs.
 |---|---|
 | `phase-1-mvp` | First end-to-end run: chaos + k6 load + verdict, mysql + kafka scenarios |
 | `phase-2-mvp` | Custom dlh-k6 image (xk6-sql + xk6-kafka), real-protocol scenarios with per-target metric series, three per-type Grafana dashboards (mysql / kafka / doris) |
-| `plan9-scenario-optimization` | Inline `write-slo` + `ensure-load-table` heredocs lifted into `util-write-slo` + `util-ensure-mysql-table` WorkflowTemplates; chart-managed SLO template library (`dlh-slos` CM); submit-time `-p` overrides via `run-scenario.sh` |
+| `plan9-scenario-optimization` | Inline `write-slo` + `ensure-load-table` heredocs lifted into `util-write-slo` + `util-ensure-mysql-table` WorkflowTemplates; chart-managed SLO template library (`dlh-slos` CM); submit-time `-p` overrides via `argo submit` |
 | `plan10-github-actions-ci` | PR guardrails CI in `.github/workflows/ci.yml`: parallel `helm` (lint + template smoke), `go` (vet + test on `verdict-job`), `shellcheck`, and `kubeconform` (rendered chart + scenarios). ~1 min wall-clock on a warm cache. No image publish, no E2E. |
-| `plan11-scenario-queue` | Per-target serialisation + priority via Argo native `spec.synchronization.semaphores` (ConfigMap `dlh-scenario-locks`, keys mysql/kafka/doris, count=1 each). Same-target scenarios queue; different-target run in parallel. `--priority N` override at submit time. `scripts/run-scenario.sh` prints a `Queued: ...` line when blocked. Argo controller bumped to v3.6.10 (subchart `argo-workflows` 0.45.20). |
+| `plan11-scenario-queue` | Per-target serialisation + priority via Argo native `spec.synchronization.semaphores` (ConfigMap `dlh-scenario-locks`, keys mysql/kafka/doris, count=1 each). Same-target scenarios queue; different-target run in parallel. `--priority N` override at submit time. Argo controller bumped to v3.6.10 (subchart `argo-workflows` 0.45.20). |
 | `plan12-chaos-mesh-migration` | Litmus retired; Chaos Mesh adopted (subchart `chaos-mesh` 2.8.2). 3 chaos WTs rewritten to script-style submit + poll/sleep + cleanup (Schedule wrapping PodChaos for pod-kill; NetworkChaos for loss/partition). `verdict-job/internal/chaosresult/` deleted (-130 LOC); chaos verdict signal is now Argo step success alone. MongoDB, ChaosCenter portal, in-tree Litmus backfills all gone. |
 | `plan13-dashboard-enrichment` | Per-target dashboards gain richer panels (mysql 5→8, kafka 5→11, doris 5→8) using k6 metrics already in VM — VUs, iteration p95, data throughput, latency percentile overlays, xk6-kafka writer internals. Chaos timeline overlay: verdict-job emits `dlh_chaos_window_{start,end}_unixtime` gauges; all 4 per-run dashboards get Grafana annotations with `useValueForTime:true` rendering orange/green vertical marks at chaos start/recovery. |
 
@@ -324,7 +325,7 @@ Out of scope (deferred): image publish to GHCR, KinD-based E2E scenario runs.
   `util-ensure-mysql-table`.
 - All scenario tunables (load, chaos, workload, SLO thresholds) are
   top-level workflow parameters; any can be overridden via
-  `scripts/run-scenario.sh -p key=value`.
+  `dlh run <scenario> -p key=value`.
 - Five Grafana dashboards live (history, run-detail, mysql, kafka, doris).
 
 **Known deferred:**
@@ -354,15 +355,16 @@ grep-able in `git log --first-parent`.
 | Plan 4 | `d7fe2c3` | WorkflowTemplate library + fixture images |
 | Plan 5 | `421c0ea` | Phase 1 scenarios + dashboards (+ Plan 4 backfills) |
 | Plans 6 + 7 + 8 (Phase 2) | `a8dbc7b` | Custom dlh-k6 image, real-protocol scenarios, per-type dashboards |
-| Plan 9 | `4d68ea3` | util-write-slo + util-ensure-mysql-table; `dlh-slos` CM; `run-scenario.sh -p` overrides |
+| Plan 9 | `4d68ea3` | util-write-slo + util-ensure-mysql-table; `dlh-slos` CM; submit-time `-p` overrides |
 | Plan 10 | `e6c11e2` | GitHub Actions CI (`helm` + `go` + `shellcheck` + `kubeconform`) |
-| Plan 11 | `9c292a7` | Per-target scenario semaphores + priority (Argo v3.6.10); `dlh-scenario-locks` CM; queued-message UX in `run-scenario.sh` |
+| Plan 11 | `9c292a7` | Per-target scenario semaphores + priority (Argo v3.6.10); `dlh-scenario-locks` CM; queued-message UX at submit time |
 | Plan 12 | `a1a9af1` | Litmus → Chaos Mesh migration; verdict-job's `chaosresult` package removed; MongoDB + ChaosCenter retired |
 | Plan 13 | `438ecb1` | Per-target dashboard enrichment (+12 panels across mysql/kafka/doris) + chaos timeline overlay via `useValueForTime` annotations |
 | Plan 14 | `130a0c1` | Argo CD platform lifecycle — `argocd/` AppProject + ApplicationSet + chart Application + controlplane Application placeholder; production bootstrap doc; scripts annotated as local-dev only |
 | Plan 15 | `01d3f5e` | dlh-controlplane Phase B (read-only) — Go service + embedded React UI + OIDC auth + scoped RBAC + Workflow informer + MinIO report.json reader + SSE event stream; `controlplane/deploy/` manifests; `dlh-controlplane` Argo CD Application activated |
-| Plan 16 | `abf407d` | dlh-controlplane Phase C — `/internal/chaos` endpoint + watchdog reconciler; chaos WTs rewired from kubectl-in-script to HTTP API; `dlh` CLI (`dlh run` + `dlh runs ls/show/logs/cancel`); `run-scenario.sh` deprecated as shim; end-to-end smoke test against minikube |
+| Plan 16 | `abf407d` | dlh-controlplane Phase C — `/internal/chaos` endpoint + watchdog reconciler; chaos WTs rewired from kubectl-in-script to HTTP API; `dlh` CLI (`dlh run` + `dlh runs ls/show/logs/cancel`); `run-scenario.sh` deprecated as shim (removed in Plan 18); end-to-end smoke test against minikube |
 | Plan 17 | `e9d73b6` | dlh-controlplane Phase D (remote targets) — Target registry from ConfigMap+Secrets; RemoteChaosClient + Router; /api/targets + UI TargetsPage + TargetPicker; dlh run --target; chaos WTs forward target_id |
+| Plan 18 | `XXXXXXX` | dlh-controlplane Phase E (CI integration + cleanup) — POST /api/oidc/exchange + GET /api/auth/info; dlh login device-code; GH Actions composite + example release-gate workflow; kafka+doris promoted to chart-managed WTs; 5 shell scripts deleted |
 
 Each plan's source-of-truth document lives under
 `docs/superpowers/plans/` and the deviations from those plans are noted

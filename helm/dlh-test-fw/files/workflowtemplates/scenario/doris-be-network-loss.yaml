@@ -1,10 +1,18 @@
+# Plan 18 (2026-05-23): converted from standalone scenarios/doris-be-network-loss.yaml
+# Workflow to a chart-managed WorkflowTemplate so `dlh run doris-be-network-loss
+# --target X` works through the controlplane API. The standalone Workflow YAML
+# is deleted in Task 17. Plan 17 FINDING #10 target_id propagation included.
+#
 # DEFERRED: requires Doris target (see targets/doris/README.md).
 # Committed to document the chaos+load+verdict pattern for a Doris BE.
 apiVersion: argoproj.io/v1alpha1
-kind: Workflow
+kind: WorkflowTemplate
 metadata:
-  generateName: doris-be-network-loss-
-  namespace: dlh-test-fw
+  name: doris-be-network-loss
+  namespace: "{{ .Release.Namespace }}"
+  labels:
+    app.kubernetes.io/part-of: dlh-test-fw
+    dlh.category: scenario
 spec:
   serviceAccountName: argo-workflow
   priority: 100
@@ -34,6 +42,9 @@ spec:
     - { name: chaos_start_after, value: 30s }
     - { name: chaos_duration,    value: 60s }
     - { name: loss_percent,      value: "50" }
+    # ===== remote target (Plan 17 Phase D / Plan 18) =====
+    # Empty string means "local framework cluster"; set to a registered target ID for remote chaos.
+    - { name: target_id, value: "" }
 
   templates:
   - name: main
@@ -42,8 +53,8 @@ spec:
         templateRef: { name: util-write-slo, template: main }
         arguments:
           parameters:
-          - { name: slo_name, value: "{{workflow.parameters.slo_name}}" }
-          - { name: slo_vars, value: "{{workflow.parameters.slo_vars}}" }
+          - { name: slo_name, value: '{{`{{workflow.parameters.slo_name}}`}}' }
+          - { name: slo_vars, value: '{{`{{workflow.parameters.slo_vars}}`}}' }
     - - name: load-fixture
         templateRef: { name: fixture-minio-load-doris, template: main }
         arguments:
@@ -58,25 +69,26 @@ spec:
           parameters:
           - { name: target_namespace,    value: "doris-sys" }
           - { name: target_pod_selector, value: "app=doris-be" }
-          - { name: loss_percent,        value: "{{workflow.parameters.loss_percent}}" }
-          - { name: duration,            value: "{{workflow.parameters.chaos_duration}}" }
+          - { name: loss_percent,        value: '{{`{{workflow.parameters.loss_percent}}`}}' }
+          - { name: duration,            value: '{{`{{workflow.parameters.chaos_duration}}`}}' }
+          - { name: target_id,           value: '{{`{{workflow.parameters.target_id}}`}}' }
       - name: load
         templateRef: { name: load-k6-run, template: main }
         arguments:
           parameters:
           - { name: script_path,    value: "/scripts/runners/doris.js" }
-          - { name: vus,            value: "{{workflow.parameters.vus}}" }
-          - { name: duration,       value: "{{workflow.parameters.load_duration}}" }
-          - { name: scenario_label, value: "{{workflow.parameters.scenario_label}}" }
+          - { name: vus,            value: '{{`{{workflow.parameters.vus}}`}}' }
+          - { name: duration,       value: '{{`{{workflow.parameters.load_duration}}`}}' }
+          - { name: scenario_label, value: '{{`{{workflow.parameters.scenario_label}}`}}' }
           - { name: env_map,        value: "" }
     - - name: verdict
         templateRef: { name: verdict-slo-eval, template: main }
         arguments:
           parameters:
-          - { name: slo_yaml,          value: "(unused — read from CM)" }
-          - { name: load_start_ts,     value: "{{steps.load.startedAt}}" }
-          - { name: chaos_start_after, value: "{{workflow.parameters.chaos_start_after}}" }
-          - { name: chaos_duration,    value: "{{workflow.parameters.chaos_duration}}" }
-          - { name: load_duration,     value: "{{workflow.parameters.load_duration}}" }
-          - { name: metrics_namespace, value: "{{workflow.parameters.scenario_label}}" }
-          - { name: workflow_name,     value: "{{workflow.name}}" }
+          - { name: slo_yaml,           value: "(unused — read from CM)" }
+          - { name: load_start_ts,      value: '{{`{{steps.load.startedAt}}`}}' }
+          - { name: chaos_start_after,  value: '{{`{{workflow.parameters.chaos_start_after}}`}}' }
+          - { name: chaos_duration,     value: '{{`{{workflow.parameters.chaos_duration}}`}}' }
+          - { name: load_duration,      value: '{{`{{workflow.parameters.load_duration}}`}}' }
+          - { name: metrics_namespace,  value: '{{`{{workflow.parameters.scenario_label}}`}}' }
+          - { name: workflow_name,      value: '{{`{{workflow.name}}`}}' }

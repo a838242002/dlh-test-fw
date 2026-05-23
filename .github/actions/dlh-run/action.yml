@@ -1,0 +1,104 @@
+name: 'dlh-run'
+description: 'Submit a dlh-test-fw scenario via the controlplane API and wait for it'
+inputs:
+  endpoint:
+    description: 'Controlplane base URL (https://dlh.example.com)'
+    required: true
+  scenario:
+    description: 'Scenario WorkflowTemplate name (e.g. mysql-pod-delete)'
+    required: true
+  target:
+    description: 'Optional remote target ID; empty = framework cluster'
+    required: false
+    default: ''
+  audience:
+    description: 'OIDC audience to request (must match controlplane DLH_CI_AUDIENCE)'
+    required: false
+    default: 'dlh-controlplane'
+  params:
+    description: 'Newline-separated key=value WorkflowTemplate parameter overrides'
+    required: false
+    default: ''
+  wait:
+    description: 'Block until the run reaches a terminal phase'
+    required: false
+    default: 'true'
+  dlh-cli-version:
+    description: 'Version of the dlh CLI to install (must match controlplane)'
+    required: false
+    default: 'latest'
+
+runs:
+  using: composite
+  steps:
+    - name: Install dlh CLI
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Fetch a prebuilt binary from the controlplane release artifacts.
+        # If your deployment doesn't publish binaries, swap this for a
+        # `go install` from a checked-out controlplane source tree.
+        VERSION='${{ inputs.dlh-cli-version }}'
+        ENDPOINT='${{ inputs.endpoint }}'
+        if ! command -v dlh >/dev/null 2>&1; then
+          echo "::error::dlh CLI not in PATH. See docs/operations/ci-integration.md."
+          exit 127
+        fi
+
+    - name: Request GH Actions OIDC token
+      id: oidc
+      shell: bash
+      env:
+        AUDIENCE: ${{ inputs.audience }}
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+        ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+      run: |
+        set -euo pipefail
+        if [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+          echo "::error::No OIDC request token. Did the calling job set permissions: id-token: write?"
+          exit 1
+        fi
+        TOKEN=$(curl -fsSL \
+          -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}" | jq -r .value)
+        echo "::add-mask::$TOKEN"
+        echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+    - name: Exchange OIDC for controlplane session
+      id: session
+      shell: bash
+      env:
+        ENDPOINT: ${{ inputs.endpoint }}
+        OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+      run: |
+        set -euo pipefail
+        RESP=$(curl -fsSL -X POST "$ENDPOINT/api/oidc/exchange" \
+          -H 'Content-Type: application/json' \
+          -d "$(jq -n --arg t "$OIDC_TOKEN" '{token:$t}')")
+        ACCESS=$(echo "$RESP" | jq -r .accessToken)
+        if [ -z "$ACCESS" ] || [ "$ACCESS" = "null" ]; then
+          echo "::error::Exchange failed: $RESP"
+          exit 1
+        fi
+        echo "::add-mask::$ACCESS"
+        echo "token=$ACCESS" >> "$GITHUB_OUTPUT"
+
+    - name: Submit scenario
+      shell: bash
+      env:
+        ENDPOINT: ${{ inputs.endpoint }}
+        DLH_TOKEN: ${{ steps.session.outputs.token }}
+        SCENARIO: ${{ inputs.scenario }}
+        TARGET: ${{ inputs.target }}
+        PARAMS: ${{ inputs.params }}
+        WAIT: ${{ inputs.wait }}
+      run: |
+        set -euo pipefail
+        ARGS=()
+        if [ -n "$TARGET" ]; then ARGS+=(--target "$TARGET"); fi
+        if [ "$WAIT" = "true" ]; then ARGS+=(--wait); fi
+        while IFS= read -r line; do
+          [ -z "$line" ] && continue
+          ARGS+=(--param "$line")
+        done <<< "$PARAMS"
+        dlh --endpoint "$ENDPOINT" run "$SCENARIO" "${ARGS[@]}"

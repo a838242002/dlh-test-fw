@@ -771,3 +771,47 @@ Branch: feat/plan16-controlplane-submission
 - Removal of `scripts/run-scenario.sh` entirely.
 - Notification hooks (Slack/email on run completion) — interface stub already lives in Phase C's event-bus design.
 - Sweep remaining scenarios (kafka-broker-partition, doris-be-network-loss) for target_id propagation pattern — Task 23 fixed only mysql-pod-delete.
+
+---
+
+## Plan 18 — controlplane Phase E (CI integration + cleanup) (2026-05-23)
+
+### What landed
+
+- `POST /api/oidc/exchange` + `GET /api/auth/info`: external OIDC token → short-lived (1h) HS256 controlplane session JWT.
+- `controlplane/internal/auth/session.go` + `exchange.go` + `jwt_peek.go`.
+- `dlh login` (RFC 8628 device-code flow) → `~/.config/dlh/token`.
+- `.github/actions/dlh-run/action.yml` reusable composite + `example-release-gate.yml` workflow.
+- `docs/operations/ci-integration.md` operator runbook.
+- kafka + doris scenarios promoted from standalone Workflow YAMLs to chart-managed WorkflowTemplates under `helm/dlh-test-fw/files/workflowtemplates/scenario/`, completing the Plan 17 FINDING #10 target_id propagation sweep.
+- Shell scripts deleted: `run-scenario.sh`, `platform-up.sh`, `platform-down.sh`, `platform-verify.sh`, `verify-templates.sh`. Only `scripts/minikube-up.sh` survives.
+- `dlh-session-signing-key` Secret (helm-lookup-stable random key) added to the chart.
+
+### Post-controlplane operational model
+
+- **All scenario submission** flows through `POST /api/runs` (UI / `dlh run` / GH Actions composite). No `argo submit`, no `kubectl create -f scenarios/*.yaml`.
+- **All scenario sources** live in `helm/dlh-test-fw/files/workflowtemplates/scenario/`. The standalone `scenarios/` directory is no longer used.
+- **Local-dev** uses `minikube-up.sh` + `helm upgrade --install` + `dlh ...`. No more `platform-up.sh`.
+- **CI** uses the composite action with `id-token: write` + an exchanged session token. No PATs.
+- **Production** uses Argo CD to sync the chart + manifests + targets ConfigMap. No shell into the cluster.
+
+### Operational pitfalls discovered
+
+1. **Session JWT signing key must be 64+ chars when using HS256**. The chart's `randAlphaNum 64` produces a sufficient key; shorter keys still sign but reduce the brute-force margin. Don't override via values without keeping the length.
+
+2. **`Exchanger.providers` cache is a memory-only map**. Restarting the controlplane re-fetches the JWKS for each known issuer; cold-start has a small (~100ms per issuer) latency penalty. Acceptable for v1; consider a TTL cache if issuer count grows.
+
+3. **GH Actions OIDC `audience` is per-token-request**. Workflows MUST request the audience matching the controlplane's `DLH_CI_AUDIENCE`. If they don't, the Exchanger rejects with `verify: oidc: expected audience`. The composite action sets it explicitly via the `audience:` input.
+
+4. **Device-code flow is IdP-specific**. `dlh login` works when the IdP exposes `device_authorization_endpoint` in its `.well-known/openid-configuration`. GitHub.com OIDC for personal accounts does NOT (it's CI-only). Most enterprise IdPs (Okta, Google Workspace, Dex with PKCE) do.
+
+5. **GH Actions OIDC tokens last 5 minutes**. The composite action mints + exchanges + uses in one job — no caching between jobs. If a workflow has multiple `dlh-run` steps, each step mints + exchanges its own.
+
+6. **Stale `scenarios/` directory references in docs**. After Plan 18, several docs still pointed at `scenarios/*.yaml` paths. Step-by-step sweep via `grep -rn` was needed; future plans should check `grep -rn 'scripts/' --include='*.md'` and `grep -rn 'scenarios/' --include='*.md'` before claiming cleanup is done.
+
+### Carry-forward for future plans
+
+- The session JWT issuer (`iss` claim) is hardcoded `dlh-controlplane`. If multiple controlplane instances coexist, add a distinguishing field (or accept any issuer matching a configured allowlist).
+- Notification hooks (Slack, email) for run completion remain unimplemented (interface stub in Plan 15 design).
+- The controlplane UI doesn't yet show a "logged in as ..." indicator. Easy to add: GET /api/auth/info during boot, then a small badge in the nav.
+- `dlh login` doesn't refresh expired tokens — re-running `dlh login` is required after 1h. A refresh-token flow could close this.

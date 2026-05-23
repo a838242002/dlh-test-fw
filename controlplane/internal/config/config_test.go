@@ -37,3 +37,35 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 		t.Errorf("K8sNamespace default: got %q", c.K8sNamespace)
 	}
 }
+
+func TestLoad_RequiresSessionSigningKey(t *testing.T) {
+	t.Setenv("DLH_AUTH_DISABLED", "")
+	t.Setenv("DLH_OIDC_ISSUER_URL", "https://example.com")
+	t.Setenv("DLH_OIDC_CLIENT_ID", "client")
+	t.Setenv("DLH_INTERNAL_TOKEN", "internal-secret")
+	t.Setenv("DLH_SESSION_SIGNING_KEY", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error when session key missing")
+	}
+}
+
+func TestLoad_DefaultCITrustedIssuers(t *testing.T) {
+	t.Setenv("DLH_AUTH_DISABLED", "true")
+	t.Setenv("DLH_CI_TRUSTED_ISSUERS", "")
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(c.CITrustedIssuers) != 1 || c.CITrustedIssuers[0] != "https://token.actions.githubusercontent.com" {
+		t.Errorf("default CITrustedIssuers: %v", c.CITrustedIssuers)
+	}
+}
+
+func TestLoad_CSVTrustedIssuers(t *testing.T) {
+	t.Setenv("DLH_AUTH_DISABLED", "true")
+	t.Setenv("DLH_CI_TRUSTED_ISSUERS", "https://a.example.com, https://b.example.com")
+	c, _ := Load()
+	if len(c.CITrustedIssuers) != 2 {
+		t.Errorf("expected 2 issuers, got %v", c.CITrustedIssuers)
+	}
+}

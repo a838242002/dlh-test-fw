@@ -24,8 +24,19 @@ type Deps struct {
 	Submitter  *runs.Submitter      // Phase C
 	Manifests  *runs.ManifestWriter // Phase C
 	ArgoClient wfclient.Interface   // Phase C — for terminate patch
-	Chaos      *chaos.Router        // Phase D — wired in Task 12
-	Targets    *targets.Registry    // Phase D — wired in Task 9
+	Chaos         *chaos.Router        // Phase D — wired in Task 12
+	Targets       *targets.Registry    // Phase D — wired in Task 9
+	SessionIssuer *auth.SessionIssuer  // Phase E — wired in Task 7
+	Exchanger     *auth.Exchanger      // Phase E — wired in Task 7
+	AuthInfo      AuthInfoConfig       // Phase E — wired in Task 7
+}
+
+// AuthInfoConfig holds the IdP configuration exposed via GET /api/auth/info.
+type AuthInfoConfig struct {
+	OIDCIssuer   string
+	OIDCClientID string
+	CIAudience   string
+	AuthDisabled bool
 }
 
 // NewRouter mounts the generated strict server onto chi with optional auth middleware.

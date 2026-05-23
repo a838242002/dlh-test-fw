@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -28,7 +29,10 @@ type Config struct {
 	AuthDisabled bool
 	// InternalToken is the shared secret for /internal/* endpoints.
 	// Required when auth is enabled.
-	InternalToken string
+	InternalToken     string
+	SessionSigningKey string
+	CITrustedIssuers  []string
+	CIAudience        string
 }
 
 // Load reads env vars and returns a populated Config or an error if any
@@ -51,6 +55,9 @@ func Load() (*Config, error) {
 		ShutdownGrace:        15 * time.Second,
 		AuthDisabled:         os.Getenv("DLH_AUTH_DISABLED") == "true",
 		InternalToken:        os.Getenv("DLH_INTERNAL_TOKEN"),
+		SessionSigningKey:    os.Getenv("DLH_SESSION_SIGNING_KEY"),
+		CITrustedIssuers:     parseCSV(getenv("DLH_CI_TRUSTED_ISSUERS", "https://token.actions.githubusercontent.com")),
+		CIAudience:           getenv("DLH_CI_AUDIENCE", "dlh-controlplane"),
 	}
 	if !c.AuthDisabled {
 		if c.OIDCIssuerURL == "" {
@@ -63,6 +70,9 @@ func Load() (*Config, error) {
 	if !c.AuthDisabled && c.InternalToken == "" {
 		return nil, fmt.Errorf("DLH_INTERNAL_TOKEN is required when auth is enabled")
 	}
+	if !c.AuthDisabled && c.SessionSigningKey == "" {
+		return nil, fmt.Errorf("DLH_SESSION_SIGNING_KEY is required when auth is enabled")
+	}
 	return c, nil
 }
 
@@ -71,4 +81,19 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func parseCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

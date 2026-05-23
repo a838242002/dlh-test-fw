@@ -19,7 +19,7 @@ func rootCmd() *cobra.Command {
 	}
 	root.PersistentFlags().StringVar(&flagEndpoint, "endpoint", endpointDefault(), "Controlplane base URL")
 	root.PersistentFlags().StringVar(&flagToken, "token", tokenDefault(), "OIDC bearer token (or set DLH_TOKEN)")
-	root.AddCommand(runCmd(), runsCmd())
+	root.AddCommand(runCmd(), runsCmd(), loginCmd())
 	return root
 }
 
@@ -31,7 +31,10 @@ func endpointDefault() string {
 }
 
 func tokenDefault() string {
-	return os.Getenv("DLH_TOKEN")
+	if v := os.Getenv("DLH_TOKEN"); v != "" {
+		return v
+	}
+	return loadCachedToken()
 }
 
 

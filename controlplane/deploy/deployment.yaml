@@ -61,6 +61,11 @@ spec:
                 secretKeyRef:
                   name: dlh-internal-token
                   key: token
+            - name: DLH_SESSION_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dlh-session-signing-key
+                  key: key
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits:   { cpu: 500m, memory: 256Mi }

@@ -16,8 +16,9 @@ const (
 )
 
 // Middleware verifies bearer tokens and attaches the identity + role to
-// the request context.
-func Middleware(v VerifierIface, roles *Roles) func(http.Handler) http.Handler {
+// the request context. It accepts controlplane session JWTs (verified locally
+// via HMAC) or OIDC bearer tokens (verified against remote issuer).
+func Middleware(v VerifierIface, roles *Roles, sessionIssuer *SessionIssuer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHdr := r.Header.Get("Authorization")
@@ -26,8 +27,18 @@ func Middleware(v VerifierIface, roles *Roles) func(http.Handler) http.Handler {
 				return
 			}
 			token := strings.TrimPrefix(authHdr, "Bearer ")
-			id, err := v.Verify(r.Context(), token)
-			if err != nil {
+
+			var id *Identity
+			var err error
+			// Try controlplane session JWT first (cheap, local HMAC verify).
+			if sessionIssuer != nil {
+				id, err = sessionIssuer.Verify(token)
+			}
+			// Fall back to OIDC bearer verification.
+			if id == nil {
+				id, err = v.Verify(r.Context(), token)
+			}
+			if err != nil || id == nil {
 				http.Error(w, "invalid token", http.StatusUnauthorized)
 				return
 			}
