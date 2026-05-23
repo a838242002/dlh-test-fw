@@ -69,3 +69,30 @@ func TestLoad_CSVTrustedIssuers(t *testing.T) {
 		t.Errorf("expected 2 issuers, got %v", c.CITrustedIssuers)
 	}
 }
+
+func TestLoad_DeepLinkURLs(t *testing.T) {
+	t.Setenv("DLH_AUTH_DISABLED", "true")
+	t.Setenv("DLH_ARGO_BASE_URL", "https://argo.example.com")
+	t.Setenv("DLH_GRAFANA_BASE_URL", "https://grafana.example.com")
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if c.ArgoBaseURL != "https://argo.example.com" {
+		t.Errorf("ArgoBaseURL = %q", c.ArgoBaseURL)
+	}
+	if c.GrafanaBaseURL != "https://grafana.example.com" {
+		t.Errorf("GrafanaBaseURL = %q", c.GrafanaBaseURL)
+	}
+}
+
+func TestLoad_DeepLinkURLs_DefaultEmpty(t *testing.T) {
+	t.Setenv("DLH_AUTH_DISABLED", "true")
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if c.ArgoBaseURL != "" || c.GrafanaBaseURL != "" {
+		t.Errorf("expected empty deep-link URLs, got argo=%q grafana=%q", c.ArgoBaseURL, c.GrafanaBaseURL)
+	}
+}
