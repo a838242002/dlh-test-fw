@@ -1,8 +1,8 @@
 # Project Conventions — dlh-test-fw
 
-This file is the orientation guide for AI assistants (and humans) joining the project mid-stream. It covers the working conventions used in Phases 1-2; deviate only with a deliberate reason and a commit-message note.
+This file is the orientation guide for AI assistants (and humans) joining the project mid-stream. It covers the working conventions used across Phases 1-2 (platform) and the controlplane migration (Plans 14-19); deviate only with a deliberate reason and a commit-message note.
 
-Last revised: 2026-05-17.
+Last revised: 2026-05-24 (Plan 19 — controlplane Phase F).
 
 ---
 
@@ -10,13 +10,19 @@ Last revised: 2026-05-17.
 
 ```
 helm/dlh-test-fw/                Umbrella Helm chart (the platform itself)
+helm/.../files/workflowtemplates/scenario/   Chart-managed scenario WorkflowTemplates
+                                 (mysql-pod-delete, kafka-broker-partition, doris-be-network-loss — Plan 18)
+controlplane/                    Go service + embedded React UI + dlh CLI (Plans 15-19)
+                                 cmd/{dlh-controlplane,dlh}, internal/{api,auth,config,k8s,minio,model,runs,chaos,targets,schedules}, web/, deploy/
+argocd/                          GitOps manifests: AppProject + ApplicationSet + Applications (Plan 14)
 verdict-job/                     Plan 3's Go binary (SLO verdict)
 fixture-images/                  Per-target build helpers (mysql, kafka, doris, k6 — one Dockerfile each)
-scenarios/                       Argo Workflow YAMLs (one per chaos+load+verdict scenario)
+scenarios/                       Historical standalone Workflow YAMLs — REMOVED in Plan 18; only README.md remains
 targets/                         Minimal target deploys (mysql, kafka, doris) for scenarios
 dashboards/grafana/              Dashboard source-of-truth JSONs
-scripts/                         platform-up / down / verify / run-scenario / minikube-up / verify-templates
+scripts/                         minikube-up.sh only (the rest removed in Plan 18 — see operational model below)
 docs/FINDINGS.md                 Authoritative cross-plan gotchas
+docs/operations/                 Operator runbooks (bootstrap-via-argocd, register-target, ci-integration)
 docs/superpowers/specs/          YYYY-MM-DD-<topic>-design.md  (output of brainstorming)
 docs/superpowers/plans/          YYYY-MM-DD-NN-<feature>.md    (output of writing-plans)
 ```

@@ -10,7 +10,7 @@ with the run's metrics.
 
 ```
                   ┌─────────────────────────────────────────────────────────────┐
-                  │  Argo Workflow (scenarios/<name>.yaml)                      │
+                  │  Argo Workflow (chart-managed WorkflowTemplate)             │
                   │                                                             │
                   │   util/write-slo  →  fixture/*  →  util/ensure-mysql-table  │
                   │   (render SLO CM)    (mc, mysql,    (parameterised CREATE   │
@@ -75,11 +75,14 @@ make k6-image              # custom dlh-k6 (xk6-sql + xk6-kafka + baked runners)
 make platform-up           # helm dependency update + helm upgrade --install dlh ...
 make platform-verify       # in-cluster smoke; expects PASS
 
-# 4. Start the controlplane
-cd controlplane && make ui-build && make build
-DLH_AUTH_DISABLED=true ./dlh-controlplane
+# 4. Build + start the controlplane (binary lands at bin/dlh-controlplane)
+cd controlplane && make ui-build && make build && make cli
+DLH_AUTH_DISABLED=true ./bin/dlh-controlplane &
+# In another shell, point the dlh CLI at it (or rely on the :8080 default):
+#   export DLH_ENDPOINT=http://localhost:8080
+#   export PATH="$PWD/controlplane/bin:$PATH"
 
-# 5. Submit the sample scenarios
+# 5. Submit the sample scenarios (dlh CLI built in step 4)
 dlh run mysql-pod-delete --wait
 dlh run kafka-broker-partition --wait
 ```
@@ -155,8 +158,10 @@ Five dashboards ship by default (sidecar picks them up via
 
 ### Add a new scenario
 
-Look at `scenarios/mysql-pod-delete.yaml` as the reference. A scenario is
-an Argo `Workflow` that composes:
+Look at `helm/dlh-test-fw/files/workflowtemplates/scenario/mysql-pod-delete.yaml`
+as the reference (Plan 18 promoted scenarios from standalone Workflow YAMLs to
+chart-managed `WorkflowTemplate`s, so `dlh run <scenario>` can target them).
+A scenario WorkflowTemplate composes:
 
 1. `util-write-slo` — picks an SLO library entry from `dlh-slos`
    ConfigMap (`pod-delete` or `network-loss`) and renders per-workflow
@@ -164,10 +169,13 @@ an Argo `Workflow` that composes:
 2. (Optional) a fixture step — `fixture-minio-load-{mysql,doris}` or
    `fixture-kafka-topic-seed`.
 3. (mysql only) `util-ensure-mysql-table` — parameterised CREATE TABLE.
-4. `chaos-*` in parallel with `load-k6-run`. Each chaos WT is a script
-   step that submits a Chaos Mesh CR (`Schedule` wrapping `PodChaos` for
-   pod-kill; `NetworkChaos` for loss/partition), polls/sleeps for the
-   chaos window, then deletes the CR.
+4. `chaos-*` in parallel with `load-k6-run`. Each chaos WT builds the
+   chaos CR JSON in a small prep step, then POSTs it to the controlplane's
+   `/internal/chaos?runID=...&targetID=...` endpoint (Argo `http` template),
+   waits the chaos window, and DELETEs the ref on cleanup. The controlplane's
+   chaos Router picks Local vs Remote per the `target_id` parameter (Plans
+   16-17). Every scenario's chaos step must forward `target_id` from
+   `{{workflow.parameters.target_id}}` (FINDINGS Plan 17 #10).
 5. `verdict-slo-eval` — mounts `dlh-slo-<wf>`, queries VM, writes the
    report artifact + VM gauges. Chaos completion signal is the Argo step's
    success — no separate chaos verdict CR read.
@@ -217,24 +225,29 @@ dlh-test-fw/
 │   ├── mysql/   (alpine + mc + mysql client)
 │   ├── doris/   (alpine + mc + curl for Stream Load)
 │   └── k6/      (custom k6 + xk6-sql + xk6-kafka + baked runners — Plan 6)
-├── scenarios/                     # Composed Workflows
-│   ├── mysql-pod-delete.yaml      #   Reference scenario; runs end-to-end
-│   ├── kafka-broker-partition.yaml
-│   └── doris-be-network-loss.yaml #   Deferred (arm64 + memory)
+├── controlplane/                  # Go service + embedded React UI + dlh CLI (Plans 15-19)
+│   ├── cmd/{dlh-controlplane,dlh}/ #   server entry + cobra CLI
+│   ├── api/openapi.yaml           #   single source of truth (oapi-codegen + openapi-typescript)
+│   ├── internal/{api,auth,config,k8s,minio,model,runs,chaos,targets,schedules}/
+│   ├── web/                       #   Vite + React + Tailwind SPA (go:embed)
+│   └── deploy/                    #   k8s manifests (Argo CD directory: source)
+├── argocd/                        # GitOps: AppProject + ApplicationSet + Applications (Plan 14)
 ├── targets/                       # Minimal target deploys for the scenarios
 │   ├── mysql/      (mysql:8, native-password)
 │   ├── kafka/      (apache/kafka:3.7.0 KRaft single-broker)
 │   └── doris/      (deferred — README only)
 ├── dashboards/grafana/            # Dashboard source-of-truth JSONs (history, run-detail, mysql, kafka, doris)
-├── scripts/                       # platform-up/down/verify, run-scenario, verify-templates
+├── scenarios/                     # README only — standalone Workflow YAMLs removed in Plan 18;
+│                                  #   scenarios are now chart-managed WorkflowTemplates
+├── scripts/                       # minikube-up.sh only (platform-*/run-scenario/verify-templates removed, Plan 18)
 ├── docs/
 │   ├── FINDINGS.md                # Authoritative cross-plan gotchas; keep reading
+│   ├── operations/                # Operator runbooks (bootstrap-via-argocd, register-target, ci-integration)
 │   └── superpowers/
-│       ├── specs/                 # Phase design docs (incl. 2026-05-18 scenario optimization)
+│       ├── specs/                 # Phase design docs (incl. controlplane architecture)
 │       └── plans/                 # Implementation plans (one per executable unit)
-├── scripts/                       # platform-up/down/verify, run-scenario, minikube-up, verify-templates
 ├── CLAUDE.md                      # Project conventions (worktree, branching, image reload)
-└── Makefile                       # Top-level targets (platform-*, run-mysql, run-kafka, k6-image, ...)
+└── Makefile                       # Top-level targets (platform-* helm wrappers, run-mysql/kafka, k6-image, ...)
 ```
 
 ---
