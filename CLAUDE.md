@@ -226,6 +226,12 @@ Fake tokens for `DLH_AUTH_DISABLED=true` mode:
   (`pnpm test`); everything else is gated by `pnpm build`.
 - shadcn deps are pnpm-managed — adding components updates `pnpm-lock.yaml`,
   which MUST be committed (CI's `make ui-build` uses `--frozen-lockfile`).
+- UI optimization pass (Plan `2026-05-23-01`): refined top-nav (icons + active
+  pill, `max-w-7xl`), Runs filter bar (search/status/category/time/failed-only)
+  + Duration/Verdict columns (Verdict derived from `Run.score` 1/0/null), grouped
+  Scenarios by derived category, redesigned Run detail (meta strip, verdict-first,
+  Argo group-node steps hidden). Pure logic in `src/lib/{time,category,run,runsFilter,steps,format}.ts`
+  is Vitest-tested. `deriveCategory`/`deriveTargetType` are heuristic on scenario id.
 
 ## Image build + minikube reload
 
