@@ -109,3 +109,55 @@ func TestValidateName(t *testing.T) {
 		}
 	}
 }
+
+func TestList_EmptyNamespace(t *testing.T) {
+	m := &Manager{Argo: wfake.NewSimpleClientset(), Namespace: "dlh-test-fw"}
+	got, err := m.List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty, got %d", len(got))
+	}
+}
+
+func TestGet_NotFound(t *testing.T) {
+	m := &Manager{Argo: wfake.NewSimpleClientset(), Namespace: "dlh-test-fw"}
+	_, err := m.Get(context.Background(), "nope")
+	if err != ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestDelete_IdempotentOnMissing(t *testing.T) {
+	m := &Manager{Argo: wfake.NewSimpleClientset(), Namespace: "dlh-test-fw"}
+	if err := m.Delete(context.Background(), "nope"); err != nil {
+		t.Errorf("expected nil for missing, got %v", err)
+	}
+}
+
+func TestCreate_ListGetDelete_Roundtrip(t *testing.T) {
+	tmpl := &wfv1.WorkflowTemplate{ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: "dlh-test-fw"}}
+	argo := wfake.NewSimpleClientset(tmpl)
+	m := &Manager{Argo: argo, Namespace: "dlh-test-fw"}
+	_, err := m.Create(context.Background(), CreateRequest{
+		Name: "nightly", ScenarioID: "mysql-pod-delete", Cron: "0 2 * * *",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	list, _ := m.List(context.Background())
+	if len(list) != 1 || list[0].Name != "nightly" {
+		t.Errorf("list: %+v", list)
+	}
+	got, _ := m.Get(context.Background(), "nightly")
+	if got == nil || got.Name != "nightly" {
+		t.Errorf("get: %+v", got)
+	}
+	if err := m.Delete(context.Background(), "nightly"); err != nil {
+		t.Errorf("delete: %v", err)
+	}
+	if _, err := m.Get(context.Background(), "nightly"); err != ErrNotFound {
+		t.Errorf("expected ErrNotFound after delete, got %v", err)
+	}
+}

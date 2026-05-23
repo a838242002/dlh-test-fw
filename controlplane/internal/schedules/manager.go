@@ -126,3 +126,36 @@ func validateName(name string) error {
 	}
 	return nil
 }
+
+// ErrNotFound is returned by Get / Pause / Resume when the schedule doesn't exist.
+var ErrNotFound = fmt.Errorf("schedule not found")
+
+// List returns all schedules in the namespace.
+func (m *Manager) List(ctx context.Context) ([]wfv1.CronWorkflow, error) {
+	list, err := m.Argo.ArgoprojV1alpha1().CronWorkflows(m.Namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list cronworkflows: %w", err)
+	}
+	return list.Items, nil
+}
+
+// Get returns the CronWorkflow or ErrNotFound.
+func (m *Manager) Get(ctx context.Context, name string) (*wfv1.CronWorkflow, error) {
+	got, err := m.Argo.ArgoprojV1alpha1().CronWorkflows(m.Namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return got, nil
+}
+
+// Delete removes the schedule. Idempotent — returns nil if already gone.
+func (m *Manager) Delete(ctx context.Context, name string) error {
+	err := m.Argo.ArgoprojV1alpha1().CronWorkflows(m.Namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
