@@ -150,3 +150,24 @@ func TestCreateRun_404OnUnknownScenario(t *testing.T) {
 		t.Fatalf("expected 404, got %T", resp)
 	}
 }
+
+func TestGetAuthInfo_PopulatesFromDeps(t *testing.T) {
+	deps := &Deps{AuthInfo: AuthInfoConfig{
+		OIDCIssuer:   "https://issuer.example.com",
+		OIDCClientID: "client-x",
+		CIAudience:   "aud-y",
+		AuthDisabled: false,
+	}}
+	h := &Handlers{deps: deps}
+	resp, err := h.GetAuthInfo(context.Background(), gen.GetAuthInfoRequestObject{})
+	if err != nil {
+		t.Fatalf("GetAuthInfo: %v", err)
+	}
+	out, ok := resp.(gen.GetAuthInfo200JSONResponse)
+	if !ok {
+		t.Fatalf("response type: %T", resp)
+	}
+	if out.OidcIssuer != "https://issuer.example.com" || out.OidcClientId != "client-x" {
+		t.Errorf("info: %+v", out)
+	}
+}
