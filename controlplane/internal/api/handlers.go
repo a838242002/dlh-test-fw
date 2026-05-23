@@ -11,6 +11,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/auth"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/model"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
@@ -82,7 +83,9 @@ func (h *Handlers) GetRun(ctx context.Context, req gen.GetRunRequestObject) (gen
 		// Workflow CR not found — fall back to MinIO manifest (TTL-collected case).
 		if h.deps.Manifests != nil {
 			if m, mErr := h.deps.Manifests.Read(ctx, req.Id); mErr == nil && m != nil {
-				return gen.GetRun200JSONResponse(runDetailFromManifest(*m)), nil
+				d := runDetailFromManifest(*m)
+				h.addLinks(&d)
+				return gen.GetRun200JSONResponse(d), nil
 			}
 		}
 		return gen.GetRun404Response{}, nil
@@ -96,6 +99,7 @@ func (h *Handlers) GetRun(ctx context.Context, req gen.GetRunRequestObject) (gen
 		// useful without verdict.
 		_ = err
 	}
+	h.addLinks(&detail)
 	return gen.GetRun200JSONResponse(detail), nil
 }
 
@@ -244,6 +248,33 @@ func (h *Handlers) TestTargetConnection(ctx context.Context, req gen.TestTargetC
 		LatencyNanos: &latencyNanos,
 		Error:        &errStr,
 	}, nil
+}
+
+// grafanaEntry aliases the anonymous element type of gen.RunDetail.GrafanaUrls
+// so we can build the slice readably.
+type grafanaEntry = struct {
+	Label string `json:"label"`
+	Url   string `json:"url"`
+}
+
+// addLinks enriches a RunDetail with Argo/Grafana deep links from configured
+// base URLs. No-op for any link whose base URL is unset.
+func (h *Handlers) addLinks(d *gen.RunDetail) {
+	lc := h.deps.Links
+	wfName := ""
+	if d.WorkflowName != nil {
+		wfName = *d.WorkflowName
+	}
+	if u := links.ArgoURL(lc.ArgoBaseURL, lc.Namespace, wfName); u != "" {
+		d.ArgoUrl = &u
+	}
+	if urls := links.GrafanaURLs(lc.GrafanaBaseURL, d.Scenario, d.StartedAt, d.FinishedAt); len(urls) > 0 {
+		arr := make([]grafanaEntry, 0, len(urls))
+		for _, u := range urls {
+			arr = append(arr, grafanaEntry{Label: u.Label, Url: u.URL})
+		}
+		d.GrafanaUrls = &arr
+	}
 }
 
 // runDetailFromManifest builds a RunDetail from a stored MinIO manifest.
