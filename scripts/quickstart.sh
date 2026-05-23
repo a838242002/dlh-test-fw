@@ -114,9 +114,32 @@ preflight() {
   log_ok "preflight passed (context: $ctx)"
 }
 
+step_crds() {
+  if kubectl get crd podchaos.chaos-mesh.org >/dev/null 2>&1; then
+    log_skip 1 "Pre-install CRDs" "chaos-mesh CRDs already present"
+    return 0
+  fi
+  log_step 1 "Pre-installing CRDs (server-side apply)"
+  helm dependency update helm/dlh-test-fw >/dev/null
+  helm template dlh helm/dlh-test-fw \
+    -f helm/dlh-test-fw/values.yaml \
+    -f helm/dlh-test-fw/values-minikube.yaml \
+    --include-crds \
+    | awk '/^---/{p=0} /kind: CustomResourceDefinition/{p=1} p{print}' \
+    > /tmp/dlh-crds.yaml
+  kubectl apply --server-side --force-conflicts -f /tmp/dlh-crds.yaml
+  kubectl wait --for=condition=Established crd --all --timeout=120s
+  kubectl label -f /tmp/dlh-crds.yaml app.kubernetes.io/managed-by=Helm --overwrite
+  kubectl annotate -f /tmp/dlh-crds.yaml \
+    meta.helm.sh/release-name=dlh \
+    meta.helm.sh/release-namespace=dlh-test-fw --overwrite
+  log_ok "CRDs installed and stamped for Helm ownership"
+}
+
 main() {
   printf '%sQuickstart: running minikube → green VERDICT: PASS%s\n' "$C_BLUE" "$C_RESET"
   preflight
+  step_crds
 }
 
 main "$@"
