@@ -1,30 +1,49 @@
 import { useEffect, useState } from "react";
-import { Routes, Route, Link } from "react-router-dom";
+import { Routes, Route, NavLink } from "react-router-dom";
+import { Moon, Sun } from "lucide-react";
 import { ScenariosPage } from "./pages/ScenariosPage";
 import { RunsPage } from "./pages/RunsPage";
 import { RunDetailPage } from "./pages/RunDetailPage";
 import { TargetsPage } from "./pages/TargetsPage";
 import { SchedulesPage } from "./pages/SchedulesPage";
 import { setAuthToken } from "./api/client";
+import { useTheme } from "@/lib/theme";
+import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-// Token key used by `dlh login` (session exchange) and the dev fake-token path.
 const TOKEN_KEY = "dlh-token";
+const FAKE_TOKEN = "fake:admin:admin@local:dlh-admin";
+
+const NAV = [
+  { to: "/runs", label: "Runs" },
+  { to: "/scenarios", label: "Scenarios" },
+  { to: "/targets", label: "Targets" },
+  { to: "/schedules", label: "Schedules" },
+];
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  return (
+    <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
+      {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </Button>
+  );
+}
 
 export default function App() {
   const [ready, setReady] = useState(false);
   const [authErr, setAuthErr] = useState<string | null>(null);
+  const [identity, setIdentity] = useState<string>("");
 
   useEffect(() => {
     fetch("/api/auth/info")
       .then((r) => r.json())
       .then((info: { authDisabled?: boolean }) => {
         if (info.authDisabled) {
-          // DLH_AUTH_DISABLED=true: inject a fake token so the middleware is
-          // satisfied without a real OIDC flow.
-          setAuthToken("fake:admin:admin@local:dlh-admin");
+          setAuthToken(FAKE_TOKEN);
+          setIdentity("admin@local");
         } else {
-          // Production: look for a session token stored by `dlh login` /
-          // the POST /api/auth/exchange flow.
           const tok = localStorage.getItem(TOKEN_KEY);
           if (tok) {
             setAuthToken(tok);
@@ -40,8 +59,8 @@ export default function App() {
 
   if (authErr) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <p className="max-w-md rounded border border-rose-200 bg-rose-50 px-6 py-4 text-rose-800">
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="max-w-md rounded border border-destructive/40 bg-destructive/10 px-6 py-4 text-destructive">
           {authErr}
         </p>
       </div>
@@ -50,21 +69,37 @@ export default function App() {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <p className="text-slate-500">Connecting…</p>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-muted-foreground">Connecting…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <nav className="mx-auto flex max-w-6xl gap-4 px-6 py-3 text-sm">
-          <Link to="/" className="font-semibold">dlh-controlplane</Link>
-          <Link to="/scenarios" className="text-slate-600 hover:text-slate-900">Scenarios</Link>
-          <Link to="/runs" className="text-slate-600 hover:text-slate-900">Runs</Link>
-          <Link to="/targets" className="text-slate-600 hover:text-slate-900">Targets</Link>
-          <Link to="/schedules" className="text-slate-600 hover:text-slate-900">Schedules</Link>
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b bg-card">
+        <nav className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-3 text-sm">
+          <span className="font-semibold text-primary">◆ dlh</span>
+          {NAV.map((n) => (
+            <NavLink
+              key={n.to}
+              to={n.to}
+              className={({ isActive }) =>
+                cn(
+                  "border-b-2 pb-0.5 transition-colors",
+                  isActive
+                    ? "border-primary font-medium text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )
+              }
+            >
+              {n.label}
+            </NavLink>
+          ))}
+          <div className="ml-auto flex items-center gap-3">
+            {identity && <span className="text-xs text-muted-foreground">{identity}</span>}
+            <ThemeToggle />
+          </div>
         </nav>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">
@@ -77,6 +112,7 @@ export default function App() {
           <Route path="/schedules" element={<SchedulesPage />} />
         </Routes>
       </main>
+      <Toaster />
     </div>
   );
 }

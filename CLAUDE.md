@@ -213,6 +213,20 @@ Fake tokens for `DLH_AUTH_DISABLED=true` mode:
   Workflow has a CronWorkflow owner reference; UI links to /schedules.
 - Role extended to grant cronworkflows alongside workflows verbs.
 
+### controlplane UI refresh
+
+- `controlplane/web` uses **shadcn/ui** primitives (vendored in `src/components/ui/`)
+  + a dark-default indigo theme with a light toggle (`src/lib/theme.tsx`,
+  persisted under `localStorage["dlh-theme"]`).
+- Runs is a dashboard landing: stat cards computed client-side
+  (`src/lib/stats.ts`) + a polling (5s) runs table.
+- Verdict rendering is `src/components/VerdictView.tsx` driven by
+  `src/lib/verdict.ts` (parses the verdict-job `report.json` `overall` +
+  `thresholds`). Pure logic in `src/lib/` is unit-tested with **Vitest**
+  (`pnpm test`); everything else is gated by `pnpm build`.
+- shadcn deps are pnpm-managed — adding components updates `pnpm-lock.yaml`,
+  which MUST be committed (CI's `make ui-build` uses `--frozen-lockfile`).
+
 ## Image build + minikube reload
 
 We have three local images (`dlh-verdict`, `dlh-k6`, plus the three fixture images). They live at `ghcr.io/dlh/*:<tag>` but are never pushed — they're built locally and `minikube image load`-ed.
