@@ -174,6 +174,24 @@ step_cli() {
   export PATH="$REPO_ROOT/controlplane/bin:$PATH"
 }
 
+step_seed_minio() {
+  log_step 6 "Seeding the MinIO mysql fixture"
+  local user pass
+  user="$(kubectl -n "$NS" get secret minio-root-credentials -o jsonpath='{.data.root-user}' | base64 -d)"
+  pass="$(kubectl -n "$NS" get secret minio-root-credentials -o jsonpath='{.data.root-password}' | base64 -d)"
+
+  port_forward dlh-minio 9000 9000
+  mc alias set dlh-local "http://localhost:9000" "$user" "$pass" >/dev/null
+
+  if mc stat dlh-local/fixtures/mysql-users.sql >/dev/null 2>&1; then
+    log_skip 6 "Seeding the MinIO mysql fixture" "object already present"
+    return 0
+  fi
+  mc mb --ignore-existing dlh-local/fixtures >/dev/null
+  mc cp fixtures/mysql-users.sql dlh-local/fixtures/mysql-users.sql
+  log_ok "fixture seeded to dlh-local/fixtures/mysql-users.sql"
+}
+
 step_crds() {
   if kubectl get crd podchaos.chaos-mesh.org >/dev/null 2>&1; then
     log_skip 1 "Pre-install CRDs" "chaos-mesh CRDs already present"
@@ -204,6 +222,7 @@ main() {
   step_platform
   step_controlplane
   step_cli
+  step_seed_minio
 }
 
 main "$@"
