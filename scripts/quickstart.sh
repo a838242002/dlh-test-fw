@@ -145,6 +145,16 @@ step_images() {
   log_ok "images ready"
 }
 
+step_platform() {
+  log_step 3 "Installing the platform (helm upgrade --install)"
+  helm dependency update helm/dlh-test-fw >/dev/null
+  helm upgrade --install dlh helm/dlh-test-fw \
+    -f helm/dlh-test-fw/values.yaml \
+    -f helm/dlh-test-fw/values-minikube.yaml \
+    --namespace "$NS" --create-namespace --wait --timeout 5m
+  log_ok "platform installed"
+}
+
 step_crds() {
   if kubectl get crd podchaos.chaos-mesh.org >/dev/null 2>&1; then
     log_skip 1 "Pre-install CRDs" "chaos-mesh CRDs already present"
@@ -172,6 +182,7 @@ main() {
   preflight
   step_crds
   step_images
+  step_platform
 }
 
 main "$@"
