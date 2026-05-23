@@ -45,6 +45,14 @@ export function RunDetailPage() {
         <h1 className="text-xl font-semibold">{run.id}</h1>
         <StatusBadge status={status} />
         {run.target && <span className="text-xs text-slate-500">target: {run.target}</span>}
+        {run.triggeredBy?.id && (
+          <a
+            href={`/schedules`}
+            className="text-xs text-blue-700 hover:underline"
+          >
+            Triggered by schedule: {run.triggeredBy.id}
+          </a>
+        )}
       </header>
       <div>
         <h2 className="mb-2 font-medium">Scenario</h2>

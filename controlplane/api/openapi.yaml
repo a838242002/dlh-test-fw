@@ -395,6 +395,12 @@ components:
         score:      { type: number, format: double, nullable: true }
         workflowName: { type: string }
         target:       { type: string, description: "Remote target ID (Run was injected into a remote cluster). Empty = local." }
+        triggeredBy:
+          type: object
+          description: "Set when the run was fired by a Schedule (CronWorkflow)."
+          properties:
+            kind: { type: string, example: "Schedule" }
+            id:   { type: string, description: "Schedule id (CronWorkflow name)" }
     RunDetail:
       allOf:
         - $ref: "#/components/schemas/Run"
@@ -430,6 +436,12 @@ components:
             target:
               type: string
               description: "Remote target ID (Run was injected into a remote cluster). Empty = local."
+            triggeredBy:
+              type: object
+              description: "Set when the run was fired by a Schedule (CronWorkflow)."
+              properties:
+                kind: { type: string, example: "Schedule" }
+                id:   { type: string, description: "Schedule id (CronWorkflow name)" }
     CreateRunRequest:
       type: object
       required: [scenarioId]

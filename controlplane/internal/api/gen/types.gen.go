@@ -125,7 +125,14 @@ type Run struct {
 	Status     RunStatus  `json:"status"`
 
 	// Target Remote target ID (Run was injected into a remote cluster). Empty = local.
-	Target       *string `json:"target,omitempty"`
+	Target *string `json:"target,omitempty"`
+
+	// TriggeredBy Set when the run was fired by a Schedule (CronWorkflow).
+	TriggeredBy *struct {
+		// Id Schedule id (CronWorkflow name)
+		Id   *string `json:"id,omitempty"`
+		Kind *string `json:"kind,omitempty"`
+	} `json:"triggeredBy,omitempty"`
 	WorkflowName *string `json:"workflowName,omitempty"`
 }
 
@@ -155,6 +162,13 @@ type RunDetail struct {
 
 	// Target Remote target ID (Run was injected into a remote cluster). Empty = local.
 	Target *string `json:"target,omitempty"`
+
+	// TriggeredBy Set when the run was fired by a Schedule (CronWorkflow).
+	TriggeredBy *struct {
+		// Id Schedule id (CronWorkflow name)
+		Id   *string `json:"id,omitempty"`
+		Kind *string `json:"kind,omitempty"`
+	} `json:"triggeredBy,omitempty"`
 
 	// Verdict Decoded from MinIO report.json. Absent if no report yet.
 	Verdict      *map[string]interface{} `json:"verdict"`

@@ -328,6 +328,13 @@ export interface components {
             workflowName?: string;
             /** @description Remote target ID (Run was injected into a remote cluster). Empty = local. */
             target?: string;
+            /** @description Set when the run was fired by a Schedule (CronWorkflow). */
+            triggeredBy?: {
+                /** @example Schedule */
+                kind?: string;
+                /** @description Schedule id (CronWorkflow name) */
+                id?: string;
+            };
         };
         RunDetail: components["schemas"]["Run"] & {
             parameters?: {
@@ -352,6 +359,13 @@ export interface components {
             }[];
             /** @description Remote target ID (Run was injected into a remote cluster). Empty = local. */
             target?: string;
+            /** @description Set when the run was fired by a Schedule (CronWorkflow). */
+            triggeredBy?: {
+                /** @example Schedule */
+                kind?: string;
+                /** @description Schedule id (CronWorkflow name) */
+                id?: string;
+            };
         };
         CreateRunRequest: {
             /** @description WorkflowTemplate name (e.g. mysql-pod-delete) */
