@@ -72,6 +72,27 @@ type CreateRunRequest struct {
 	TargetId *string `json:"targetId,omitempty"`
 }
 
+// CreateScheduleRequest defines model for CreateScheduleRequest.
+type CreateScheduleRequest struct {
+	// Cron Standard 5-field cron expression.
+	Cron string `json:"cron"`
+
+	// Id Schedule identifier. Lowercase alphanumeric + '-' + '.' (k8s name rules).
+	Id string `json:"id"`
+
+	// Parameters Optional WorkflowTemplate parameter overrides.
+	Parameters *map[string]string `json:"parameters,omitempty"`
+
+	// ScenarioId WorkflowTemplate name (e.g. mysql-pod-delete)
+	ScenarioId string `json:"scenarioId"`
+
+	// TargetId Optional remote target ID. Empty = framework cluster.
+	TargetId *string `json:"targetId,omitempty"`
+
+	// Timezone IANA tz name (e.g. Asia/Tokyo). Empty = UTC.
+	Timezone *string `json:"timezone,omitempty"`
+}
+
 // ExchangeRequest defines model for ExchangeRequest.
 type ExchangeRequest struct {
 	// Token External OIDC token (GH Actions JWT, etc.)
@@ -158,6 +179,22 @@ type Scenario struct {
 	TargetType *string `json:"targetType,omitempty"`
 }
 
+// Schedule defines model for Schedule.
+type Schedule struct {
+	ActiveCount     *int32             `json:"activeCount,omitempty"`
+	CreatedBy       *string            `json:"createdBy,omitempty"`
+	Cron            string             `json:"cron"`
+	FailedCount     *int64             `json:"failedCount,omitempty"`
+	Id              string             `json:"id"`
+	LastScheduledAt *time.Time         `json:"lastScheduledAt,omitempty"`
+	Parameters      *map[string]string `json:"parameters,omitempty"`
+	Scenario        string             `json:"scenario"`
+	SuccessfulCount *int64             `json:"successfulCount,omitempty"`
+	Suspended       *bool              `json:"suspended,omitempty"`
+	Target          *string            `json:"target,omitempty"`
+	Timezone        *string            `json:"timezone,omitempty"`
+}
+
 // Target defines model for Target.
 type Target struct {
 	AllowedTargetTypes *[]string `json:"allowedTargetTypes,omitempty"`
@@ -184,6 +221,9 @@ type OidcExchangeJSONRequestBody = ExchangeRequest
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = CreateRunRequest
+
+// CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
+type CreateScheduleJSONRequestBody = CreateScheduleRequest
 
 // CreateChaosJSONRequestBody defines body for CreateChaos for application/json ContentType.
 type CreateChaosJSONRequestBody = ChaosResource

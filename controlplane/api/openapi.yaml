@@ -269,6 +269,92 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuthInfo" }
+  /api/schedules:
+    get:
+      operationId: listSchedules
+      responses:
+        "200":
+          description: list of schedules
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Schedule" }
+    post:
+      operationId: createSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateScheduleRequest" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schedule" }
+        "400":
+          description: invalid request
+        "404":
+          description: scenario not found
+        "409":
+          description: schedule already exists
+  /api/schedules/{id}:
+    get:
+      operationId: getSchedule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: schedule detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schedule" }
+        "404":
+          description: not found
+    delete:
+      operationId: deleteSchedule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: deleted (or already gone)
+  /api/schedules/{id}/pause:
+    post:
+      operationId: pauseSchedule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: paused
+        "404":
+          description: not found
+  /api/schedules/{id}/resume:
+    post:
+      operationId: resumeSchedule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: resumed
+        "404":
+          description: not found
 components:
   securitySchemes:
     bearerAuth:
@@ -426,5 +512,46 @@ components:
         oidcClientId:  { type: string }
         ciAudience:    { type: string, description: "Audience CI workflows should request when minting OIDC tokens" }
         authDisabled:  { type: boolean }
+    Schedule:
+      type: object
+      required: [id, scenario, cron]
+      properties:
+        id:                { type: string }
+        scenario:          { type: string }
+        target:            { type: string }
+        cron:              { type: string }
+        timezone:          { type: string }
+        suspended:         { type: boolean }
+        createdBy:         { type: string }
+        lastScheduledAt:   { type: string, format: date-time }
+        activeCount:       { type: integer, format: int32 }
+        successfulCount:   { type: integer, format: int64 }
+        failedCount:       { type: integer, format: int64 }
+        parameters:
+          type: object
+          additionalProperties: { type: string }
+    CreateScheduleRequest:
+      type: object
+      required: [id, scenarioId, cron]
+      properties:
+        id:
+          type: string
+          description: "Schedule identifier. Lowercase alphanumeric + '-' + '.' (k8s name rules)."
+        scenarioId:
+          type: string
+          description: "WorkflowTemplate name (e.g. mysql-pod-delete)"
+        targetId:
+          type: string
+          description: "Optional remote target ID. Empty = framework cluster."
+        cron:
+          type: string
+          description: "Standard 5-field cron expression."
+        timezone:
+          type: string
+          description: "IANA tz name (e.g. Asia/Tokyo). Empty = UTC."
+        parameters:
+          type: object
+          description: "Optional WorkflowTemplate parameter overrides."
+          additionalProperties: { type: string }
 security:
   - bearerAuth: []

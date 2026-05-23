@@ -52,6 +52,24 @@ type ServerInterface interface {
 	// (GET /api/scenarios/{id})
 	GetScenario(w http.ResponseWriter, r *http.Request, id string)
 
+	// (GET /api/schedules)
+	ListSchedules(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/schedules)
+	CreateSchedule(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /api/schedules/{id})
+	DeleteSchedule(w http.ResponseWriter, r *http.Request, id string)
+
+	// (GET /api/schedules/{id})
+	GetSchedule(w http.ResponseWriter, r *http.Request, id string)
+
+	// (POST /api/schedules/{id}/pause)
+	PauseSchedule(w http.ResponseWriter, r *http.Request, id string)
+
+	// (POST /api/schedules/{id}/resume)
+	ResumeSchedule(w http.ResponseWriter, r *http.Request, id string)
+
 	// (GET /api/targets)
 	ListTargets(w http.ResponseWriter, r *http.Request)
 
@@ -120,6 +138,36 @@ func (_ Unimplemented) ListScenarios(w http.ResponseWriter, r *http.Request) {
 
 // (GET /api/scenarios/{id})
 func (_ Unimplemented) GetScenario(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /api/schedules)
+func (_ Unimplemented) ListSchedules(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /api/schedules)
+func (_ Unimplemented) CreateSchedule(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (DELETE /api/schedules/{id})
+func (_ Unimplemented) DeleteSchedule(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /api/schedules/{id})
+func (_ Unimplemented) GetSchedule(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /api/schedules/{id}/pause)
+func (_ Unimplemented) PauseSchedule(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /api/schedules/{id}/resume)
+func (_ Unimplemented) ResumeSchedule(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -415,6 +463,170 @@ func (siw *ServerInterfaceWrapper) GetScenario(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetScenario(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSchedules operation middleware
+func (siw *ServerInterfaceWrapper) ListSchedules(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSchedules(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSchedule operation middleware
+func (siw *ServerInterfaceWrapper) CreateSchedule(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSchedule(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSchedule operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSchedule(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSchedule operation middleware
+func (siw *ServerInterfaceWrapper) GetSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSchedule(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PauseSchedule operation middleware
+func (siw *ServerInterfaceWrapper) PauseSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PauseSchedule(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeSchedule operation middleware
+func (siw *ServerInterfaceWrapper) ResumeSchedule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeSchedule(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -726,6 +938,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/api/scenarios/{id}", wrapper.GetScenario)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/schedules", wrapper.ListSchedules)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/schedules", wrapper.CreateSchedule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/schedules/{id}", wrapper.DeleteSchedule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/schedules/{id}", wrapper.GetSchedule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/schedules/{id}/pause", wrapper.PauseSchedule)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/schedules/{id}/resume", wrapper.ResumeSchedule)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/targets", wrapper.ListTargets)
 	})
 	r.Group(func(r chi.Router) {
@@ -970,6 +1200,154 @@ func (response GetScenario404Response) VisitGetScenarioResponse(w http.ResponseW
 	return nil
 }
 
+type ListSchedulesRequestObject struct {
+}
+
+type ListSchedulesResponseObject interface {
+	VisitListSchedulesResponse(w http.ResponseWriter) error
+}
+
+type ListSchedules200JSONResponse struct {
+	Items []Schedule `json:"items"`
+}
+
+func (response ListSchedules200JSONResponse) VisitListSchedulesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateScheduleRequestObject struct {
+	Body *CreateScheduleJSONRequestBody
+}
+
+type CreateScheduleResponseObject interface {
+	VisitCreateScheduleResponse(w http.ResponseWriter) error
+}
+
+type CreateSchedule201JSONResponse Schedule
+
+func (response CreateSchedule201JSONResponse) VisitCreateScheduleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateSchedule400Response struct {
+}
+
+func (response CreateSchedule400Response) VisitCreateScheduleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CreateSchedule404Response struct {
+}
+
+func (response CreateSchedule404Response) VisitCreateScheduleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type CreateSchedule409Response struct {
+}
+
+func (response CreateSchedule409Response) VisitCreateScheduleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(409)
+	return nil
+}
+
+type DeleteScheduleRequestObject struct {
+	Id string `json:"id"`
+}
+
+type DeleteScheduleResponseObject interface {
+	VisitDeleteScheduleResponse(w http.ResponseWriter) error
+}
+
+type DeleteSchedule204Response struct {
+}
+
+func (response DeleteSchedule204Response) VisitDeleteScheduleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type GetScheduleRequestObject struct {
+	Id string `json:"id"`
+}
+
+type GetScheduleResponseObject interface {
+	VisitGetScheduleResponse(w http.ResponseWriter) error
+}
+
+type GetSchedule200JSONResponse Schedule
+
+func (response GetSchedule200JSONResponse) VisitGetScheduleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetSchedule404Response struct {
+}
+
+func (response GetSchedule404Response) VisitGetScheduleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type PauseScheduleRequestObject struct {
+	Id string `json:"id"`
+}
+
+type PauseScheduleResponseObject interface {
+	VisitPauseScheduleResponse(w http.ResponseWriter) error
+}
+
+type PauseSchedule204Response struct {
+}
+
+func (response PauseSchedule204Response) VisitPauseScheduleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PauseSchedule404Response struct {
+}
+
+func (response PauseSchedule404Response) VisitPauseScheduleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type ResumeScheduleRequestObject struct {
+	Id string `json:"id"`
+}
+
+type ResumeScheduleResponseObject interface {
+	VisitResumeScheduleResponse(w http.ResponseWriter) error
+}
+
+type ResumeSchedule204Response struct {
+}
+
+func (response ResumeSchedule204Response) VisitResumeScheduleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ResumeSchedule404Response struct {
+}
+
+func (response ResumeSchedule404Response) VisitResumeScheduleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 type ListTargetsRequestObject struct {
 }
 
@@ -1170,6 +1548,24 @@ type StrictServerInterface interface {
 
 	// (GET /api/scenarios/{id})
 	GetScenario(ctx context.Context, request GetScenarioRequestObject) (GetScenarioResponseObject, error)
+
+	// (GET /api/schedules)
+	ListSchedules(ctx context.Context, request ListSchedulesRequestObject) (ListSchedulesResponseObject, error)
+
+	// (POST /api/schedules)
+	CreateSchedule(ctx context.Context, request CreateScheduleRequestObject) (CreateScheduleResponseObject, error)
+
+	// (DELETE /api/schedules/{id})
+	DeleteSchedule(ctx context.Context, request DeleteScheduleRequestObject) (DeleteScheduleResponseObject, error)
+
+	// (GET /api/schedules/{id})
+	GetSchedule(ctx context.Context, request GetScheduleRequestObject) (GetScheduleResponseObject, error)
+
+	// (POST /api/schedules/{id}/pause)
+	PauseSchedule(ctx context.Context, request PauseScheduleRequestObject) (PauseScheduleResponseObject, error)
+
+	// (POST /api/schedules/{id}/resume)
+	ResumeSchedule(ctx context.Context, request ResumeScheduleRequestObject) (ResumeScheduleResponseObject, error)
 
 	// (GET /api/targets)
 	ListTargets(ctx context.Context, request ListTargetsRequestObject) (ListTargetsResponseObject, error)
@@ -1462,6 +1858,165 @@ func (sh *strictHandler) GetScenario(w http.ResponseWriter, r *http.Request, id 
 	}
 }
 
+// ListSchedules operation middleware
+func (sh *strictHandler) ListSchedules(w http.ResponseWriter, r *http.Request) {
+	var request ListSchedulesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSchedules(ctx, request.(ListSchedulesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSchedules")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSchedulesResponseObject); ok {
+		if err := validResponse.VisitListSchedulesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSchedule operation middleware
+func (sh *strictHandler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
+	var request CreateScheduleRequestObject
+
+	var body CreateScheduleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSchedule(ctx, request.(CreateScheduleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSchedule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateScheduleResponseObject); ok {
+		if err := validResponse.VisitCreateScheduleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSchedule operation middleware
+func (sh *strictHandler) DeleteSchedule(w http.ResponseWriter, r *http.Request, id string) {
+	var request DeleteScheduleRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSchedule(ctx, request.(DeleteScheduleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSchedule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteScheduleResponseObject); ok {
+		if err := validResponse.VisitDeleteScheduleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSchedule operation middleware
+func (sh *strictHandler) GetSchedule(w http.ResponseWriter, r *http.Request, id string) {
+	var request GetScheduleRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSchedule(ctx, request.(GetScheduleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSchedule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetScheduleResponseObject); ok {
+		if err := validResponse.VisitGetScheduleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PauseSchedule operation middleware
+func (sh *strictHandler) PauseSchedule(w http.ResponseWriter, r *http.Request, id string) {
+	var request PauseScheduleRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PauseSchedule(ctx, request.(PauseScheduleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PauseSchedule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PauseScheduleResponseObject); ok {
+		if err := validResponse.VisitPauseScheduleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResumeSchedule operation middleware
+func (sh *strictHandler) ResumeSchedule(w http.ResponseWriter, r *http.Request, id string) {
+	var request ResumeScheduleRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResumeSchedule(ctx, request.(ResumeScheduleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResumeSchedule")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResumeScheduleResponseObject); ok {
+		if err := validResponse.VisitResumeScheduleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListTargets operation middleware
 func (sh *strictHandler) ListTargets(w http.ResponseWriter, r *http.Request) {
 	var request ListTargetsRequestObject
@@ -1646,45 +2201,51 @@ func (sh *strictHandler) GetReadyz(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"y8Jkmqyv1/8LAAD///Mm+PCeJgAA",
+	"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",
+	"X/ylURoyAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

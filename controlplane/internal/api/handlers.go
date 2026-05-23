@@ -271,3 +271,23 @@ func (h *Handlers) OidcExchange(ctx context.Context, req gen.OidcExchangeRequest
 func (h *Handlers) GetAuthInfo(_ context.Context, _ gen.GetAuthInfoRequestObject) (gen.GetAuthInfoResponseObject, error) {
 	return h.handleAuthInfo(), nil
 }
+
+// Phase F stubs. Real implementations in Task 6.
+func (h *Handlers) ListSchedules(_ context.Context, _ gen.ListSchedulesRequestObject) (gen.ListSchedulesResponseObject, error) {
+	return gen.ListSchedules200JSONResponse{Items: []gen.Schedule{}}, nil
+}
+func (h *Handlers) CreateSchedule(_ context.Context, _ gen.CreateScheduleRequestObject) (gen.CreateScheduleResponseObject, error) {
+	return gen.CreateSchedule400Response{}, nil
+}
+func (h *Handlers) GetSchedule(_ context.Context, _ gen.GetScheduleRequestObject) (gen.GetScheduleResponseObject, error) {
+	return gen.GetSchedule404Response{}, nil
+}
+func (h *Handlers) DeleteSchedule(_ context.Context, _ gen.DeleteScheduleRequestObject) (gen.DeleteScheduleResponseObject, error) {
+	return gen.DeleteSchedule204Response{}, nil
+}
+func (h *Handlers) PauseSchedule(_ context.Context, _ gen.PauseScheduleRequestObject) (gen.PauseScheduleResponseObject, error) {
+	return gen.PauseSchedule404Response{}, nil
+}
+func (h *Handlers) ResumeSchedule(_ context.Context, _ gen.ResumeScheduleRequestObject) (gen.ResumeScheduleResponseObject, error) {
+	return gen.ResumeSchedule404Response{}, nil
+}
