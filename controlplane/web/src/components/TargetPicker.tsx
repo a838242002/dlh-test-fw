@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { components } from "../api/gen";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Target = components["schemas"]["Target"];
+
+const LOCAL_VALUE = "__local__";
 
 export function TargetPicker({
   value,
@@ -16,33 +19,31 @@ export function TargetPicker({
   const [items, setItems] = useState<Target[] | null>(null);
 
   useEffect(() => {
-    api.GET("/api/targets", {}).then(({ data }) => {
-      setItems(data?.items ?? []);
-    });
+    api.GET("/api/targets", {}).then(({ data }) => setItems(data?.items ?? []));
   }, []);
 
-  if (!items) return <span className="text-xs text-slate-500">loading targets…</span>;
-  const filtered = filterType
-    ? items.filter(
-        (t) =>
-          !t.allowedTargetTypes?.length || t.allowedTargetTypes.includes(filterType)
-      )
-    : items;
+  const filtered = (items ?? [])
+    .filter((t) => t.configured)
+    .filter(
+      (t) => !filterType || !t.allowedTargetTypes?.length || t.allowedTargetTypes.includes(filterType)
+    );
 
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="rounded border border-slate-300 bg-white px-2 py-1 text-sm"
+    <Select
+      value={value === "" ? LOCAL_VALUE : value}
+      onValueChange={(v) => onChange(v === LOCAL_VALUE ? "" : v)}
     >
-      <option value="">(local — framework cluster)</option>
-      {filtered
-        .filter((t) => t.configured)
-        .map((t) => (
-          <option key={t.id} value={t.id}>
+      <SelectTrigger className="h-8 w-[200px] text-xs">
+        <SelectValue placeholder="Select target" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={LOCAL_VALUE}>local — framework cluster</SelectItem>
+        {filtered.map((t) => (
+          <SelectItem key={t.id} value={t.id}>
             {t.displayName ?? t.id}
-          </option>
+          </SelectItem>
         ))}
-    </select>
+      </SelectContent>
+    </Select>
   );
 }
