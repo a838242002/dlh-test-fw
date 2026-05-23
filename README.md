@@ -60,49 +60,77 @@ single Kubernetes namespace (`dlh-test-fw`) on minikube.
 ## Quickstart
 
 Requires `minikube`, `kubectl`, `helm`, `docker`, `make`, `go` 1.26+,
-`pnpm` (Node 20+), `jq`, `bash`. On Apple Silicon minikube uses the
-docker driver. (No `argo` CLI needed — scenario submission goes through
-the controlplane API / `dlh` CLI since Plan 18.)
+`pnpm` (Node 20+), `mc` (MinIO client), `jq`, `bash`. On Apple Silicon
+minikube uses the docker driver. No `argo` CLI needed — scenario
+submission goes through the controlplane API / `dlh` CLI.
 
 ```bash
-# 1. Bring up minikube (6 CPU / 12 GiB; idempotent)
-scripts/minikube-up.sh
+# 1. Start minikube
+scripts/minikube-up.sh        # destructive reset; skip if already running
 
-# 2. Build + load the local images into minikube
-make fixture-images        # mysql / kafka / doris fixture-shells
-make k6-image              # custom dlh-k6 (xk6-sql + xk6-kafka + baked runners)
-( cd verdict-job && make load-image )
+# 2. Pre-install CRDs (clean cluster only — required once per cluster lifetime).
+#    Several Chaos Mesh CRDs exceed Helm's 256 KB client-side annotation limit,
+#    preventing `helm upgrade --install` from managing them automatically.
+#    This target uses server-side apply to bypass the limit, then stamps the
+#    CRDs with Helm ownership so subsequent `make platform-up` works cleanly.
+make platform-crds
 
-# 3. Install / upgrade the platform (creates the dlh-test-fw namespace,
-#    the MinIO/Grafana dev-credential secrets, and the scenario WTs)
-make platform-up           # helm dependency update + helm upgrade --install dlh ...
-make platform-verify       # in-cluster smoke; expects PASS
+# 3. Build + load all local images into minikube
+make fixture-images           # mysql / kafka / doris fixture-shell images
+make k6-reload                # build + load custom dlh-k6 (xk6-sql + xk6-kafka)
+( cd verdict-job  && make load-image )
+( cd controlplane && make reload-minikube )   # builds + loads ghcr.io/dlh/dlh-controlplane:0.1.0
 
-# 4. Build the controlplane image + dlh CLI; force-load the image into minikube
-cd controlplane
-make reload-minikube       # builds ghcr.io/dlh/dlh-controlplane:0.1.0 + loads it
-make cli                   # builds bin/dlh
-export PATH="$PWD/bin:$PATH"
-cd ..
+# 4. Install the platform (creates dlh-test-fw namespace, secrets, scenario WTs)
+make platform-up              # helm dependency update + helm upgrade --install dlh ...
+make platform-verify          # in-cluster smoke test; expects PASS
 
-# 5. Deploy the controlplane into the cluster (local-dev: auth disabled).
-#    deploy/ is plain YAML (the same manifests Argo CD syncs in prod).
+# 5. Build the dlh CLI
+( cd controlplane && make cli )
+export PATH="$PWD/controlplane/bin:$PATH"
+
+# 6. Deploy the controlplane into the cluster.
+#    deploy/ is plain YAML (same manifests Argo CD syncs in production).
+#    DLH_AUTH_DISABLED=true is local-dev only — never set this on a shared cluster.
 kubectl -n dlh-test-fw apply -f controlplane/deploy/
 kubectl -n dlh-test-fw set env deployment/dlh-controlplane DLH_AUTH_DISABLED=true
 kubectl -n dlh-test-fw rollout status deployment/dlh-controlplane --timeout=120s
 kubectl -n dlh-test-fw port-forward svc/dlh-controlplane 8080:80 &
 
-# 6. Submit the sample scenarios (auth disabled → any fake token works)
+# 7. Seed MinIO with the mysql scenario fixture (one-time per cluster).
+#    The fixture-minio-load-mysql WT downloads this file from MinIO and loads
+#    it into the target database before chaos begins.
+kubectl -n dlh-test-fw port-forward svc/dlh-minio 9000:9000 &
+sleep 2
+mc alias set dlh-local http://localhost:9000 admin dlh-dev-secret-please-rotate
+mc cp fixtures/mysql-users.sql dlh-local/fixtures/mysql-users.sql
+
+# 8. Deploy the mysql target (creates mysql-sys namespace + mysql deployment
+#    + mysql-creds secret in both mysql-sys and dlh-test-fw)
+kubectl apply -f targets/mysql/deploy.yaml
+kubectl -n mysql-sys rollout status deploy/mysql --timeout=120s
+
+# 9. Submit the sample scenario
 export DLH_ENDPOINT=http://localhost:8080
 export DLH_TOKEN='fake:dev:dev@example.com:dlh-admins'
 dlh run mysql-pod-delete --wait
-dlh run kafka-broker-partition --wait
+```
+
+A successful run streams `Running` status for ~3 minutes and ends with
+`Succeeded`. The final `verdict` step may print **`VERDICT: FAIL`** on a
+fresh minikube — that is correct platform behaviour: it means the
+pod-delete chaos broke the SLO thresholds. All workflow steps ran; the
+SLO just wasn't met. To make the run pass, lighten the chaos:
+
+```bash
+dlh run mysql-pod-delete --wait \
+  -p load_duration=180s -p chaos_duration=15s -p chaos_start_after=60s
 ```
 
 Scenario parameters are overridable at submit time with `-p key=value`:
 
 ```bash
-dlh run mysql-pod-delete --wait -p vus=50 -p chaos_duration=120s -p mysql_op_mix=read:100
+dlh run mysql-pod-delete --wait -p vus=20 -p chaos_duration=120s -p mysql_op_mix=read:100
 ```
 
 Submissions to the same target serialise via Argo `synchronization.semaphores`
@@ -247,6 +275,7 @@ dlh-test-fw/
 │   ├── kafka/      (apache/kafka:3.7.0 KRaft single-broker)
 │   └── doris/      (deferred — README only)
 ├── dashboards/grafana/            # Dashboard source-of-truth JSONs (history, run-detail, mysql, kafka, doris)
+├── fixtures/                      # MinIO seed data (mysql-users.sql for mysql-pod-delete scenario)
 ├── scenarios/                     # README only — standalone Workflow YAMLs removed in Plan 18;
 │                                  #   scenarios are now chart-managed WorkflowTemplates
 ├── scripts/                       # minikube-up.sh only (platform-*/run-scenario/verify-templates removed, Plan 18)

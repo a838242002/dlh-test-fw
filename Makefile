@@ -1,5 +1,5 @@
 SHELL := /usr/bin/env bash
-.PHONY: platform-up platform-down platform-verify chart-lint fixture-images sync-dashboards run-mysql run-kafka
+.PHONY: platform-up platform-down platform-verify platform-crds chart-lint fixture-images sync-dashboards run-mysql run-kafka k6-reload
 
 # NOTE (Plan 18): the platform-up/down/verify and run-scenario shell scripts
 # were removed. These targets are thin convenience wrappers around the
@@ -19,6 +19,28 @@ fixture-images:
 
 chart-lint:
 	helm lint helm/dlh-test-fw
+
+# platform-crds: server-side-apply all CRDs from the umbrella chart.
+# Required once on a clean cluster before make platform-up, because several
+# Chaos Mesh CRDs exceed Helm's 256 KB client-side-apply annotation limit and
+# prevent the chart from installing its own crds/ directory.
+# The kubectl label/annotate step hands Helm ownership of the CRDs so that
+# subsequent `helm upgrade --install` does not refuse to manage them.
+platform-crds: chart-lint
+	helm dependency update helm/dlh-test-fw
+	helm template dlh helm/dlh-test-fw \
+	  -f helm/dlh-test-fw/values.yaml \
+	  -f helm/dlh-test-fw/values-minikube.yaml \
+	  --include-crds \
+	  | awk '/^---/{p=0} /kind: CustomResourceDefinition/{p=1} p{print}' \
+	  > /tmp/dlh-crds.yaml
+	kubectl apply --server-side --force-conflicts -f /tmp/dlh-crds.yaml
+	kubectl wait --for=condition=Established crd --all --timeout=120s
+	kubectl label -f /tmp/dlh-crds.yaml \
+	  app.kubernetes.io/managed-by=Helm --overwrite
+	kubectl annotate -f /tmp/dlh-crds.yaml \
+	  meta.helm.sh/release-name=dlh \
+	  meta.helm.sh/release-namespace=dlh-test-fw --overwrite
 
 platform-up: chart-lint
 	helm dependency update helm/dlh-test-fw
@@ -44,10 +66,15 @@ run-kafka:
 	dlh run kafka-broker-partition --wait
 
 # --- k6 image (Plan 6) ---
-.PHONY: k6-image k6-smoke
+.PHONY: k6-image k6-smoke k6-reload
 
 k6-image:
 	$(MAKE) -C fixture-images/k6 image
+
+# k6-reload: build the dlh-k6 image AND load it into minikube. Use this for
+# local dev; k6-image alone only builds the Docker image without loading.
+k6-reload:
+	$(MAKE) -C fixture-images/k6 reload-minikube
 
 k6-smoke:
 	$(MAKE) -C fixture-images/k6 smoke

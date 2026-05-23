@@ -16,6 +16,19 @@ stringData:
   MYSQL_ROOT_PASSWORD: dlh-mysql-dev
   MYSQL_DATABASE: dlh
 ---
+# Mirror of mysql-creds in the workflow namespace so fixture-loader and k6
+# pods (which run in dlh-test-fw) can mount the credentials as secretKeyRef.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-creds
+  namespace: dlh-test-fw
+type: Opaque
+stringData:
+  user: root
+  password: dlh-mysql-dev
+  database: dlh
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
