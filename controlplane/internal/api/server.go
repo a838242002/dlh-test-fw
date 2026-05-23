@@ -58,7 +58,9 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 	if authMW != nil {
 		r.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-				if strings.HasPrefix(req.URL.Path, "/api/") {
+				// /api/auth/info is public — the login command needs it to
+				// discover OIDC config before the user has a token.
+				if strings.HasPrefix(req.URL.Path, "/api/") && req.URL.Path != "/api/auth/info" {
 					authMW(next).ServeHTTP(w, req)
 					return
 				}
