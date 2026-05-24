@@ -1,5 +1,5 @@
 SHELL := /usr/bin/env bash
-.PHONY: platform-up platform-down platform-verify platform-crds chart-lint fixture-images sync-dashboards run-mysql run-kafka k6-reload
+.PHONY: platform-up platform-down platform-verify platform-crds chart-lint fixture-images sync-dashboards run-mysql run-kafka k6-reload quickstart
 
 # NOTE (Plan 18): the platform-up/down/verify and run-scenario shell scripts
 # were removed. These targets are thin convenience wrappers around the
@@ -32,15 +32,21 @@ platform-crds: chart-lint
 	  -f helm/dlh-test-fw/values.yaml \
 	  -f helm/dlh-test-fw/values-minikube.yaml \
 	  --include-crds \
-	  | awk '/^---/{p=0} /kind: CustomResourceDefinition/{p=1} p{print}' \
+	  | awk 'function flush(){if(buf ~ /\nkind: CustomResourceDefinition\n/)printf "---\n%s",buf;buf=""} /^---[[:space:]]*$$/{flush();next}{buf=buf $$0 "\n"} END{flush()}' \
 	  > /tmp/dlh-crds.yaml
 	kubectl apply --server-side --force-conflicts -f /tmp/dlh-crds.yaml
-	kubectl wait --for=condition=Established crd --all --timeout=120s
+	kubectl wait --for=condition=Established -f /tmp/dlh-crds.yaml --timeout=120s
 	kubectl label -f /tmp/dlh-crds.yaml \
 	  app.kubernetes.io/managed-by=Helm --overwrite
 	kubectl annotate -f /tmp/dlh-crds.yaml \
 	  meta.helm.sh/release-name=dlh \
 	  meta.helm.sh/release-namespace=dlh-test-fw --overwrite
+
+# quickstart: one-command local-dev bootstrap (running minikube → green
+# VERDICT: PASS). Thin alias for scripts/quickstart.sh; see that script for
+# flags (--rebuild, --with-kafka). Local-dev only.
+quickstart:
+	scripts/quickstart.sh
 
 platform-up: chart-lint
 	helm dependency update helm/dlh-test-fw

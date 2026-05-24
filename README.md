@@ -66,9 +66,32 @@ single Kubernetes namespace (`dlh-test-fw`) on minikube.
 ## Quickstart
 
 Requires `minikube`, `kubectl`, `helm`, `docker`, `make`, `go` 1.26+,
-`pnpm` (Node 20+), `mc` (MinIO client), `jq`, `bash`. On Apple Silicon
-minikube uses the docker driver. No `argo` CLI needed — scenario
-submission goes through the controlplane API / `dlh` CLI.
+`pnpm` (Node 20+), `mc` (MinIO client), `jq`, `nc`, `bash`. On Apple Silicon
+minikube uses the docker driver.
+
+```bash
+# 1. Start minikube (destructive reset; skip if already running)
+scripts/minikube-up.sh
+
+# 2. One command: CRDs → images → helm → controlplane → CLI → fixture →
+#    mysql target → submit a lightened mysql-pod-delete run → VERDICT: PASS.
+#    Idempotent (re-run skips done steps). Flags: --rebuild, --with-kafka.
+scripts/quickstart.sh
+```
+
+`scripts/quickstart.sh` is idempotent and safe to re-run; it refuses to run
+against any kube-context other than `minikube`. When it finishes it prints a
+**Next steps** block with the port-forward commands, URLs, and Grafana
+credentials for ongoing access.
+
+For local-dev it also configures what the GitOps path leaves out-of-band: it
+sets the controlplane's `DLH_ARGO_BASE_URL`/`DLH_GRAFANA_BASE_URL` to the
+localhost port-forward URLs (so Run-detail deep links render — start those
+port-forwards to follow them), and creates the `local-demo` target's SA/RBAC +
+kubeconfig Secret so it shows `configured: true`.
+
+<details>
+<summary>Manual steps — what quickstart does under the hood</summary>
 
 ```bash
 # 1. Start minikube
@@ -127,6 +150,8 @@ kubectl apply -f targets/kafka/deploy.yaml
 kubectl -n kafka-sys rollout status statefulset/kafka --timeout=240s
 dlh run kafka-broker-partition --wait
 ```
+
+</details>
 
 A successful run streams `Running` status for ~3 minutes and ends with
 `Succeeded`. The final `verdict` step may print **`VERDICT: FAIL`** on a
@@ -201,7 +226,7 @@ curl -s 'http://localhost:8428/api/v1/query?query=dlh_verdict_overall{dlh_workfl
 
 ```bash
 kubectl -n dlh-test-fw port-forward svc/dlh-grafana 3001:80
-# http://localhost:3001  admin / <secret value of dlh-grafana-credentials>
+# http://localhost:3001  admin / <secret value of grafana-admin-credentials (key admin-password)>
 ```
 
 Five dashboards ship by default (sidecar picks them up via
