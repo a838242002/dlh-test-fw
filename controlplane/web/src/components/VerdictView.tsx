@@ -1,5 +1,5 @@
 import { CheckCircle2, XCircle } from "lucide-react";
-import { parseVerdict } from "@/lib/verdict";
+import { parseVerdict, formatMetricByName } from "@/lib/verdict";
 import { cn } from "@/lib/utils";
 import { formatMetricValue } from "@/lib/format";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,6 +21,9 @@ export function VerdictView({ verdict }: { verdict: Record<string, unknown> | nu
       >
         {parsed.overall ? <CheckCircle2 className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
         {parsed.overall ? "PASS" : "FAIL"}
+        <span className="ml-auto text-sm font-normal opacity-80">
+          {parsed.thresholds.filter((t) => t.passed).length} / {parsed.thresholds.length} thresholds met
+        </span>
       </div>
 
       {parsed.thresholds.length > 0 && (
@@ -30,16 +33,31 @@ export function VerdictView({ verdict }: { verdict: Record<string, unknown> | nu
               <TableHead>Metric</TableHead>
               <TableHead>Value</TableHead>
               <TableHead>Bound</TableHead>
+              <TableHead>Window</TableHead>
               <TableHead>Result</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {parsed.thresholds.map((t) => (
-              <TableRow key={t.metric}>
+              <TableRow key={t.metric} className={t.passed ? undefined : "bg-status-failed/5"}>
                 <TableCell className="font-medium">{t.metric}</TableCell>
-                <TableCell className="font-mono text-xs">{formatMetricValue(t.value)}</TableCell>
-                <TableCell className="font-mono text-xs">{t.bound}</TableCell>
-                <TableCell className={t.passed ? "text-status-success" : "text-status-failed"}>
+                <TableCell className="font-mono text-xs">{formatMetricByName(t.metric, t.value)}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  {t.cmp && Number.isFinite(t.boundValue)
+                    ? `${t.cmp} ${formatMetricByName(t.metric, t.boundValue as number)}`
+                    : t.bound}
+                </TableCell>
+                <TableCell>
+                  {t.window ? (
+                    <span className={cn(
+                      "rounded px-2 py-0.5 text-[11px]",
+                      t.window === "chaos" ? "bg-amber-500/15 text-amber-400" : "bg-blue-500/15 text-blue-400"
+                    )}>{t.window}</span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className={t.passed ? "text-status-success" : "text-status-failed font-semibold"}>
                   {t.passed ? "pass" : "fail"}
                 </TableCell>
               </TableRow>
