@@ -1,6 +1,7 @@
 package model
 
 import (
+	"sort"
 	"time"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
@@ -155,6 +156,21 @@ func RunDetailFromWorkflow(wf *wfv1.Workflow) gen.RunDetail {
 			}
 			steps = append(steps, step)
 		}
+		sort.SliceStable(steps, func(i, j int) bool {
+			si, sj := steps[i].StartedAt, steps[j].StartedAt
+			switch {
+			case si == nil && sj == nil:
+				return steps[i].Name < steps[j].Name
+			case si == nil:
+				return false
+			case sj == nil:
+				return true
+			case si.Equal(*sj):
+				return steps[i].Name < steps[j].Name
+			default:
+				return si.Before(*sj)
+			}
+		})
 		d.Steps = &steps
 	}
 	return d
