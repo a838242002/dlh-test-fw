@@ -1,162 +1,166 @@
 # Run-detail UI Optimization — Design Spec
 
-*Design doc — 2026-05-25. Output of `superpowers:brainstorming`.*
+*Design doc — 2026-05-25. Output of `superpowers:brainstorming`, refined against an interactive HTML prototype reviewed in-browser.*
 
-> **Milestone context:** This is **Spec 2 of 2** in a controlplane enhancement
-> pair. The companion **priority spec** (priority visibility & control —
-> submit-time override, live re-prioritize, per-scenario defaults) is
-> sequenced *after* this one. We do UI-first; priority *display* lands with
-> that later spec. This spec only **reserves a layout slot** for it.
+> **Milestone context:** This is **Spec 2 of 2** (UI-first). The companion
+> **priority spec** (`2026-05-25-controlplane-priority-design.md`) is sequenced
+> after this one. Priority *control* is out of scope here; this spec only
+> **displays** a run's priority in the meta strip (read-only) and reserves the
+> cell — the priority spec wires the data + controls.
 
 ## Problem
 
 A live UI walkthrough (Playwright against the running controlplane) surfaced
-three real defects and one non-defect on the run-detail surface:
+real defects on the run-detail surface:
 
 1. **Runs-list VERDICT column is dead** — every run shows "—" even when it
-   passed. Root cause: `internal/model/types.go` builds each list `Run` but
-   **never sets `Score`**, so it is always `null`; the frontend column derives
-   pass/fail from `score` (1/0/null). The field was designed to carry the
-   verdict — it was simply never populated.
+   passed. `internal/model/types.go` builds each list `Run` but **never sets
+   `Score`**, so it is always `null`; the frontend column derives pass/fail
+   from `score`. The field was designed to carry the verdict, never populated.
 2. **Run-detail step order is non-deterministic** — the step list reordered on
-   *every* page load (observed live). Root cause: `types.go` ranges
-   `wf.Status.Nodes`, a Go map, so iteration order is randomized.
-3. **Live updates are broken** — `GET /api/runs/{id}/events` (SSE) returns
-   **401**. `EventSource` cannot send an `Authorization` header and that route
-   does not honor the auth-disabled bypass / has no header-less auth path.
-4. **(Non-defect) theme** — a full-page screenshot rendered the page light, but
-   direct load *and* click-through both render correctly dark. This was a
-   Playwright `fullPage` capture artifact, **not** a user-facing bug.
+   *every* page load (observed live). `types.go` ranges `wf.Status.Nodes`, a Go
+   map → randomized order.
+3. **Live updates broken** — `GET /api/runs/{id}/events` (SSE) returns **401**
+   (`EventSource` can't send an `Authorization` header and the route ignores
+   the auth-disabled bypass).
+4. **No sense of *what a scenario is*** — the UI shows only the id
+   (`mysql-pod-delete`); nothing says what it does. Scenarios carry no
+   machine-readable description (only source comments + `slo_name` params).
+5. **Verdict values are raw** — `3.00e-6`, `0.2961` with no units.
 
-Additionally, run-detail verdict threshold values render raw (`3.00e-6`,
-`0.2961`) with no units — hard to read.
+(A suspected theme bug turned out to be a Playwright `fullPage` screenshot
+artifact, not user-facing — downgraded to optional hardening.)
 
 ## Goal
 
-Make the run-detail (and the closely-coupled Runs-list verdict column) read
-accurately and clearly: a populated verdict column, deterministically-ordered
-steps shown as a scannable timeline, working live updates, and human-readable
-verdict values — without introducing new backend dependencies.
+Make run-detail (and the coupled Runs-list verdict column) read accurately and
+clearly — a populated verdict column, deterministic steps shown as a
+window-aware timeline, working live updates, human-readable verdict values, and
+a plain-language sense of what each scenario does — **without new backend
+dependencies**.
 
-## Decisions (from brainstorming)
+## Decisions (settled in brainstorming + prototype review)
 
-| Question | Decision |
+| Topic | Decision |
 |---|---|
-| Scope | Verdict rendering (list + detail), steps timeline, SSE live updates, optional theme hardening. Priority display is **out** (later spec); reserve a meta-strip slot. |
-| Runs-list verdict source | **MinIO `report.json` `overall`, cached per workflow.** NOT VictoriaMetrics — the controlplane has no VM client today, and VM gauges carry a 5-min staleness caveat. MinIO reports are immutable + authoritative + cacheable. |
-| Steps rework ambition | **Timeline bars** — chronological + a duration bar per step scaled to the run window (load‖chaos overlap visible), phase via icon/color. |
-| SSE auth | Honor `DLH_AUTH_DISABLED` on the events route (local-dev), and accept the token via **query param** (`?access_token=`) for authenticated deployments. |
-| Theme | Downgrade to a **minor defensive hardening** (root `html/body` background) — not a confirmed bug. |
+| Runs-list verdict source | MinIO `report.json` `overall`, **cached per workflow** (immutable once finished). NOT VictoriaMetrics (no VM client today; gauge staleness caveat). |
+| Steps treatment | **Timeline bars** + a dedicated **Verdict-windows lane** (chaos/recovery) + axis/gridlines. |
+| SSE auth | Honor `DLH_AUTH_DISABLED`; accept token via `?access_token=` query param. |
+| Scenario description | **Curated annotation per scenario + auto-derived fallback.** |
+| Theme | Minor optional hardening (root `html/body` bg). Not a confirmed bug. |
+| Priority cell | Display-only here; data + control land in the priority spec. |
 
-## Work item 1 — Verdict rendering
+## Work items
 
-### 1a. Runs-list column (backend + frontend)
+### 1. Verdict rendering
 
-**Backend** (`internal/api/handlers.go`, `internal/model/types.go`,
-`internal/minio/reports.go`):
-- In the list path, resolve each run's verdict and set `score` to `1.0` /
-  `0.0` / `nil` from the MinIO report's `overall`, reusing the existing
-  `ReportReader` (already used by the detail handler).
-- **Cache** keyed by workflow name (`map[string]float64` + `sync.RWMutex`, or a
-  small bounded LRU). A finished run's report is immutable → cache permanently.
-  Running/pending runs have no report → return `nil` and **do not cache**, so
-  the verdict resolves once the run finishes.
-- Errors (MinIO unreachable, no object) → `nil` + log; **never fail the list**.
+**1a. Runs-list column (backend).** In the list path, set each item's `score`
+(`1.0`/`0.0`/`nil`) from the MinIO report's `overall`, reusing the existing
+`internal/minio` `ReportReader`, **cached by workflow name** (`map`+`RWMutex`
+or small LRU). Running/pending → `nil`, uncached (resolves once finished).
+MinIO errors → `nil`+log, never fail the list. Frontend: none — the existing
+score-based column lights up (verify `web/src/lib/run.ts` mapping).
 
-**Data flow:** `GET /api/runs` → list Workflows → per run: `cache.Get(wf)`; on
-miss *and* terminal phase → `ReportReader.Read(wf)` → cache `overall` → set
-`score`.
+**1b. Run-detail value formatting (frontend).** Pure formatter in
+`web/src/lib/verdict.ts`, unit inferred from metric name: `*latency*`/
+`*duration*` → time (`3.00e-6 s` → `3 µs`; bound `< 1` → `< 1 s`),
+`*rate*`/`*error*` → percent (`0.2961` → `29.6 %`; `< 0.5` → `< 50 %`),
+fallback → `toPrecision(3)`. Vitest-tested with the real metric names.
 
-**Cost:** Runs page polls ~5s. With the cache, each finished run is read once
-then O(1); steady state is cheap.
+**1c. Verdict card layout (frontend).** Add a **Window** column to the
+threshold table (`chaos` / `recovery` pills, from the report's `window`
+field). Add a banner summary ("2 / 2 thresholds met"). Keep "View raw JSON".
 
-**Frontend:** none required — the existing Runs column already derives from
-`score`; populating it lights the column up. Verify the
-`score → pass/fail/—` mapping in `web/src/lib/run.ts`.
+### 2. Steps timeline
 
-### 1b. Run-detail value formatting (frontend)
+**2a. Deterministic order (backend).** In `types.go`, `sort.Slice` steps by
+`StartedAt` asc (nil last), tiebreak `Name`. Group `[n]` nodes stay filtered.
+Go-tested for stable order.
 
-A pure formatter in `web/src/lib/verdict.ts`, unit inferred from metric name:
-- `*latency*` / `*duration*` → time (`3.00e-6 s` → `3µs`; bound `< 1` → `< 1s`).
-- `*rate*` / `*error*` → percent (`0.2961` → `29.6%`; `< 0.5` → `< 50%`).
-- fallback → `toPrecision(3)` (no scientific notation in normal ranges).
+**2b. Timeline + windows lane (frontend).** Replace the plain table
+(`RunDetailPage.tsx`) with a timeline; layout math in `web/src/lib/steps.ts`
+(Vitest):
+- run window = `[min(startedAt), max(finishedAt|now)]`; per step
+  `offsetPct`/`widthPct` (min-visible floor).
+- bar **colored by kind** (prep/util grey, load blue, **chaos amber — not red**,
+  verdict indigo); phase via row icon.
+- a **Verdict-windows lane** above the step rows: `chaos` (amber) and
+  `recovery` (blue) as labeled segments on the same axis, sourced from the
+  report's `chaos_window_*` / recovery window; **dashed boundary guides** drop
+  through the step rows. This visually ties the timeline to the verdict's
+  Window column. (No full-height tint — bars stay un-muddied.)
+- **gridlines + a minute axis** (`0 → run duration`).
 
-Vitest-tested against the real metric names (`p95-latency-chaos`,
-`error-rate-recovery`). `RunDetailPage.tsx`'s threshold table calls it for
-`value` and `bound`.
+### 3. SSE live updates (backend)
 
-## Work item 2 — Steps timeline
+`internal/api/sse.go` + `server.go`: the events route honors
+`DLH_AUTH_DISABLED`; for authenticated deployments accept the token via
+`?access_token=<jwt>` (validated like a header token). Frontend `EventSource`
+URL appends `?access_token=` when auth is enabled. Go-tested (disabled bypass,
+query-param accept/reject). Running runs then live-update.
 
-### 2a. Deterministic order (backend)
-In `internal/model/types.go`, after collecting steps from `wf.Status.Nodes`,
-`sort.Slice` by `StartedAt` ascending (nil-safe: nil sorts last), tiebreak by
-`Name`. Group `[n]` nodes remain filtered (frontend `isGroupNode`, unchanged).
-Go-tested: a fixed set of nodes always yields the same order.
+### 4. Scenario description (“what is this scenario?”)
 
-### 2b. Timeline rendering (frontend)
-Replace the plain table in `RunDetailPage.tsx` with a timeline. Pure layout
-math in `web/src/lib/steps.ts` (Vitest):
-- run window = `[min(startedAt), max(finishedAt|now)]`.
-- per step: `offsetPct = (start − windowStart)/windowSpan`,
-  `widthPct = max(duration/windowSpan, minVisible)`.
-- row: phase icon/color + name + start-offset label + duration + the bar.
-Overlapping steps (load‖chaos) visibly overlap. Running steps render an
-open-ended/animated bar.
+- **Source:** a curated annotation on each scenario WorkflowTemplate
+  (`dlh.scenario/description`), exposed by the scenarios API and on run detail.
+  **Auto-derived fallback** when absent: a generated summary from chaos type +
+  target type + SLO (e.g. *"pod-delete chaos on a MySQL target, evaluated
+  against the pod-delete SLO."*) so it is never blank.
+- **Display:** one clean muted sentence under the run title (no chip, no
+  technical tail — the chaos/SLO/target facts live in the meta strip).
+- Surfaced on **run detail** now; the **Scenarios** cards can reuse the same
+  field (follow-up, not required here).
 
-## Work item 3 — SSE live updates (backend)
+### 5. Header + meta strip (frontend)
 
-`internal/api/sse.go` + auth wiring (`internal/api/server.go`):
-- The `/api/runs/{id}/events` route must honor `DLH_AUTH_DISABLED` (immediate
-  local-dev fix).
-- For authenticated deployments, accept the bearer token via query param
-  (`?access_token=<jwt>`) since `EventSource` cannot set headers; validate it
-  the same way header tokens are validated.
-- Frontend: the run-detail `EventSource` URL appends `?access_token=` (the
-  token the SPA already holds) when auth is enabled.
-- Go-tested: events route returns 200 under `DLH_AUTH_DISABLED=true`, and with
-  a valid `?access_token=` when auth is enabled; 401 only when neither.
+- **Title leads with the scenario name** (`mysql-pod-delete`); the full
+  timestamped run id becomes a mono/copyable subtitle.
+- **Meta strip de-duped + grouped:** drop the redundant Scenario cell (it's the
+  title); merge **Chaos · SLO** into one cell; group scenario-definition facts
+  (Target, Chaos·SLO) from run-instance facts (Started, Duration, Triggered
+  by). Add a **Priority** cell (display-only; populated by the priority spec —
+  renders "—"/hidden until then).
 
-## Work item 4 — Theme hardening (minor, optional)
+### 6. States (frontend)
 
-Apply the dark default background to root `html`/`body` (e.g. in `index.css`)
-rather than only a viewport-height wrapper, so long pages and screenshot
-tooling never expose a white gap. ~1 line. Not a confirmed user bug.
+- **Failed run:** FAIL verdict banner; the **failing threshold highlighted**;
+  failed steps show their `message` (the model already carries it) inline.
+- **Chaos-only run (no verdict):** friendly "No verdict — chaos-only run"
+  instead of an empty card.
+- **Running run:** Running badge + live indicator; in-progress steps render an
+  open-ended/animated bar; window end = now.
 
-## Run-detail layout: reserve priority slot
+### 7. Theme hardening (minor, optional)
 
-The meta strip (Scenario / Target / Started / Duration / Triggered by) gets a
-**Priority** cell designed in now but populated by the later priority spec
-(until then it renders "—" or is hidden when absent). No backend priority work
-in this spec.
+Dark default background on root `html`/`body` rather than only a
+viewport-height wrapper. ~1 line. Not a confirmed bug.
 
 ## Files touched
 
 **Backend:** `internal/model/types.go` (step sort), `internal/api/handlers.go`
-(+ list verdict enrichment + cache), `internal/minio/reports.go` (reuse;
-optional cache layer), `internal/api/sse.go` + `internal/api/server.go` (events
-auth), `internal/config/config.go` (only if a config knob is needed).
-`api/openapi.yaml`: `score` already exists on the list item — just populated;
-document the `?access_token=` query param on the events operation.
+(list verdict enrichment + cache), `internal/minio/reports.go` (reuse; optional
+cache), `internal/api/sse.go` + `server.go` (events auth), scenarios handler +
+WorkflowTemplate annotations (description), `api/openapi.yaml` (populate
+`score`; document `?access_token=`; add scenario `description`).
 
-**Frontend:** `web/src/lib/verdict.ts` (value formatting), `web/src/lib/steps.ts`
-(timeline math), `web/src/pages/RunDetailPage.tsx` (timeline + formatting +
-priority slot), `web/src/lib/run.ts` / `RunsPage.tsx` (verify score→verdict
-mapping), `web/src/index.css` (root bg).
+**Frontend:** `web/src/lib/verdict.ts` (formatting), `web/src/lib/steps.ts`
+(timeline + windows math), `web/src/components/VerdictView.tsx` (window column +
+summary), `web/src/pages/RunDetailPage.tsx` (title, description, meta strip,
+timeline, states), `web/src/lib/run.ts` / `RunsPage.tsx` (verify mapping),
+`web/src/index.css` (root bg).
 
 ## Testing
 
-- **Vitest:** `lib/verdict.ts` (unit inference + precision), `lib/steps.ts`
-  (offset/width math, overlap, running step).
-- **Go:** step-sort determinism; list verdict enrichment + cache (hit/miss,
-  terminal-vs-running, MinIO error → nil); SSE auth (disabled bypass,
-  `?access_token=` accept/reject).
-- **Live (Playwright) re-verification:** Runs column populated (pass/fail/—),
-  run-detail steps ordered with scaled bars + readable verdict values, and a
-  *running* run live-updates without a 401.
+- **Vitest:** `lib/verdict.ts` (unit inference/precision), `lib/steps.ts`
+  (offset/width, window segments, overlap, running).
+- **Go:** step-sort determinism; list verdict enrichment + cache; SSE auth;
+  scenario description (curated + derived fallback).
+- **Live (Playwright):** verdict column populated; run-detail steps ordered with
+  window-lane + readable values; a running run live-updates (no 401); a failed
+  run shows the failing threshold + step message.
 
 ## Out of scope
 
-- **Priority display & control** — the companion priority spec.
-- The Scenarios catalog "building-block vs runnable" trap.
-- Any VictoriaMetrics client / broader verdict-source redesign.
-- Backend changes beyond what these four items require.
+- **Priority control** (companion spec) — only the read-only meta cell here.
+- Scenarios catalog "building-block vs runnable" trap.
+- VictoriaMetrics client / verdict-source redesign.
