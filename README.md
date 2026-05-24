@@ -84,6 +84,12 @@ against any kube-context other than `minikube`. When it finishes it prints a
 **Next steps** block with the port-forward commands, URLs, and Grafana
 credentials for ongoing access.
 
+For local-dev it also configures what the GitOps path leaves out-of-band: it
+sets the controlplane's `DLH_ARGO_BASE_URL`/`DLH_GRAFANA_BASE_URL` to the
+localhost port-forward URLs (so Run-detail deep links render — start those
+port-forwards to follow them), and creates the `local-demo` target's SA/RBAC +
+kubeconfig Secret so it shows `configured: true`.
+
 <details>
 <summary>Manual steps — what quickstart does under the hood</summary>
 
