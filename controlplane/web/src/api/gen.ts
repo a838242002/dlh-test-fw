@@ -305,6 +305,7 @@ export interface components {
         Scenario: {
             id: string;
             displayName: string;
+            /** @description Human summary; from dlh.scenario/description annotation or derived. */
             description?: string;
             /** @description e.g. mysql, kafka, doris */
             targetType?: string;

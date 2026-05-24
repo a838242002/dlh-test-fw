@@ -182,6 +182,7 @@ type RunDetailStatus string
 
 // Scenario defines model for Scenario.
 type Scenario struct {
+	// Description Human summary; from dlh.scenario/description annotation or derived.
 	Description *string `json:"description,omitempty"`
 	DisplayName string  `json:"displayName"`
 	Id          string  `json:"id"`

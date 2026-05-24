@@ -7,6 +7,7 @@ import (
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 )
 
 // ScenarioFromTemplate maps a WorkflowTemplate to the OpenAPI Scenario DTO.
@@ -18,14 +19,37 @@ func ScenarioFromTemplate(t *wfv1.WorkflowTemplate) gen.Scenario {
 		Id:          t.Name,
 		DisplayName: t.Name,
 	}
-	if v := t.Annotations["dlh.description"]; v != "" {
-		desc := v
-		s.Description = &desc
+
+	// Derive target type from scenario id via the links package (mirrors web-side logic).
+	// DeriveTargetType returns "generic" when nothing matches; we normalise that to ""
+	// so ScenarioDescription falls through to its id-only branch.
+	targetType := links.DeriveTargetType(t.Name)
+	if targetType == "generic" {
+		targetType = ""
 	}
-	if v := t.Annotations["dlh.target-type"]; v != "" {
+	if targetType != "" {
+		tt := targetType
+		s.TargetType = &tt
+	} else if v := t.Annotations["dlh.target-type"]; v != "" {
 		tt := v
 		s.TargetType = &tt
+		targetType = v
 	}
+
+	// Extract slo_name from the WorkflowTemplate's top-level arguments so the
+	// description can name the SLO being evaluated.
+	var sloName string
+	for _, p := range t.Spec.Arguments.Parameters {
+		if p.Name == "slo_name" && p.Default != nil {
+			sloName = p.Default.String()
+			break
+		}
+	}
+
+	// Build description: dlh.scenario/description annotation wins; else derive.
+	desc := ScenarioDescription(t.Annotations, t.Name, targetType, sloName)
+	s.Description = &desc
+
 	if len(t.Spec.Arguments.Parameters) > 0 {
 		params := make([]struct {
 			Default     *string `json:"default,omitempty"`
