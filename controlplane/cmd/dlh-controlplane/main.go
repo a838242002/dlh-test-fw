@@ -124,6 +124,7 @@ func main() {
 		Templates:  tmplLister,
 		Workflows:  wfLister,
 		Reports:    reports,
+		Verdicts:   runs.NewVerdictCache(reports),
 		Submitter:  submitter,
 		Manifests:  manifests,
 		ArgoClient: clients.Argo,

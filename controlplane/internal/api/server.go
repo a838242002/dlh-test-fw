@@ -23,6 +23,7 @@ type Deps struct {
 	Templates  k8s.TemplateLister
 	Workflows  k8s.WorkflowLister
 	Reports    *mio.ReportReader
+	Verdicts   *runs.VerdictCache   // populated from Reports; caches per-run score
 	Submitter  *runs.Submitter      // Phase C
 	Manifests  *runs.ManifestWriter // Phase C
 	ArgoClient wfclient.Interface   // Phase C — for terminate patch
