@@ -194,7 +194,7 @@ step_run() {
   port_forward dlh-controlplane 8080 80
   export DLH_ENDPOINT="http://localhost:8080"
   export DLH_TOKEN
-  local tmp run_id score
+  local tmp run_id verdict
   tmp="$(mktemp)"
   # `dlh run --wait` prints `submitted: <id>` then streams status; tee keeps the
   # live output visible while we capture the run id from it.
@@ -204,19 +204,22 @@ step_run() {
   rm -f "$tmp"
   [[ -n "$run_id" ]] || die "could not determine run id from dlh output"
 
-  # The verdict (Run.score: 1=PASS, 0=FAIL, null=none) is synced by the
-  # controlplane shortly after the workflow finishes — poll briefly for it.
-  score=""
+  # The verdict lives in the run detail's .verdict.overall (true=PASS,
+  # false=FAIL, null=no verdict e.g. a chaos-only run). The controlplane
+  # publishes it once it parses the verdict step's report.json — poll briefly.
+  # NB: jq -r '.verdict.overall' yields the literal "true"/"false"/"null"; do
+  # NOT pipe through `// empty`, which would swallow a real `false` (FAIL).
+  verdict="null"
   for _ in {1..15}; do
-    score="$(dlh runs show "$run_id" | jq -r '.score // empty')"
-    [[ -n "$score" ]] && break
+    verdict="$(dlh runs show "$run_id" | jq -r '.verdict.overall')"
+    [[ "$verdict" != "null" ]] && break
     sleep 2
   done
 
-  case "$score" in
-    1|1.0) log_ok "VERDICT: PASS (run $run_id, score=$score)" ;;
-    "")    die "run $run_id finished with no verdict (score null). Inspect: dlh runs show $run_id" ;;
-    *)     die "VERDICT: FAIL (run $run_id, score=$score) — the lightened run was expected to PASS. Inspect: dlh runs show $run_id" ;;
+  case "$verdict" in
+    true)  log_ok "VERDICT: PASS (run $run_id)" ;;
+    false) die "VERDICT: FAIL (run $run_id) — the lightened run was expected to PASS. Inspect: dlh runs show $run_id" ;;
+    *)     die "run $run_id finished with no verdict (verdict.overall=$verdict). Inspect: dlh runs show $run_id" ;;
   esac
 }
 
