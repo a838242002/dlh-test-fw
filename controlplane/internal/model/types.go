@@ -150,6 +150,16 @@ func RunDetailFromWorkflow(wf *wfv1.Workflow) gen.RunDetail {
 	name := wf.Name
 	d.WorkflowName = &name
 
+	// Populate description: prefer dlh.scenario/description annotation, else derived.
+	desc := ScenarioDescription(wf.Annotations, d.Scenario, links.DeriveTargetType(d.Scenario), "")
+	d.Description = &desc
+
+	// Populate priority from workflow spec (display-only).
+	if wf.Spec.Priority != nil {
+		p := int(*wf.Spec.Priority)
+		d.Priority = &p
+	}
+
 	if len(wf.Status.Nodes) > 0 {
 		// Steps uses an inline anonymous struct type in the generated code.
 		steps := make([]struct {

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Circle, ExternalLink, Loader2, XCircle } from "lucide-react";
-import { api } from "../api/client";
+import { api, getAuthToken } from "../api/client";
 import type { components } from "../api/gen";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CategoryIcon } from "@/components/CategoryIcon";
@@ -9,10 +9,9 @@ import { ErrorState } from "@/components/ErrorState";
 import { VerdictView } from "@/components/VerdictView";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { relativeTime, formatDuration } from "@/lib/time";
 import { deriveCategory } from "@/lib/category";
-import { namedSteps } from "@/lib/steps";
+import { namedSteps, timelineLayout, windowBand } from "@/lib/steps";
 
 type RunDetail = components["schemas"]["RunDetail"];
 
@@ -45,7 +44,8 @@ export function RunDetailPage() {
       else setRun(data as RunDetail);
     });
 
-    const es = new EventSource(`/api/runs/${id}/events`);
+    const tok = getAuthToken();
+    const es = new EventSource(`/api/runs/${id}/events${tok ? `?access_token=${encodeURIComponent(tok)}` : ""}`);
     const onEvent = (e: MessageEvent) => {
       try {
         const d = JSON.parse(e.data);
@@ -82,11 +82,12 @@ export function RunDetailPage() {
         <ArrowLeft className="h-4 w-4" /> Runs
       </Link>
 
+      {/* Title row: scenario name + status badge + external links */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
           <CategoryIcon category={deriveCategory(run.scenario)} />
         </div>
-        <h1 className="font-mono text-lg font-semibold">{run.id}</h1>
+        <h1 className="text-lg font-semibold">{run.scenario}</h1>
         <StatusBadge status={status} />
         {(run.argoUrl || (run.grafanaUrls && run.grafanaUrls.length > 0)) && (
           <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -106,17 +107,21 @@ export function RunDetailPage() {
         )}
       </div>
 
+      {/* Run-id subtitle + description */}
+      <div className="ml-11 -mt-2 font-mono text-xs text-muted-foreground">{run.id}</div>
+      {run.description && <p className="ml-11 max-w-2xl text-sm text-muted-foreground">{run.description}</p>}
+
+      {/* Meta strip */}
       <div className="flex flex-wrap gap-x-10 gap-y-3 rounded-lg border bg-card px-5 py-4">
-        <Meta label="Scenario" value={run.scenario} />
         <Meta label="Target" value={run.target || "local"} />
+        <Meta label="Chaos · SLO" value={run.scenario.includes("-") ? run.scenario.split("-").slice(1).join("-") : "—"} />
+        <Meta label="Priority" value={run.priority != null ? String(run.priority) : "—"} />
         <Meta label="Started" value={relativeTime(run.startedAt)} title={new Date(run.startedAt).toLocaleString()} />
         <Meta label="Duration" value={formatDuration(run.startedAt, run.finishedAt)} />
         <Meta label="Triggered by">
           {run.triggeredBy?.id ? (
             <Link to="/schedules" className="text-primary hover:underline">{run.triggeredBy.id}</Link>
-          ) : (
-            <span className="text-muted-foreground">manual</span>
-          )}
+          ) : (<span className="text-muted-foreground">manual</span>)}
         </Meta>
       </div>
 
@@ -125,39 +130,57 @@ export function RunDetailPage() {
         <CardContent><VerdictView verdict={run.verdict} /></CardContent>
       </Card>
 
-      {visibleSteps.length > 0 && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Steps</CardTitle>
-            <span className="text-xs text-muted-foreground">
-              {visibleSteps.length} steps{hidden > 0 ? " · group nodes hidden" : ""}
-            </span>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Step</TableHead>
-                  <TableHead>Phase</TableHead>
-                  <TableHead>Duration</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+      {/* Steps: chronological timeline with chaos-window band + messages */}
+      {visibleSteps.length > 0 && (() => {
+        const lay = timelineLayout(visibleSteps, run.finishedAt ?? undefined);
+        const v = run.verdict as Record<string, unknown> | undefined;
+        const chaos =
+          v?.chaos_window_start && v?.chaos_window_end
+            ? windowBand(lay.startMs, lay.windowMs, Date.parse(v.chaos_window_start as string), Date.parse(v.chaos_window_end as string))
+            : null;
+        const kindOf = (name: string) =>
+          name.includes("chaos") ? "bg-amber-500"
+          : name.startsWith("load") || name.includes("testrun") ? "bg-blue-500"
+          : name === "verdict" ? "bg-indigo-500"
+          : "bg-slate-600";
+        return (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Steps</CardTitle>
+              <span className="text-xs text-muted-foreground">{visibleSteps.length} steps · chronological{hidden > 0 ? " · group nodes hidden" : ""}</span>
+            </CardHeader>
+            <CardContent>
+              {chaos && (
+                <div className="relative mb-2 ml-[268px] h-4">
+                  <div className="absolute inset-y-0 rounded border-x border-dashed border-amber-500/50 bg-amber-500/15 px-1 text-[10px] text-amber-400"
+                       style={{ left: `${chaos.offsetPct}%`, width: `${chaos.widthPct}%` }}>chaos window</div>
+                </div>
+              )}
+              <div className="space-y-1.5">
                 {visibleSteps.map((s, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="flex items-center gap-2 font-medium">
-                      <StepIcon phase={s.phase} />
-                      {s.name}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{s.phase}</TableCell>
-                    <TableCell className="text-muted-foreground">{formatDuration(s.startedAt, s.finishedAt)}</TableCell>
-                  </TableRow>
+                  <div key={i} className="grid grid-cols-[180px_64px_1fr] items-center gap-3">
+                    <span className="flex items-center gap-2 text-sm font-medium"><StepIcon phase={s.phase} />{s.name}</span>
+                    <span className="font-mono text-xs text-muted-foreground">{formatDuration(s.startedAt, s.finishedAt)}</span>
+                    <span className="relative h-3.5 rounded bg-muted">
+                      <span className={`absolute top-0 h-3.5 rounded ${kindOf(s.name)} ${lay.bars[i].running ? "animate-pulse" : ""}`}
+                            style={{ left: `${lay.bars[i].offsetPct}%`, width: `${lay.bars[i].widthPct}%` }} />
+                    </span>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+              </div>
+              {visibleSteps.some((s) => s.message) && (
+                <div className="mt-3 space-y-1">
+                  {visibleSteps.filter((s) => s.message).map((s, i) => (
+                    <div key={i} className="rounded border border-status-failed/40 bg-status-failed/10 px-2.5 py-1.5 font-mono text-xs text-status-failed">
+                      {s.name}: {s.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
     </section>
   );
 }

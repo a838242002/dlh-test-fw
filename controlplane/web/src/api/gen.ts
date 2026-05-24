@@ -350,6 +350,9 @@ export interface components {
                 finishedAt?: string;
                 message?: string;
             }[];
+            description?: string;
+            /** @description Run priority (display-only here; set by the priority feature). */
+            priority?: number;
             /** @description Decoded from MinIO report.json. Absent if no report yet. */
             verdict?: {
                 [key: string]: unknown;
