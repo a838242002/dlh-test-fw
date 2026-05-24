@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { relativeTime, formatDuration } from "@/lib/time";
 import { deriveCategory } from "@/lib/category";
 import { namedSteps, timelineLayout, windowBand } from "@/lib/steps";
+import { cn } from "@/lib/utils";
 
 type RunDetail = components["schemas"]["RunDetail"];
 
@@ -134,10 +135,18 @@ export function RunDetailPage() {
       {visibleSteps.length > 0 && (() => {
         const lay = timelineLayout(visibleSteps, run.finishedAt ?? undefined);
         const v = run.verdict as Record<string, unknown> | undefined;
-        const chaos =
-          v?.chaos_window_start && v?.chaos_window_end
-            ? windowBand(lay.startMs, lay.windowMs, Date.parse(v.chaos_window_start as string), Date.parse(v.chaos_window_end as string))
-            : null;
+        const windows = (() => {
+          const ths = Array.isArray(v?.thresholds) ? (v!.thresholds as Record<string, any>[]) : [];
+          const byWin: Record<string, { start: number; end: number }> = {};
+          for (const t of ths) {
+            if (!t.window || !t.window_start || !t.window_end) continue;
+            const s = Date.parse(t.window_start);
+            const e = Date.parse(t.window_end);
+            const cur = byWin[t.window];
+            byWin[t.window] = cur ? { start: Math.min(cur.start, s), end: Math.max(cur.end, e) } : { start: s, end: e };
+          }
+          return Object.entries(byWin).map(([name, w]) => ({ name, ...windowBand(lay.startMs, lay.windowMs, w.start, w.end) }));
+        })();
         const kindOf = (name: string) =>
           name.includes("chaos") ? "bg-amber-500"
           : name.startsWith("load") || name.includes("testrun") ? "bg-blue-500"
@@ -150,10 +159,27 @@ export function RunDetailPage() {
               <span className="text-xs text-muted-foreground">{visibleSteps.length} steps · chronological{hidden > 0 ? " · group nodes hidden" : ""}</span>
             </CardHeader>
             <CardContent>
-              {chaos && (
-                <div className="relative mb-2 ml-[268px] h-4">
-                  <div className="absolute inset-y-0 rounded border-x border-dashed border-amber-500/50 bg-amber-500/15 px-1 text-[10px] text-amber-400"
-                       style={{ left: `${chaos.offsetPct}%`, width: `${chaos.widthPct}%` }}>chaos window</div>
+              {windows.length > 0 && (
+                <div className="mb-1.5 grid grid-cols-[180px_64px_1fr] items-center gap-3">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Verdict windows</span>
+                  <span></span>
+                  <span className="relative h-4">
+                    {windows.map((w) => (
+                      <span
+                        key={w.name}
+                        title={w.name}
+                        className={cn(
+                          "absolute top-0 h-4 overflow-hidden whitespace-nowrap rounded border px-1 text-[10px] leading-4",
+                          w.name === "chaos"
+                            ? "border-amber-500/50 bg-amber-500/15 text-amber-400"
+                            : "border-blue-500/50 bg-blue-500/15 text-blue-400"
+                        )}
+                        style={{ left: `${w.offsetPct}%`, width: `${w.widthPct}%` }}
+                      >
+                        {w.name}
+                      </span>
+                    ))}
+                  </span>
                 </div>
               )}
               <div className="space-y-1.5">
