@@ -49,6 +49,13 @@ trap cleanup EXIT
 # records its PID for cleanup, and waits up to ~10s for the local port to open.
 port_forward() {
   local svc="$1" lport="$2" rport="$3"
+  # If the port is already open, something else owns it (a stale port-forward or
+  # a local dlh-controlplane). kubectl would fail to bind, but our readiness
+  # probe below would still pass against the squatter and silently target the
+  # wrong server — so refuse loudly instead.
+  if nc -z localhost "$lport" 2>/dev/null; then
+    die "localhost:$lport is already in use — stop whatever is bound to it (e.g. a local 'go run ./cmd/dlh-controlplane' or a stale kubectl port-forward) and re-run."
+  fi
   kubectl -n "$NS" port-forward "svc/$svc" "$lport:$rport" >/dev/null 2>&1 &
   PF_PIDS+=("$!")
   for _ in {1..20}; do
