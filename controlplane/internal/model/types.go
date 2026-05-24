@@ -40,8 +40,12 @@ func ScenarioFromTemplate(t *wfv1.WorkflowTemplate) gen.Scenario {
 	// description can name the SLO being evaluated.
 	var sloName string
 	for _, p := range t.Spec.Arguments.Parameters {
-		if p.Name == "slo_name" && p.Default != nil {
-			sloName = p.Default.String()
+		if p.Name == "slo_name" {
+			if p.Value != nil {
+				sloName = p.Value.String()
+			} else if p.Default != nil {
+				sloName = p.Default.String()
+			}
 			break
 		}
 	}

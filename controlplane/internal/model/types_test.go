@@ -9,6 +9,23 @@ import (
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 )
 
+func TestScenarioFromTemplate_DerivedDescriptionUsesSloValue(t *testing.T) {
+	tmpl := &wfv1.WorkflowTemplate{}
+	tmpl.Name = "kafka-broker-partition"
+	v := wfv1.AnyString("broker-partition")
+	tmpl.Spec.Arguments.Parameters = []wfv1.Parameter{
+		{Name: "slo_name", Value: &v},
+	}
+	s := ScenarioFromTemplate(tmpl)
+	if s.Description == nil {
+		t.Fatal("description is nil")
+	}
+	want := "broker-partition chaos on a kafka target, evaluated against the broker-partition SLO."
+	if *s.Description != want {
+		t.Fatalf("description = %q, want %q", *s.Description, want)
+	}
+}
+
 func TestRunDetailFromWorkflow_StepsSortedByStart(t *testing.T) {
 	base := metav1.Now().Time
 	wf := &wfv1.Workflow{}
