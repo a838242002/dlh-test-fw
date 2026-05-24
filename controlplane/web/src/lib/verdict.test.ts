@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseVerdict } from "@/lib/verdict";
+import { parseVerdict, formatMetricByName } from "@/lib/verdict";
 
 describe("parseVerdict", () => {
   it("returns null for null/undefined", () => {
@@ -24,6 +24,7 @@ describe("parseVerdict", () => {
     expect(v!.thresholds).toHaveLength(2);
     expect(v!.thresholds[0]).toEqual({
       metric: "p95-latency-chaos", value: 0.0000025, bound: "< 2.5", passed: true,
+      cmp: "<", boundValue: 2.5, window: "",
     });
   });
 
@@ -53,5 +54,20 @@ describe("parseVerdict", () => {
   it("tolerates a missing thresholds array", () => {
     const v = parseVerdict({ overall: true });
     expect(v!.thresholds).toEqual([]);
+  });
+});
+
+describe("formatMetricByName", () => {
+  it("latency → time units", () => {
+    expect(formatMetricByName("p95-latency-chaos", 3e-6)).toBe("3 µs");
+    expect(formatMetricByName("p95-latency-chaos", 0.0004)).toBe("0.4 ms");
+    expect(formatMetricByName("p95-latency-chaos", 2.5)).toBe("2.5 s");
+  });
+  it("rate/error → percent", () => {
+    expect(formatMetricByName("error-rate-recovery", 0.2961)).toBe("29.6 %");
+    expect(formatMetricByName("error-rate-recovery", 0.5)).toBe("50 %");
+  });
+  it("fallback → significant figures, no sci-notation", () => {
+    expect(formatMetricByName("throughput", 1234.567)).toBe("1230");
   });
 });

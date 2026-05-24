@@ -3,6 +3,9 @@ export interface ParsedThreshold {
   value: number;
   bound: string;
   passed: boolean;
+  cmp?: string;        // "<" | ">" | ""
+  boundValue?: number; // numeric bound
+  window?: string;     // "chaos" | "recovery" | ""
 }
 
 export interface ParsedVerdict {
@@ -28,6 +31,9 @@ export function parseVerdict(raw: Record<string, unknown> | null | undefined): P
       value: num(t.value),
       bound,
       passed: Boolean(t.passed),
+      cmp: typeof t.lt === "number" ? "<" : typeof t.gt === "number" ? ">" : "",
+      boundValue: typeof t.lt === "number" ? t.lt : typeof t.gt === "number" ? t.gt : NaN,
+      window: typeof t.window === "string" ? t.window : "",
     };
   });
 
@@ -42,4 +48,24 @@ export function parseVerdict(raw: Record<string, unknown> | null | undefined): P
   }
 
   return result;
+}
+
+/** Format a metric value with units inferred from the metric name. */
+export function formatMetricByName(metric: string, v: number): string {
+  if (!Number.isFinite(v)) return String(v);
+  const m = metric.toLowerCase();
+  if (m.includes("latency") || m.includes("duration")) {
+    if (v < 1e-4) return `${trim(v * 1e6)} µs`;
+    if (v < 1) return `${trim(v * 1e3)} ms`;
+    return `${trim(v)} s`;
+  }
+  if (m.includes("rate") || m.includes("error")) {
+    return `${trim(v * 100)} %`;
+  }
+  return trim(v);
+}
+
+/** 3 significant figures, no scientific notation, trailing zeros trimmed. */
+function trim(v: number): string {
+  return parseFloat(v.toPrecision(3)).toString();
 }
