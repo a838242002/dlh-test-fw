@@ -152,10 +152,13 @@ step_images() {
 step_platform() {
   log_step 3 "Installing the platform (helm upgrade --install)"
   helm dependency update helm/dlh-test-fw >/dev/null
+  # 10m (vs the Makefile's 5m): the first install cold-pulls large images
+  # (e.g. grafana ~630MB + sidecars) which can exceed 5m on a slow link and
+  # fail the --wait even though the pods come up moments later.
   helm upgrade --install dlh helm/dlh-test-fw \
     -f helm/dlh-test-fw/values.yaml \
     -f helm/dlh-test-fw/values-minikube.yaml \
-    --namespace "$NS" --create-namespace --wait --timeout 5m
+    --namespace "$NS" --create-namespace --wait --timeout 10m
   log_ok "platform installed"
 }
 
