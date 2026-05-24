@@ -107,7 +107,7 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 			// If there is no Authorization header, inject the ?access_token
 			// value so authMW can verify it via the standard Bearer path.
 			if req.Header.Get("Authorization") == "" {
-				if tok := req.URL.Query().Get("access_token"); tok != "" {
+				if tok := bearerOrQueryToken(req); tok != "" {
 					req = req.Clone(req.Context())
 					req.Header.Set("Authorization", "Bearer "+tok)
 				}
