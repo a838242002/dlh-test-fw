@@ -88,8 +88,20 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 	r.Get("/healthz", healthHandler)
 	r.Get("/readyz", healthHandler)
 
-	// Explicit SSE route — registered BEFORE HandlerFromMux so chi matches
-	// this handler rather than the generated stub.
+	// Register all generated API routes (/api/scenarios, /api/runs, etc.)
+	// plus the generated /healthz + /readyz stubs.
+	h := &Handlers{deps: deps}
+	strictSI := gen.NewStrictHandler(h, nil)
+	gen.HandlerFromMux(strictSI, r)
+
+	// Explicit SSE route — registered AFTER HandlerFromMux so it wins.
+	//
+	// chi v5 uses last-registration-wins for identical route patterns
+	// (tree.go:setEndpoint unconditionally overwrites the handler field).
+	// HandlerFromMux registers the generated stub for /api/runs/{id}/events
+	// via r.Group; registering the real handler here overwrites that stub,
+	// consistent with the /internal/chaos routes below which use the same
+	// post-HandlerFromMux pattern.
 	//
 	// Auth note: EventSource cannot send an Authorization header, so the
 	// client passes its token via ?access_token=.  The global authMW is
@@ -116,14 +128,6 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 		})
 	}
 	r.Get("/api/runs/{id}/events", sseAuthHandler.ServeHTTP)
-
-	// Register all generated API routes (/api/scenarios, /api/runs, etc.)
-	// plus the generated /healthz + /readyz stubs.  The manually registered
-	// /healthz and /readyz above win because chi uses first-registered wins
-	// for identical patterns.
-	h := &Handlers{deps: deps}
-	strictSI := gen.NewStrictHandler(h, nil)
-	gen.HandlerFromMux(strictSI, r)
 
 	// /internal/chaos — chi-direct mount, X-Internal-Token auth (not OIDC).
 	// MUST be registered AFTER gen.HandlerFromMux: HandlerFromMux uses r.Group
