@@ -162,11 +162,115 @@ step_platform() {
   log_ok "platform installed"
 }
 
+# configure_local_target — make the values-shipped local-demo target usable.
+# The chart registers it in the dlh-targets ConfigMap but (by design) does not
+# create its kubeconfig Secret, so the controlplane reports it configured:false.
+# Apply the scoped SA/RBAC (mirrors controlplane/deploy/targets-rbac.yaml.example)
+# and mint a Secret holding a kubeconfig that points back at the in-cluster API.
+configure_local_target() {
+  log_info "configuring local-demo target (SA/RBAC + kubeconfig secret)"
+  kubectl apply -f - >/dev/null <<YAML
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dlh-controlplane-remote
+  namespace: ${NS}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dlh-controlplane-remote
+  namespace: ${NS}
+rules:
+  - apiGroups: ["chaos-mesh.org"]
+    resources: ["schedules", "podchaos", "networkchaos"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dlh-controlplane-remote
+  namespace: ${NS}
+subjects:
+  - kind: ServiceAccount
+    name: dlh-controlplane-remote
+    namespace: ${NS}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dlh-controlplane-remote
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dlh-controlplane-remote-token
+  namespace: ${NS}
+  annotations:
+    kubernetes.io/service-account.name: dlh-controlplane-remote
+type: kubernetes.io/service-account-token
+YAML
+
+  if kubectl -n "$NS" get secret dlh-target-local-demo >/dev/null 2>&1; then
+    log_info "local-demo kubeconfig secret already present (skip)"
+    return 0
+  fi
+
+  # Wait for the token controller to populate the SA-token Secret, then read
+  # the (decoded) token and the (already-base64) cluster CA.
+  local token ca
+  for _ in {1..30}; do
+    token="$(kubectl -n "$NS" get secret dlh-controlplane-remote-token -o jsonpath='{.data.token}' 2>/dev/null | base64 -d)"
+    [[ -n "$token" ]] && break
+    sleep 1
+  done
+  [[ -n "$token" ]] || die "SA token for dlh-controlplane-remote was not populated"
+  ca="$(kubectl -n "$NS" get secret dlh-controlplane-remote-token -o jsonpath='{.data.ca\.crt}')"
+
+  # In-cluster kubeconfig (server reachable from the controlplane pod), stored
+  # as the dlh-target-local-demo Secret the dlh-targets ConfigMap references.
+  local kubeconfig
+  kubeconfig="$(cat <<KCFG
+apiVersion: v1
+kind: Config
+clusters:
+  - name: local-demo
+    cluster:
+      server: https://kubernetes.default.svc
+      certificate-authority-data: ${ca}
+contexts:
+  - name: local-demo
+    context:
+      cluster: local-demo
+      user: dlh-controlplane-remote
+      namespace: ${NS}
+current-context: local-demo
+users:
+  - name: dlh-controlplane-remote
+    user:
+      token: ${token}
+KCFG
+)"
+  kubectl -n "$NS" create secret generic dlh-target-local-demo \
+    --from-literal=kubeconfig="$kubeconfig" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  log_info "local-demo target configured"
+}
+
 step_controlplane() {
-  log_step 4 "Deploying the controlplane"
+  log_step 4 "Deploying + configuring the controlplane"
   kubectl -n "$NS" apply -f controlplane/deploy/
-  kubectl -n "$NS" set env deployment/dlh-controlplane DLH_AUTH_DISABLED=true
+  # DLH_AUTH_DISABLED is local-dev only. The two *_BASE_URL vars enable the
+  # run-detail Argo/Grafana deep links (empty = hidden); they point at the
+  # localhost port-forwards printed in the Next steps block.
+  kubectl -n "$NS" set env deployment/dlh-controlplane \
+    DLH_AUTH_DISABLED=true \
+    DLH_ARGO_BASE_URL=http://localhost:2746 \
+    DLH_GRAFANA_BASE_URL=http://localhost:3001
   kubectl -n "$NS" rollout status deployment/dlh-controlplane --timeout=120s
+  configure_local_target
   log_ok "controlplane ready"
 }
 
@@ -247,6 +351,12 @@ Ongoing access (run in a spare terminal):
                     → http://localhost:8080
   Grafana         : kubectl -n ${NS} port-forward svc/dlh-grafana 3001:80
                     → http://localhost:3001   (${guser} / ${gpass})
+  Argo Workflows  : kubectl -n ${NS} port-forward svc/dlh-argo-workflows-server 2746:2746
+                    → http://localhost:2746
+
+Run detail deep-links open the Argo/Grafana URLs above (start those
+port-forwards first). The local-demo target is registered + configured —
+try it with: dlh run mysql-pod-delete --target local-demo --wait
 
 Use the dlh CLI:
   export PATH="\$PWD/controlplane/bin:\$PATH"
