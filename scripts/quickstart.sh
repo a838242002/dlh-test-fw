@@ -273,11 +273,14 @@ step_crds() {
   fi
   log_step 1 "Pre-installing CRDs (server-side apply)"
   helm dependency update helm/dlh-test-fw >/dev/null
+  # Extract whole CRD documents (apiVersion through end-of-doc). A naive
+  # "start printing at kind:" filter drops the preceding apiVersion line, so
+  # buffer each ---delimited doc and emit it only if it is a CRD.
   helm template dlh helm/dlh-test-fw \
     -f helm/dlh-test-fw/values.yaml \
     -f helm/dlh-test-fw/values-minikube.yaml \
     --include-crds \
-    | awk '/^---/{p=0} /kind: CustomResourceDefinition/{p=1} p{print}' \
+    | awk 'function flush(){if(buf ~ /\nkind: CustomResourceDefinition\n/)printf "---\n%s",buf;buf=""} /^---[[:space:]]*$/{flush();next}{buf=buf $0 "\n"} END{flush()}' \
     > /tmp/dlh-crds.yaml
   kubectl apply --server-side --force-conflicts -f /tmp/dlh-crds.yaml
   kubectl wait --for=condition=Established -f /tmp/dlh-crds.yaml --timeout=120s
