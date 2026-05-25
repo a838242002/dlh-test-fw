@@ -171,3 +171,31 @@ func TestGetAuthInfo_PopulatesFromDeps(t *testing.T) {
 		t.Errorf("info: %+v", out)
 	}
 }
+
+func TestCreateRun_ForwardsPriority(t *testing.T) {
+	ns := "dlh-test-fw"
+	baked := int32(100)
+	tmpl := &wfv1.WorkflowTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		Spec:       wfv1.WorkflowSpec{Priority: &baked},
+	}
+	argo := wfake.NewSimpleClientset(tmpl)
+	deps := &Deps{
+		Templates: &fakeTemplates{items: []wfv1.WorkflowTemplate{*tmpl}},
+		Submitter: &runs.Submitter{Argo: argo, Namespace: ns},
+		Manifests: &runs.ManifestWriter{Client: nil, Bucket: "artifacts"},
+	}
+	h := &Handlers{deps: deps}
+
+	prio := 500
+	req := gen.CreateRunRequestObject{Body: &gen.CreateRunRequest{ScenarioId: "mysql-pod-delete", Priority: &prio}}
+	resp, err := h.CreateRun(context.Background(), req)
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	out := resp.(gen.CreateRun202JSONResponse)
+	got, _ := argo.ArgoprojV1alpha1().Workflows(ns).Get(context.Background(), out.Id, metav1.GetOptions{})
+	if got.Spec.Priority == nil || *got.Spec.Priority != 500 {
+		t.Errorf("workflow priority: got %v want 500", got.Spec.Priority)
+	}
+}

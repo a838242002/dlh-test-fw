@@ -152,6 +152,7 @@ func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 	sr, err := h.deps.Submitter.Submit(ctx, runs.SubmitRequest{
 		ScenarioID: body.ScenarioId,
 		TargetID:   targetID,
+		Priority:   body.Priority,
 		Parameters: params,
 		CreatedBy:  createdBy,
 	})
