@@ -393,6 +393,7 @@ components:
         startedAt:  { type: string, format: date-time }
         finishedAt: { type: string, format: date-time }
         score:      { type: number, format: double, nullable: true }
+        priority:   { type: integer, description: "Effective workflow priority. Absent for legacy runs with no spec.priority." }
         workflowName: { type: string }
         target:       { type: string, description: "Remote target ID (Run was injected into a remote cluster). Empty = local." }
         triggeredBy:
@@ -459,6 +460,9 @@ components:
         targetId:
           type: string
           description: "Optional remote target ID. Empty = inject chaos in framework cluster."
+        priority:
+          type: integer
+          description: "Optional priority override. Empty = scenario default (or baked WT value)."
         parameters:
           type: object
           description: "Optional parameter overrides. Keys are WT parameter names."

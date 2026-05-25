@@ -65,6 +65,9 @@ type CreateRunRequest struct {
 	// Parameters Optional parameter overrides. Keys are WT parameter names.
 	Parameters *map[string]string `json:"parameters,omitempty"`
 
+	// Priority Optional priority override. Empty = scenario default (or baked WT value).
+	Priority *int `json:"priority,omitempty"`
+
 	// ScenarioId WorkflowTemplate name (e.g. mysql-pod-delete)
 	ScenarioId string `json:"scenarioId"`
 
@@ -119,10 +122,13 @@ type ProbeResult struct {
 type Run struct {
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
 	Id         string     `json:"id"`
-	Scenario   string     `json:"scenario"`
-	Score      *float64   `json:"score"`
-	StartedAt  time.Time  `json:"startedAt"`
-	Status     RunStatus  `json:"status"`
+
+	// Priority Effective workflow priority. Absent for legacy runs with no spec.priority.
+	Priority  *int      `json:"priority,omitempty"`
+	Scenario  string    `json:"scenario"`
+	Score     *float64  `json:"score"`
+	StartedAt time.Time `json:"startedAt"`
+	Status    RunStatus `json:"status"`
 
 	// Target Remote target ID (Run was injected into a remote cluster). Empty = local.
 	Target *string `json:"target,omitempty"`

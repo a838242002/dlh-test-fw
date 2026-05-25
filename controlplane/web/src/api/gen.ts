@@ -326,6 +326,8 @@ export interface components {
             finishedAt?: string;
             /** Format: double */
             score?: number | null;
+            /** @description Effective workflow priority. Absent for legacy runs with no spec.priority. */
+            priority?: number;
             workflowName?: string;
             /** @description Remote target ID (Run was injected into a remote cluster). Empty = local. */
             target?: string;
@@ -378,6 +380,8 @@ export interface components {
             scenarioId: string;
             /** @description Optional remote target ID. Empty = inject chaos in framework cluster. */
             targetId?: string;
+            /** @description Optional priority override. Empty = scenario default (or baked WT value). */
+            priority?: number;
             /** @description Optional parameter overrides. Keys are WT parameter names. */
             parameters?: {
                 [key: string]: string;
