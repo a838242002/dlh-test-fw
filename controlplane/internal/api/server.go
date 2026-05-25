@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/queue"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/schedules"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
@@ -33,7 +35,13 @@ type Deps struct {
 	Exchanger     *auth.Exchanger      // Phase E — wired in Task 7
 	AuthInfo      AuthInfoConfig       // Phase E — wired in Task 7
 	Schedules     *schedules.Manager   // Phase F — wired in Task 6
+	Locks         LocksReader          // Phase 2 — dlh-scenario-locks semaphore reader
 	Links links.Config // deep-link base URLs (Argo/Grafana)
+}
+
+// LocksReader returns the semaphore keys + slot counts (dlh-scenario-locks).
+type LocksReader interface {
+	Keys(ctx context.Context) ([]queue.LockKey, error)
 }
 
 // AuthInfoConfig holds the IdP configuration exposed via GET /api/auth/info.

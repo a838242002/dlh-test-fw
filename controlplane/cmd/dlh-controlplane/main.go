@@ -133,6 +133,7 @@ func main() {
 		SessionIssuer: sessionIssuer,
 		Exchanger:     exchanger,
 		Schedules:     scheduleMgr,
+		Locks:         &api.ConfigMapLocks{Client: clients.Core, Namespace: cfg.K8sNamespace, Name: cfg.LocksConfigMapName},
 		AuthInfo: api.AuthInfoConfig{
 			OIDCIssuer:   cfg.OIDCIssuerURL,
 			OIDCClientID: cfg.OIDCClientID,

@@ -14,6 +14,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/model"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/queue"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
 )
@@ -340,4 +341,38 @@ func (h *Handlers) PauseSchedule(ctx context.Context, req gen.PauseScheduleReque
 }
 func (h *Handlers) ResumeSchedule(ctx context.Context, req gen.ResumeScheduleRequestObject) (gen.ResumeScheduleResponseObject, error) {
 	return h.handleResumeSchedule(ctx, req)
+}
+
+// GetQueue — GET /api/queue
+func (h *Handlers) GetQueue(ctx context.Context, _ gen.GetQueueRequestObject) (gen.GetQueueResponseObject, error) {
+	keys, err := h.deps.Locks.Keys(ctx)
+	if err != nil {
+		return nil, err
+	}
+	wfs, err := h.deps.Workflows.List(k8s.WorkflowFilter{})
+	if err != nil {
+		return nil, err
+	}
+	lanes := queue.BuildLanes(wfs, keys)
+
+	out := make([]gen.QueueLane, 0, len(lanes))
+	for _, l := range lanes {
+		gl := gen.QueueLane{Key: l.Key, Slots: l.Slots,
+			Running: mapEntries(l.Running), Pending: mapEntries(l.Pending)}
+		out = append(out, gl)
+	}
+	return gen.GetQueue200JSONResponse{Lanes: out}, nil
+}
+
+func mapEntries(es []queue.Entry) []gen.QueueEntry {
+	out := make([]gen.QueueEntry, 0, len(es))
+	for _, e := range es {
+		ge := gen.QueueEntry{Id: e.ID, Scenario: e.Scenario, SubmittedAt: e.SubmittedAt}
+		if e.Priority != nil {
+			p := *e.Priority
+			ge.Priority = &p
+		}
+		out = append(out, ge)
+	}
+	return out
 }

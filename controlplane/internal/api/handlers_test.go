@@ -11,6 +11,7 @@ import (
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/queue"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 )
 
@@ -197,5 +198,41 @@ func TestCreateRun_ForwardsPriority(t *testing.T) {
 	got, _ := argo.ArgoprojV1alpha1().Workflows(ns).Get(context.Background(), out.Id, metav1.GetOptions{})
 	if got.Spec.Priority == nil || *got.Spec.Priority != 500 {
 		t.Errorf("workflow priority: got %v want 500", got.Spec.Priority)
+	}
+}
+
+// fakeLocks implements LocksReader.
+type fakeLocks struct{ keys []queue.LockKey }
+
+func (f *fakeLocks) Keys(_ context.Context) ([]queue.LockKey, error) { return f.keys, nil }
+
+func TestGetQueue_GroupsAndOrders(t *testing.T) {
+	t0 := metav1.Now()
+	mk := func(name, scenario, phase string, prio int32) *wfv1.Workflow {
+		return &wfv1.Workflow{
+			ObjectMeta: metav1.ObjectMeta{Name: name, CreationTimestamp: t0,
+				Labels: map[string]string{"dlh.scenario": scenario}},
+			Spec:   wfv1.WorkflowSpec{Priority: &prio},
+			Status: wfv1.WorkflowStatus{Phase: wfv1.WorkflowPhase(phase)},
+		}
+	}
+	deps := &Deps{
+		Workflows: &fakeWorkflows{items: []*wfv1.Workflow{
+			mk("m-run", "mysql-pod-delete", "Running", 100),
+			mk("m-pend", "mysql-pod-delete", "Pending", 500),
+		}},
+		Locks: &fakeLocks{keys: []queue.LockKey{{Key: "mysql", Slots: 1}, {Key: "kafka", Slots: 1}}},
+	}
+	h := &Handlers{deps: deps}
+	resp, err := h.GetQueue(context.Background(), gen.GetQueueRequestObject{})
+	if err != nil {
+		t.Fatalf("GetQueue: %v", err)
+	}
+	out := resp.(gen.GetQueue200JSONResponse)
+	if len(out.Lanes) != 2 {
+		t.Fatalf("expected 2 lanes, got %d", len(out.Lanes))
+	}
+	if out.Lanes[0].Key != "mysql" || len(out.Lanes[0].Running) != 1 || len(out.Lanes[0].Pending) != 1 {
+		t.Errorf("mysql lane: %+v", out.Lanes[0])
 	}
 }
