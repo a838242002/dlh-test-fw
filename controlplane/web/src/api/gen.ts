@@ -234,6 +234,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/schedules": {
         parameters: {
             query?: never;
@@ -475,6 +491,25 @@ export interface components {
             parameters?: {
                 [key: string]: string;
             };
+        };
+        Queue: {
+            lanes: components["schemas"]["QueueLane"][];
+        };
+        QueueLane: {
+            /** @description Semaphore key / target type (mysql/kafka/doris). */
+            key: string;
+            /** @description Concurrent slots for this key. */
+            slots: number;
+            running: components["schemas"]["QueueEntry"][];
+            /** @description Ordered by release order (priority desc, then oldest first). */
+            pending: components["schemas"]["QueueEntry"][];
+        };
+        QueueEntry: {
+            id: string;
+            scenario: string;
+            priority?: number;
+            /** Format: date-time */
+            submittedAt: string;
         };
     };
     responses: never;
@@ -930,6 +965,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthInfo"];
+                };
+            };
+        };
+    };
+    getQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description per-target-type semaphore lanes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Queue"];
                 };
             };
         };

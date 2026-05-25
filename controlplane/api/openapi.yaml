@@ -269,6 +269,15 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuthInfo" }
+  /api/queue:
+    get:
+      operationId: getQueue
+      responses:
+        "200":
+          description: per-target-type semaphore lanes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
   /api/schedules:
     get:
       operationId: listSchedules
@@ -576,5 +585,33 @@ components:
           type: object
           description: "Optional WorkflowTemplate parameter overrides."
           additionalProperties: { type: string }
+    Queue:
+      type: object
+      required: [lanes]
+      properties:
+        lanes:
+          type: array
+          items: { $ref: "#/components/schemas/QueueLane" }
+    QueueLane:
+      type: object
+      required: [key, slots, running, pending]
+      properties:
+        key:    { type: string, description: "Semaphore key / target type (mysql/kafka/doris)." }
+        slots:  { type: integer, description: "Concurrent slots for this key." }
+        running:
+          type: array
+          items: { $ref: "#/components/schemas/QueueEntry" }
+        pending:
+          type: array
+          description: "Ordered by release order (priority desc, then oldest first)."
+          items: { $ref: "#/components/schemas/QueueEntry" }
+    QueueEntry:
+      type: object
+      required: [id, scenario, submittedAt]
+      properties:
+        id:          { type: string }
+        scenario:    { type: string }
+        priority:    { type: integer }
+        submittedAt: { type: string, format: date-time }
 security:
   - bearerAuth: []

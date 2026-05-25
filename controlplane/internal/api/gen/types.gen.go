@@ -118,6 +118,32 @@ type ProbeResult struct {
 	Ok           bool    `json:"ok"`
 }
 
+// Queue defines model for Queue.
+type Queue struct {
+	Lanes []QueueLane `json:"lanes"`
+}
+
+// QueueEntry defines model for QueueEntry.
+type QueueEntry struct {
+	Id          string    `json:"id"`
+	Priority    *int      `json:"priority,omitempty"`
+	Scenario    string    `json:"scenario"`
+	SubmittedAt time.Time `json:"submittedAt"`
+}
+
+// QueueLane defines model for QueueLane.
+type QueueLane struct {
+	// Key Semaphore key / target type (mysql/kafka/doris).
+	Key string `json:"key"`
+
+	// Pending Ordered by release order (priority desc, then oldest first).
+	Pending []QueueEntry `json:"pending"`
+	Running []QueueEntry `json:"running"`
+
+	// Slots Concurrent slots for this key.
+	Slots int `json:"slots"`
+}
+
 // Run defines model for Run.
 type Run struct {
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
