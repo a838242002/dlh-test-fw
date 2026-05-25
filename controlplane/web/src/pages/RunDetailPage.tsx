@@ -134,18 +134,21 @@ export function RunDetailPage() {
       {/* Steps: chronological timeline with chaos-window band + messages */}
       {visibleSteps.length > 0 && (() => {
         const lay = timelineLayout(visibleSteps, run.finishedAt ?? undefined);
-        const v = run.verdict as Record<string, unknown> | undefined;
         const windows = (() => {
-          const ths = Array.isArray(v?.thresholds) ? (v!.thresholds as Record<string, any>[]) : [];
-          const byWin: Record<string, { start: number; end: number }> = {};
-          for (const t of ths) {
-            if (!t.window || !t.window_start || !t.window_end) continue;
-            const s = Date.parse(t.window_start);
-            const e = Date.parse(t.window_end);
-            const cur = byWin[t.window];
-            byWin[t.window] = cur ? { start: Math.min(cur.start, s), end: Math.max(cur.end, e) } : { start: s, end: e };
+          const byName = (n: string) => visibleSteps.find((s) => s.name === n);
+          const ms = (v?: string) => (v ? Date.parse(v) : NaN);
+          const chaosStep = byName("chaos");
+          const loadStep = byName("load");
+          const out: { name: string; offsetPct: number; widthPct: number }[] = [];
+          const cStart = ms(chaosStep?.startedAt), cEnd = ms(chaosStep?.finishedAt);
+          if (Number.isFinite(cStart) && Number.isFinite(cEnd)) {
+            out.push({ name: "chaos", ...windowBand(lay.startMs, lay.windowMs, cStart, cEnd) });
           }
-          return Object.entries(byWin).map(([name, w]) => ({ name, ...windowBand(lay.startMs, lay.windowMs, w.start, w.end) }));
+          const lEnd = ms(loadStep?.finishedAt);
+          if (Number.isFinite(cEnd) && Number.isFinite(lEnd) && lEnd > cEnd) {
+            out.push({ name: "recovery", ...windowBand(lay.startMs, lay.windowMs, cEnd, lEnd) });
+          }
+          return out;
         })();
         const guides = windows.flatMap((w) => [
           { x: w.offsetPct, kind: w.name },
