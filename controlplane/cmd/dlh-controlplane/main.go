@@ -139,6 +139,7 @@ func main() {
 		Exchanger:     exchanger,
 		Schedules:     scheduleMgr,
 		Locks:         &api.ConfigMapLocks{Client: clients.Core, Namespace: cfg.K8sNamespace, Name: cfg.LocksConfigMapName},
+		Priorities:    &priorities.Store{Client: clients.Core, Namespace: cfg.K8sNamespace, Name: cfg.PrioritiesConfigMapName},
 		AuthInfo: api.AuthInfoConfig{
 			OIDCIssuer:   cfg.OIDCIssuerURL,
 			OIDCClientID: cfg.OIDCClientID,

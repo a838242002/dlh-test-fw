@@ -364,6 +364,55 @@ func (h *Handlers) GetQueue(ctx context.Context, _ gen.GetQueueRequestObject) (g
 	return gen.GetQueue200JSONResponse{Lanes: out}, nil
 }
 
+// GetScenarioPriorities — GET /api/scenario-priorities
+func (h *Handlers) GetScenarioPriorities(ctx context.Context, _ gen.GetScenarioPrioritiesRequestObject) (gen.GetScenarioPrioritiesResponseObject, error) {
+	tmpls, err := h.deps.Templates.ListTemplates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	overrides, err := h.deps.Priorities.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]gen.ScenarioPriority, 0, len(tmpls))
+	for _, t := range tmpls {
+		baked := 0
+		if t.Spec.Priority != nil {
+			baked = int(*t.Spec.Priority)
+		}
+		sp := gen.ScenarioPriority{Scenario: t.Name, Baked: baked, Effective: baked}
+		if ov, ok := overrides[t.Name]; ok {
+			o := ov
+			sp.Override = &o
+			sp.Effective = ov
+		}
+		items = append(items, sp)
+	}
+	return gen.GetScenarioPriorities200JSONResponse{Items: items}, nil
+}
+
+// PutScenarioPriority — PUT /api/scenario-priorities/{id}
+func (h *Handlers) PutScenarioPriority(ctx context.Context, req gen.PutScenarioPriorityRequestObject) (gen.PutScenarioPriorityResponseObject, error) {
+	if req.Body == nil {
+		return gen.PutScenarioPriority400Response{}, nil
+	}
+	tmpl, err := h.deps.Templates.GetTemplate(ctx, req.Id)
+	if err != nil || tmpl == nil {
+		return gen.PutScenarioPriority404Response{}, nil
+	}
+	if err := h.deps.Priorities.Set(ctx, req.Id, req.Body.Priority); err != nil {
+		return nil, err
+	}
+	baked := 0
+	if tmpl.Spec.Priority != nil {
+		baked = int(*tmpl.Spec.Priority)
+	}
+	o := req.Body.Priority
+	return gen.PutScenarioPriority200JSONResponse{
+		Scenario: req.Id, Baked: baked, Override: &o, Effective: req.Body.Priority,
+	}, nil
+}
+
 func mapEntries(es []queue.Entry) []gen.QueueEntry {
 	out := make([]gen.QueueEntry, 0, len(es))
 	for _, e := range es {

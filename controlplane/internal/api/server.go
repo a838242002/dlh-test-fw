@@ -36,7 +36,15 @@ type Deps struct {
 	AuthInfo      AuthInfoConfig       // Phase E — wired in Task 7
 	Schedules     *schedules.Manager   // Phase F — wired in Task 6
 	Locks         LocksReader          // Phase 2 — dlh-scenario-locks semaphore reader
+	Priorities    PrioritiesStore      // Phase 3 — per-scenario default priority overrides
 	Links links.Config // deep-link base URLs (Argo/Grafana)
+}
+
+// PrioritiesStore reads + writes per-scenario default priority overrides.
+type PrioritiesStore interface {
+	All(ctx context.Context) (map[string]int, error)
+	Get(ctx context.Context, scenario string) (int, bool, error)
+	Set(ctx context.Context, scenario string, priority int) error
 }
 
 // LocksReader returns the semaphore keys + slot counts (dlh-scenario-locks).
@@ -101,6 +109,16 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 	h := &Handlers{deps: deps}
 	strictSI := gen.NewStrictHandler(h, nil)
 	gen.HandlerFromMux(strictSI, r)
+
+	// Admin-only gate on editing per-scenario default priorities. Registered
+	// AFTER HandlerFromMux so it overrides the ungated generated route
+	// (chi last-registration-wins). The global authMW (r.Use above) has
+	// already populated the role in context; RequireRole just checks it.
+	{
+		wrapper := gen.ServerInterfaceWrapper{Handler: strictSI}
+		r.With(auth.RequireRole(auth.RoleAdmin)).
+			Put("/api/scenario-priorities/{id}", wrapper.PutScenarioPriority)
+	}
 
 	// Explicit SSE route — registered AFTER HandlerFromMux so it wins.
 	//

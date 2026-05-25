@@ -206,6 +206,65 @@ type fakeLocks struct{ keys []queue.LockKey }
 
 func (f *fakeLocks) Keys(_ context.Context) ([]queue.LockKey, error) { return f.keys, nil }
 
+type fakePriorities struct{ m map[string]int }
+
+func (f *fakePriorities) All(_ context.Context) (map[string]int, error) { return f.m, nil }
+func (f *fakePriorities) Get(_ context.Context, s string) (int, bool, error) {
+	v, ok := f.m[s]
+	return v, ok, nil
+}
+func (f *fakePriorities) Set(_ context.Context, s string, p int) error {
+	if f.m == nil {
+		f.m = map[string]int{}
+	}
+	f.m[s] = p
+	return nil
+}
+
+func TestPutAndGetScenarioPriorities(t *testing.T) {
+	ns := "dlh-test-fw"
+	baked := int32(100)
+	tmpl := wfv1.WorkflowTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		Spec:       wfv1.WorkflowSpec{Priority: &baked},
+	}
+	fp := &fakePriorities{m: map[string]int{}}
+	deps := &Deps{
+		Templates:  &fakeTemplates{items: []wfv1.WorkflowTemplate{tmpl}},
+		Priorities: fp,
+	}
+	h := &Handlers{deps: deps}
+
+	// PUT override 500
+	prio := 500
+	putResp, err := h.PutScenarioPriority(context.Background(), gen.PutScenarioPriorityRequestObject{
+		Id:   "mysql-pod-delete",
+		Body: &gen.PutScenarioPriorityJSONRequestBody{Priority: prio},
+	})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	po := putResp.(gen.PutScenarioPriority200JSONResponse)
+	if po.Override == nil || *po.Override != 500 || po.Effective != 500 || po.Baked != 100 {
+		t.Errorf("put result: %+v", po)
+	}
+
+	// GET reflects it
+	getResp, _ := h.GetScenarioPriorities(context.Background(), gen.GetScenarioPrioritiesRequestObject{})
+	go200 := getResp.(gen.GetScenarioPriorities200JSONResponse)
+	if len(go200.Items) != 1 || go200.Items[0].Scenario != "mysql-pod-delete" || go200.Items[0].Effective != 500 {
+		t.Errorf("get items: %+v", go200.Items)
+	}
+
+	// PUT unknown scenario → 404
+	r404, _ := h.PutScenarioPriority(context.Background(), gen.PutScenarioPriorityRequestObject{
+		Id: "nope", Body: &gen.PutScenarioPriorityJSONRequestBody{Priority: 1},
+	})
+	if _, ok := r404.(gen.PutScenarioPriority404Response); !ok {
+		t.Errorf("expected 404 for unknown scenario, got %T", r404)
+	}
+}
+
 func TestGetQueue_GroupsAndOrders(t *testing.T) {
 	t0 := metav1.Now()
 	mk := func(name, scenario, phase string, prio int32) *wfv1.Workflow {
