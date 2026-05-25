@@ -11,10 +11,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// ScenarioDefaults looks up a per-scenario default priority override.
+type ScenarioDefaults interface {
+	Get(ctx context.Context, scenario string) (int, bool, error)
+}
+
 // Submitter creates new Workflow CRs from WorkflowTemplate refs.
 type Submitter struct {
 	Argo      wfclient.Interface
 	Namespace string
+	Defaults  ScenarioDefaults // optional; nil = no per-scenario defaults
 }
 
 // SubmitRequest is the inbound payload (one-step removed from the HTTP DTO).
@@ -71,7 +77,7 @@ func (s *Submitter) Submit(ctx context.Context, req SubmitRequest) (*SubmitResul
 	// Resolve the EFFECTIVE priority so the Workflow is self-describing in the
 	// UI: explicit request override → (Phase 3: scenario default) → template's
 	// baked spec.priority. nil leaves spec.priority unset (legacy behaviour).
-	effPriority := s.resolvePriority(req, tmpl)
+	effPriority := s.resolvePriority(ctx, req, tmpl)
 
 	wf := &wfv1.Workflow{
 		ObjectMeta: metav1.ObjectMeta{
@@ -97,12 +103,18 @@ func (s *Submitter) Submit(ctx context.Context, req SubmitRequest) (*SubmitResul
 }
 
 // resolvePriority returns the effective workflow priority pointer.
-// Order: explicit request override → template's baked spec.priority.
-// (Phase 3 inserts a scenario-default ConfigMap lookup between the two.)
-func (s *Submitter) resolvePriority(req SubmitRequest, tmpl *wfv1.WorkflowTemplate) *int32 {
+// Order: explicit request override → per-scenario default (dlh-scenario-priorities)
+// → template's baked spec.priority.
+func (s *Submitter) resolvePriority(ctx context.Context, req SubmitRequest, tmpl *wfv1.WorkflowTemplate) *int32 {
 	if req.Priority != nil {
 		v := int32(*req.Priority)
 		return &v
+	}
+	if s.Defaults != nil {
+		if d, ok, err := s.Defaults.Get(ctx, req.ScenarioID); err == nil && ok {
+			v := int32(d)
+			return &v
+		}
 	}
 	if tmpl != nil && tmpl.Spec.Priority != nil {
 		v := *tmpl.Spec.Priority
