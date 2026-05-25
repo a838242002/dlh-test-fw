@@ -282,6 +282,11 @@ type ListRunsParams struct {
 	Limit    *int       `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ReprioritizeRunJSONBody defines parameters for ReprioritizeRun.
+type ReprioritizeRunJSONBody struct {
+	Priority int `json:"priority"`
+}
+
 // PutScenarioPriorityJSONBody defines parameters for PutScenarioPriority.
 type PutScenarioPriorityJSONBody struct {
 	Priority int `json:"priority"`
@@ -292,6 +297,9 @@ type OidcExchangeJSONRequestBody = ExchangeRequest
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = CreateRunRequest
+
+// ReprioritizeRunJSONRequestBody defines body for ReprioritizeRun for application/json ContentType.
+type ReprioritizeRunJSONRequestBody ReprioritizeRunJSONBody
 
 // PutScenarioPriorityJSONRequestBody defines body for PutScenarioPriority for application/json ContentType.
 type PutScenarioPriorityJSONRequestBody PutScenarioPriorityJSONBody

@@ -149,6 +149,32 @@ paths:
             text/event-stream:
               schema:
                 type: string
+  /api/runs/{id}/priority:
+    post:
+      operationId: reprioritizeRun
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority: { type: integer }
+      responses:
+        "202":
+          description: re-prioritized
+        "400":
+          description: invalid request
+        "404":
+          description: run not found
+        "409":
+          description: run is not pending (cannot reorder a running/finished run)
   /internal/chaos:
     post:
       operationId: createChaos
