@@ -250,6 +250,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/scenario-priorities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getScenarioPriorities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenario-priorities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putScenarioPriority"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/schedules": {
         parameters: {
             query?: never;
@@ -510,6 +542,15 @@ export interface components {
             priority?: number;
             /** Format: date-time */
             submittedAt: string;
+        };
+        ScenarioPriority: {
+            scenario: string;
+            /** @description WorkflowTemplate's baked spec.priority. */
+            baked: number;
+            /** @description Current override from dlh-scenario-priorities; null = none (uses baked). */
+            override?: number | null;
+            /** @description override ?? baked. */
+            effective?: number;
         };
     };
     responses: never;
@@ -986,6 +1027,77 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Queue"];
                 };
+            };
+        };
+    };
+    getScenarioPriorities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description per-scenario baked default + current override */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ScenarioPriority"][];
+                    };
+                };
+            };
+        };
+    };
+    putScenarioPriority: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    priority: number;
+                };
+            };
+        };
+        responses: {
+            /** @description updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioPriority"];
+                };
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description forbidden (admin role required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description scenario not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

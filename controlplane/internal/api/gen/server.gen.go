@@ -49,6 +49,12 @@ type ServerInterface interface {
 	// (GET /api/runs/{id}/events)
 	StreamRunEvents(w http.ResponseWriter, r *http.Request, id string)
 
+	// (GET /api/scenario-priorities)
+	GetScenarioPriorities(w http.ResponseWriter, r *http.Request)
+
+	// (PUT /api/scenario-priorities/{id})
+	PutScenarioPriority(w http.ResponseWriter, r *http.Request, id string)
+
 	// (GET /api/scenarios)
 	ListScenarios(w http.ResponseWriter, r *http.Request)
 
@@ -136,6 +142,16 @@ func (_ Unimplemented) GetRun(w http.ResponseWriter, r *http.Request, id string)
 
 // (GET /api/runs/{id}/events)
 func (_ Unimplemented) StreamRunEvents(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /api/scenario-priorities)
+func (_ Unimplemented) GetScenarioPriorities(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (PUT /api/scenario-priorities/{id})
+func (_ Unimplemented) PutScenarioPriority(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -440,6 +456,57 @@ func (siw *ServerInterfaceWrapper) StreamRunEvents(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StreamRunEvents(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetScenarioPriorities operation middleware
+func (siw *ServerInterfaceWrapper) GetScenarioPriorities(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetScenarioPriorities(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutScenarioPriority operation middleware
+func (siw *ServerInterfaceWrapper) PutScenarioPriority(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutScenarioPriority(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -963,6 +1030,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/api/runs/{id}/events", wrapper.StreamRunEvents)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/scenario-priorities", wrapper.GetScenarioPriorities)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/scenario-priorities/{id}", wrapper.PutScenarioPriority)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/scenarios", wrapper.ListScenarios)
 	})
 	r.Group(func(r chi.Router) {
@@ -1202,6 +1275,66 @@ func (response StreamRunEvents200TexteventStreamResponse) VisitStreamRunEventsRe
 	}
 	_, err := io.Copy(w, response.Body)
 	return err
+}
+
+type GetScenarioPrioritiesRequestObject struct {
+}
+
+type GetScenarioPrioritiesResponseObject interface {
+	VisitGetScenarioPrioritiesResponse(w http.ResponseWriter) error
+}
+
+type GetScenarioPriorities200JSONResponse struct {
+	Items []ScenarioPriority `json:"items"`
+}
+
+func (response GetScenarioPriorities200JSONResponse) VisitGetScenarioPrioritiesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutScenarioPriorityRequestObject struct {
+	Id   string `json:"id"`
+	Body *PutScenarioPriorityJSONRequestBody
+}
+
+type PutScenarioPriorityResponseObject interface {
+	VisitPutScenarioPriorityResponse(w http.ResponseWriter) error
+}
+
+type PutScenarioPriority200JSONResponse ScenarioPriority
+
+func (response PutScenarioPriority200JSONResponse) VisitPutScenarioPriorityResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PutScenarioPriority400Response struct {
+}
+
+func (response PutScenarioPriority400Response) VisitPutScenarioPriorityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type PutScenarioPriority403Response struct {
+}
+
+func (response PutScenarioPriority403Response) VisitPutScenarioPriorityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(403)
+	return nil
+}
+
+type PutScenarioPriority404Response struct {
+}
+
+func (response PutScenarioPriority404Response) VisitPutScenarioPriorityResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
 }
 
 type ListScenariosRequestObject struct {
@@ -1593,6 +1726,12 @@ type StrictServerInterface interface {
 	// (GET /api/runs/{id}/events)
 	StreamRunEvents(ctx context.Context, request StreamRunEventsRequestObject) (StreamRunEventsResponseObject, error)
 
+	// (GET /api/scenario-priorities)
+	GetScenarioPriorities(ctx context.Context, request GetScenarioPrioritiesRequestObject) (GetScenarioPrioritiesResponseObject, error)
+
+	// (PUT /api/scenario-priorities/{id})
+	PutScenarioPriority(ctx context.Context, request PutScenarioPriorityRequestObject) (PutScenarioPriorityResponseObject, error)
+
 	// (GET /api/scenarios)
 	ListScenarios(ctx context.Context, request ListScenariosRequestObject) (ListScenariosResponseObject, error)
 
@@ -1875,6 +2014,63 @@ func (sh *strictHandler) StreamRunEvents(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StreamRunEventsResponseObject); ok {
 		if err := validResponse.VisitStreamRunEventsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetScenarioPriorities operation middleware
+func (sh *strictHandler) GetScenarioPriorities(w http.ResponseWriter, r *http.Request) {
+	var request GetScenarioPrioritiesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetScenarioPriorities(ctx, request.(GetScenarioPrioritiesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetScenarioPriorities")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetScenarioPrioritiesResponseObject); ok {
+		if err := validResponse.VisitGetScenarioPrioritiesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutScenarioPriority operation middleware
+func (sh *strictHandler) PutScenarioPriority(w http.ResponseWriter, r *http.Request, id string) {
+	var request PutScenarioPriorityRequestObject
+
+	request.Id = id
+
+	var body PutScenarioPriorityJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutScenarioPriority(ctx, request.(PutScenarioPriorityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutScenarioPriority")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutScenarioPriorityResponseObject); ok {
+		if err := validResponse.VisitPutScenarioPriorityResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2275,58 +2471,62 @@ func (sh *strictHandler) GetReadyz(w http.ResponseWriter, r *http.Request) {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+xbeW/cuBX/Kg9qgdjIHM4eRetF/3Bs78a7aeza46ZAYuxypKcRdyhS4WF7NhigH6Kf",
-	"sJ+kIClpdHAOJ07SBfqPMZZ4vPd79yP1PopFXgiOXKvo8H2k4gxz4n4eGZ2d8VTY34UUBUpN0b0hRmcn",
-	"VJEpw8T+rxcFRofRVAiGhEfLQRTTI5NQ5DHa9wmqWNJCU8Gjw6h6A8dncCfkPGXiToHKhGEJSHxnUGm4",
-	"y5BDTrmmfAbnZyfHoMUcuYoG1W5KS8pndjNBk/iYUeT6rElOe8CZUgZl4PVyENlNqbS8vGmO7ax8U28t",
-	"pr9irO3KxxkR6hKVMNKz2gGqoP9AqRzf7yO8J3nB7AKxnTbMUWUjIWfj22eEFRl5FmJuTnnSnnwVZ5gY",
-	"hqHROWqSEE3c5klCLeSEXTSI0tJggBFVYPzASR3gGryWVDfIKTfYCuElpn0UKwh63HKS49oXqiBx+K30",
-	"m7S18rwg7wxCRnjCcATXly+HiqQ4gguiFGgBJ6cvTyenMKZco+SEjZ0Qx+8lpstRXxYddOyeQe4lEo2X",
-	"hl96xe9zXxBJctQo1Xr5BJjscucnQb0aiFuUkiaoRvATLhQQifB60hjgQGxwtiK6kFRIqhchFKt9yiH1",
-	"NiM4zQu9gL+CipETSQUkmBLDNOwJCVMyx8Tuf0uYwf3GthbvGUqnpOVMb+btnV+XnmSCecGIRkc+7OFo",
-	"NoJ8od6xYSGSYYIMNe6HTEcTOUMdWrpmSmIuNIIfCWcnK54ot9iAUwmgHFILonVuEDOjNMrtGtJgbr2i",
-	"VLa/Vlti6X1Nm4MrTXhCZALfDlOKLAE7DPC+kKisxY5CgNAAFNX+QBPkmqYU5QheijuUMVEIzo1xk6Ok",
-	"MTyFJ8Mn9u/oCezN/6y8RKRhqPaDGz6upvcUIqT6Ie3+39WyXbRqEGma42+CByLv2dGrI9C/NYk+UpSM",
-	"J2K+EPurfa4nx9v1lVoH38Bq4HUvpLun93FG+Gy91rrY3qf39N672kYCAHs/vICj2A5Q8OPryQBQx6P9",
-	"rdT6HTYTpwrBVSiKxzEqNQnTeJUJqYeM3mICseBaClYwwhGUNy1L5AiukCdAFDxHIteIDe8LKlEdOXhS",
-	"IXOio8MoIRqHVqKhKTMpTOFIpBrzsHWUD4iUZOG023jOtyZCTa6b1IUwvJBiagE0LCBclFLIIG3Wgni8",
-	"eEW4UC2uKdd/+iYYAsQ8lHB2c7h5kMq/GzQB8VpptUH8o8sQoj+MV7nxuEyMx26Rl4RjH9wOFX7dtYSc",
-	"ci0XfWpoONVphtz1gTE4VZlpTrXGZHfV2mTqUXvFtfw5jPq5HAayhivMSZEJiTDHBYwr12fXhT3nVsdz",
-	"ks7JOBGSrgseyBP7s+9XZYISE5guQCJDG6aEfQR7dY5iJwxA25JDsMSWHymVSruNdlcKL9CAyUnDeUna",
-	"I6ymmPClWpvNY8FjIyVyDW4EpEKCzqiymIbSqY6MrWCqxVckr3ANyfnS8L6EU8qpyh6ibYNdlL4TGdIU",
-	"Y01vsa4g64xzBEdTZWGwADCckXgB0nAFd1RnwAXYSmRUj96YaIbtKRYS27wJM3X1GDeM2aq4UzFxk0/L",
-	"hTWR+mHYKE208Y6Um9yK6qIUiRNAKaYrE8eICVpL/Z5Q5n6cOs87iK75nIu7ZvjrJiR9hC87WQjsXRoO",
-	"d0SVuS4mQLkWQKp8pUxJGmkEEzFh4RRF0tnMWuXzoDcoy3+d2XTRb5rS0oYJ1Dno3rEUvMrInLGGXOna",
-	"BLY93yVF+x9bgS8DVlJp6KtwtbrN13rxN1VnjSmeoCaUuYSFsfM0Onyz2c1Y610OesmOnIlryfrInSAW",
-	"wCif22LYiuZIzkSdZSu4Plu5HGl4bYZOlCcvX/x8dPnD+c/Pj65Of76+fAlUgeEKdVA/Wju/DyU+JCWc",
-	"XEvWDtzdwD5FFpxvJNsuCT/dDw5B3nXMH1i+PKC6thZYB629hKqCkcVQcLaADCV+Bwq1tRErnXpcikQb",
-	"ubak1lhswvBDvHmOSpEZPqxlU2REhd882Gd25Oi2rDbYRZD/d4mf2iXeokyoL0I2NRy7DigWCSaQSpHD",
-	"3yg/OweJhZB69KsSK39DUxvk/RtYeAezJi43OpmdJzfLQXTVSALaKHbcU5vMFyYnHJTJcyIX33lqE5aN",
-	"Kp8+bgwHwrnQxP0UEhKUto4Mu0Rv7a/W2c+6FKrllNYYedmI295d2d2gQza4u+1N3NMusqsuywBcPTAA",
-	"VxDsVr80AQxRUmtwoP63meaxMFx3q9Svvwp61dg160pT7kFW9eh6L1KXuAU3WlMOr5E6I0pX/DzIdT9W",
-	"DNtSkLrWQmrYQ1hVRtlaZN2J08ppb2yIPSz5WtvRmtS7dVSFMXGHyaTW4gd2Z2LBUzozEgN+eiINWu9G",
-	"4JYwmsDcTNGPd+GACeK8Y5WDeUAavqQB1gc6k9WOVxjLNWhvOnvpw30TcsYKY2NzF6vCuYdw6hpnR0Zn",
-	"q/++r5Tmx9cTJzc72jLq3q4Yz7QuHFflyU3dyaMW1gxJ4kZ7Txb9c3hWjhtWza9KSgX9CRfRcunW8gej",
-	"bRFd2BwDjuHowifDCcuGGpUepncjOOMxMwkqcO0T3xxEnhSCcq1g7+L8avKWj0lBx7ZcHdQHTtWT8Xua",
-	"LPeBcJdm+MaoP3AopLhfrNYavXVEU+0is6Wh2ZiMXPj1Z5LRwejZ6MD11QrkpKDRYfS1e2Rdgc4c9I4A",
-	"YnQ2rpguVd8qvotdZ0l0GP2Auj4xtmL23VS3wlcHB+5sQnCN3t5JUTAau8ljG71XR8/bmiP1Hk4Mbfhj",
-	"d1Q7TElM+QwsyeDVtaVV0eGbG/u/40vQJB5j2QJ29ixUgLlzmsRVozjySoxKPxfJ4tEY6zbJl21rsYnL",
-	"8hPi2muDB/BVjV531d72jfXlIPrGE9OeQbn3VbJiyo571h/ne/sSfRq9XlzvqhbuOhX0Pd5PiJPfIABO",
-	"gXLofe7QNS5V3dT0jeDlsubCWvNaJl5SpS+Nu+nQjMZvSnf1zqBcrLxVs1NQ09/zuuG5Zcj8gJmrpsSD",
-	"Z1IeY2vibhVdeDVGc9pmoE5lnx0cDKKc3NPc5NHht+4/yv1/zwLd0JuP1JlOnVVF/J0avr4Ts/k0wS8U",
-	"CJc9RbT1YUaVFrKMVWGXVt88+ET+rHezYSeH9tWj7e9A7aND4hgL52Me4rK+6Y+rrzFwoSEVhiddE3cB",
-	"209kqDEgAsJjZF4EIVu3IXil7C45beO3yQBvwth2IqajgPkKtA1NgOUWp4O1PvizMXTwmMpStk/XGFRS",
-	"vt0FmZ4OjPG2ul8XxOxKSyT5peGnftwXAU/jvfaEDpWjp41ed8F+coDyFuXQ9WA8v1Cu04CkMprN4e+q",
-	"HvUFnXLd/nk8z1y7jJhowsQsiEztNdaZ19Uq5P+ubGwF6AZkPsTOVNnp2KZU1agvqlRlk+nxlIpRpUGk",
-	"sEJha9BvNGs/XeTvXlXbKfw/e0Rtq5AO1Im+PfdJUgA79C+hoWWTnTCJJFkA3lOlVVCNt+YNJ+55Q4qf",
-	"wQ8E2PfkJe7+ZsXWTHDc35wefF66Dz6LRtXi/Sj/5ZOFghi1oRVxYV9/cdk7IpOP4lOiMvkGRi/d+y/O",
-	"qSfzgaz60npzQJqUY75gOCrb2I9Ye+KMKu3uW1UQ9FHZmuFMqsbE78o/VGD2USlPjD/ENzQhG+vq8mzQ",
-	"XiZY6dSx4BzdHdnfG4bNi6ShHpt9DbJ8vyuOGRKms982adyLckiYtc6Fwp/C/cn2hyFNOXVu6hHG/MF9",
-	"6wYN/JJpXfwCurpa7q5m+PNjnWHZ6n89UaO33KZrQJV7fs2VlibWxhqdH3R8CXurz3HgKcwpT+ApVJ/j",
-	"wFN3CW5/9JYfGZ3ZlW4pcat1Tz/AH49ATKRcUD7zpDSOE56ot1xlRLqWcCxRw3/+9W94dT5xl7b9UUQo",
-	"B3Wf/XyqBLT1VdZnTjx73zOFElAnJlkOgl3z0akFaV0LfUoa50J1V/7b0HrlvRR3TOVvZ3cU+n33rOzN",
-	"zTKk5P7rp+2paiXsji/qXq9JUboPAyVqI7m3kXilLSM45bFI0H9J4s4Yx/bX2Kq317SAd7Oi+pyp7wPE",
-	"syvobv2N/uvSj9jVfVm9+Lr/6pXQ4PYKOLgurc0DWUvooGwAecm6C3bROFreLP8bAAD//6rbF0JiOgAA",
+	"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",
+	"xsyXPwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

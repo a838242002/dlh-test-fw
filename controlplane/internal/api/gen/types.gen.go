@@ -232,6 +232,19 @@ type Scenario struct {
 	TargetType *string `json:"targetType,omitempty"`
 }
 
+// ScenarioPriority defines model for ScenarioPriority.
+type ScenarioPriority struct {
+	// Baked WorkflowTemplate's baked spec.priority.
+	Baked int `json:"baked"`
+
+	// Effective override ?? baked.
+	Effective *int `json:"effective,omitempty"`
+
+	// Override Current override from dlh-scenario-priorities; null = none (uses baked).
+	Override *int   `json:"override"`
+	Scenario string `json:"scenario"`
+}
+
 // Schedule defines model for Schedule.
 type Schedule struct {
 	ActiveCount     *int32             `json:"activeCount,omitempty"`
@@ -269,11 +282,19 @@ type ListRunsParams struct {
 	Limit    *int       `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// PutScenarioPriorityJSONBody defines parameters for PutScenarioPriority.
+type PutScenarioPriorityJSONBody struct {
+	Priority int `json:"priority"`
+}
+
 // OidcExchangeJSONRequestBody defines body for OidcExchange for application/json ContentType.
 type OidcExchangeJSONRequestBody = ExchangeRequest
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = CreateRunRequest
+
+// PutScenarioPriorityJSONRequestBody defines body for PutScenarioPriority for application/json ContentType.
+type PutScenarioPriorityJSONRequestBody PutScenarioPriorityJSONBody
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = CreateScheduleRequest

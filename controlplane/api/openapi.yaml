@@ -278,6 +278,50 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Queue" }
+  /api/scenario-priorities:
+    get:
+      operationId: getScenarioPriorities
+      responses:
+        "200":
+          description: per-scenario baked default + current override
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ScenarioPriority" }
+  /api/scenario-priorities/{id}:
+    put:
+      operationId: putScenarioPriority
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority: { type: integer }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScenarioPriority" }
+        "400":
+          description: invalid request
+        "403":
+          description: forbidden (admin role required)
+        "404":
+          description: scenario not found
   /api/schedules:
     get:
       operationId: listSchedules
@@ -613,5 +657,13 @@ components:
         scenario:    { type: string }
         priority:    { type: integer }
         submittedAt: { type: string, format: date-time }
+    ScenarioPriority:
+      type: object
+      required: [scenario, baked]
+      properties:
+        scenario: { type: string }
+        baked:    { type: integer, description: "WorkflowTemplate's baked spec.priority." }
+        override: { type: integer, nullable: true, description: "Current override from dlh-scenario-priorities; null = none (uses baked)." }
+        effective: { type: integer, description: "override ?? baked." }
 security:
   - bearerAuth: []
