@@ -34,31 +34,41 @@ function Meta({ label, value, title, children }: { label: string; value?: string
 export function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [run, setRun] = useState<RunDetail | null>(null);
-  const [liveStatus, setLiveStatus] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     if (!id) return;
-    api.GET("/api/runs/{id}", { params: { path: { id } } }).then(({ data, error }) => {
-      if (error) setError(error);
-      else setRun(data as RunDetail);
-    });
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
+    const load = () => {
+      api.GET("/api/runs/{id}", { params: { path: { id } } }).then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) setError(error);
+        else setRun(data as RunDetail);
+      });
+    };
+    load();
+
+    // Each SSE event signals the run changed; re-fetch the full detail so the
+    // status, the Steps timeline, and the verdict all update live (the event
+    // payload only carries the phase). Debounced to coalesce bursts of node
+    // updates during execution.
+    const onEvent = () => {
+      clearTimeout(timer);
+      timer = setTimeout(load, 250);
+    };
     const tok = getAuthToken();
     const es = new EventSource(`/api/runs/${id}/events${tok ? `?access_token=${encodeURIComponent(tok)}` : ""}`);
-    const onEvent = (e: MessageEvent) => {
-      try {
-        const d = JSON.parse(e.data);
-        if (d.phase) setLiveStatus(d.phase);
-      } catch {
-        /* ignore */
-      }
-    };
     es.addEventListener("snapshot", onEvent);
     es.addEventListener("MODIFIED", onEvent);
     es.addEventListener("ADDED", onEvent);
     es.addEventListener("DELETED", onEvent);
-    return () => es.close();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      es.close();
+    };
   }, [id]);
 
   if (error) return <ErrorState message="Failed to load run" details={error} />;
@@ -71,7 +81,7 @@ export function RunDetailPage() {
     );
   }
 
-  const status = liveStatus ?? String(run.status ?? "Unknown");
+  const status = String(run.status ?? "Unknown");
   const allSteps = run.steps ?? [];
   const visibleSteps = namedSteps(allSteps, run.id);
   const hidden = allSteps.length - visibleSteps.length;
