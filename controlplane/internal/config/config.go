@@ -38,6 +38,8 @@ type Config struct {
 	GrafanaBaseURL string
 	// LocksConfigMapName is the dlh-scenario-locks ConfigMap (semaphore slot counts).
 	LocksConfigMapName string
+	// PrioritiesConfigMapName is the dlh-scenario-priorities ConfigMap (per-scenario default overrides).
+	PrioritiesConfigMapName string
 }
 
 // Load reads env vars and returns a populated Config or an error if any
@@ -65,7 +67,8 @@ func Load() (*Config, error) {
 		CIAudience:           getenv("DLH_CI_AUDIENCE", "dlh-controlplane"),
 		ArgoBaseURL:        os.Getenv("DLH_ARGO_BASE_URL"),
 		GrafanaBaseURL:     os.Getenv("DLH_GRAFANA_BASE_URL"),
-		LocksConfigMapName: getenv("DLH_LOCKS_CONFIGMAP", "dlh-scenario-locks"),
+		LocksConfigMapName:      getenv("DLH_LOCKS_CONFIGMAP", "dlh-scenario-locks"),
+		PrioritiesConfigMapName: getenv("DLH_PRIORITIES_CONFIGMAP", "dlh-scenario-priorities"),
 	}
 	if !c.AuthDisabled {
 		if c.OIDCIssuerURL == "" {
