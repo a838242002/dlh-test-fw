@@ -659,7 +659,7 @@ components:
         submittedAt: { type: string, format: date-time }
     ScenarioPriority:
       type: object
-      required: [scenario, baked]
+      required: [scenario, baked, effective]
       properties:
         scenario: { type: string }
         baked:    { type: integer, description: "WorkflowTemplate's baked spec.priority." }

@@ -550,7 +550,7 @@ export interface components {
             /** @description Current override from dlh-scenario-priorities; null = none (uses baked). */
             override?: number | null;
             /** @description override ?? baked. */
-            effective?: number;
+            effective: number;
         };
     };
     responses: never;

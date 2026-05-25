@@ -238,7 +238,7 @@ type ScenarioPriority struct {
 	Baked int `json:"baked"`
 
 	// Effective override ?? baked.
-	Effective *int `json:"effective,omitempty"`
+	Effective int `json:"effective"`
 
 	// Override Current override from dlh-scenario-priorities; null = none (uses baked).
 	Override *int   `json:"override"`
