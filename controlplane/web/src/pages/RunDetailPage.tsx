@@ -147,6 +147,10 @@ export function RunDetailPage() {
           }
           return Object.entries(byWin).map(([name, w]) => ({ name, ...windowBand(lay.startMs, lay.windowMs, w.start, w.end) }));
         })();
+        const guides = windows.flatMap((w) => [
+          { x: w.offsetPct, kind: w.name },
+          { x: w.offsetPct + w.widthPct, kind: w.name },
+        ]);
         const kindOf = (name: string) =>
           name.includes("chaos") ? "bg-amber-500"
           : name.startsWith("load") || name.includes("testrun") ? "bg-blue-500"
@@ -159,40 +163,56 @@ export function RunDetailPage() {
               <span className="text-xs text-muted-foreground">{visibleSteps.length} steps · chronological{hidden > 0 ? " · group nodes hidden" : ""}</span>
             </CardHeader>
             <CardContent>
-              {windows.length > 0 && (
-                <div className="mb-1.5 grid grid-cols-[180px_64px_1fr] items-center gap-3">
-                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Verdict windows</span>
-                  <span></span>
-                  <span className="relative h-4">
-                    {windows.map((w) => (
-                      <span
-                        key={w.name}
-                        title={w.name}
-                        className={cn(
-                          "absolute top-0 h-4 overflow-hidden whitespace-nowrap rounded border px-1 text-[10px] leading-4",
-                          w.name === "chaos"
-                            ? "border-amber-500/50 bg-amber-500/15 text-amber-400"
-                            : "border-blue-500/50 bg-blue-500/15 text-blue-400"
-                        )}
-                        style={{ left: `${w.offsetPct}%`, width: `${w.widthPct}%` }}
-                      >
-                        {w.name}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-              )}
-              <div className="space-y-1.5">
-                {visibleSteps.map((s, i) => (
-                  <div key={i} className="grid grid-cols-[180px_64px_1fr] items-center gap-3">
-                    <span className="flex items-center gap-2 text-sm font-medium"><StepIcon phase={s.phase} />{s.name}</span>
-                    <span className="font-mono text-xs text-muted-foreground">{formatDuration(s.startedAt, s.finishedAt)}</span>
-                    <span className="relative h-3.5 rounded bg-muted">
-                      <span className={`absolute top-0 h-3.5 rounded ${kindOf(s.name)} ${lay.bars[i].running ? "animate-pulse" : ""}`}
-                            style={{ left: `${lay.bars[i].offsetPct}%`, width: `${lay.bars[i].widthPct}%` }} />
+              <div className="relative">
+                {windows.length > 0 && (
+                  <div className="mb-1.5 grid grid-cols-[180px_64px_1fr] items-center gap-3">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Verdict windows</span>
+                    <span></span>
+                    <span className="relative h-4">
+                      {windows.map((w) => (
+                        <span
+                          key={w.name}
+                          title={w.name}
+                          className={cn(
+                            "absolute top-0 h-4 overflow-hidden whitespace-nowrap rounded border px-1 text-[10px] leading-4",
+                            w.name === "chaos"
+                              ? "border-amber-500/50 bg-amber-500/15 text-amber-400"
+                              : "border-blue-500/50 bg-blue-500/15 text-blue-400"
+                          )}
+                          style={{ left: `${w.offsetPct}%`, width: `${w.widthPct}%` }}
+                        >
+                          {w.name}
+                        </span>
+                      ))}
                     </span>
                   </div>
-                ))}
+                )}
+                <div className="space-y-1.5">
+                  {visibleSteps.map((s, i) => (
+                    <div key={i} className="grid grid-cols-[180px_64px_1fr] items-center gap-3">
+                      <span className="flex items-center gap-2 text-sm font-medium"><StepIcon phase={s.phase} />{s.name}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{formatDuration(s.startedAt, s.finishedAt)}</span>
+                      <span className="relative h-3.5 rounded bg-muted">
+                        <span className={`absolute top-0 h-3.5 rounded ${kindOf(s.name)} ${lay.bars[i].running ? "animate-pulse" : ""}`}
+                              style={{ left: `${lay.bars[i].offsetPct}%`, width: `${lay.bars[i].widthPct}%` }} />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {guides.length > 0 && (
+                  <div className="pointer-events-none absolute inset-y-0 left-[268px] right-0">
+                    {guides.map((g, i) => (
+                      <span
+                        key={i}
+                        className={cn(
+                          "absolute inset-y-0 border-l border-dashed",
+                          g.kind === "chaos" ? "border-amber-500/40" : "border-blue-500/40"
+                        )}
+                        style={{ left: `${g.x}%` }}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
               {visibleSteps.some((s) => s.message) && (
                 <div className="mt-3 space-y-1">
