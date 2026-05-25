@@ -110,14 +110,20 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 	strictSI := gen.NewStrictHandler(h, nil)
 	gen.HandlerFromMux(strictSI, r)
 
-	// Admin-only gate on editing per-scenario default priorities. Registered
-	// AFTER HandlerFromMux so it overrides the ungated generated route
-	// (chi last-registration-wins). The global authMW (r.Use above) has
-	// already populated the role in context; RequireRole just checks it.
+	// Role-gated routes registered AFTER HandlerFromMux so they override the
+	// ungated generated routes (chi last-registration-wins). The global authMW
+	// (r.Use above) has already populated the role in context; RequireRole just
+	// checks it.
 	{
 		wrapper := gen.ServerInterfaceWrapper{Handler: strictSI}
+		// Admin-only: edit per-scenario default priorities.
 		r.With(auth.RequireRole(auth.RoleAdmin)).
 			Put("/api/scenario-priorities/{id}", wrapper.PutScenarioPriority)
+		// Runner-gated: live re-prioritize of a pending run. Registered after
+		// HandlerFromMux so it overrides the ungated generated route. Global
+		// authMW has already populated the role; RequireRole just checks it.
+		r.With(auth.RequireRole(auth.RoleRunner)).
+			Post("/api/runs/{id}/priority", wrapper.ReprioritizeRun)
 	}
 
 	// Explicit SSE route — registered AFTER HandlerFromMux so it wins.

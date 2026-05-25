@@ -413,6 +413,24 @@ func (h *Handlers) PutScenarioPriority(ctx context.Context, req gen.PutScenarioP
 	}, nil
 }
 
+// ReprioritizeRun — POST /api/runs/{id}/priority
+func (h *Handlers) ReprioritizeRun(ctx context.Context, req gen.ReprioritizeRunRequestObject) (gen.ReprioritizeRunResponseObject, error) {
+	if req.Body == nil {
+		return gen.ReprioritizeRun400Response{}, nil
+	}
+	if _, err := h.deps.Workflows.Get(req.Id); err != nil {
+		return gen.ReprioritizeRun404Response{}, nil
+	}
+	err := h.deps.Submitter.Reprioritize(ctx, req.Id, req.Body.Priority)
+	switch {
+	case errors.Is(err, runs.ErrNotPending):
+		return gen.ReprioritizeRun409Response{}, nil
+	case err != nil:
+		return nil, err
+	}
+	return gen.ReprioritizeRun202Response{}, nil
+}
+
 func mapEntries(es []queue.Entry) []gen.QueueEntry {
 	out := make([]gen.QueueEntry, 0, len(es))
 	for _, e := range es {

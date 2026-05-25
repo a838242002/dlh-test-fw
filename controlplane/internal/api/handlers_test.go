@@ -295,3 +295,41 @@ func TestGetQueue_GroupsAndOrders(t *testing.T) {
 		t.Errorf("mysql lane: %+v", out.Lanes[0])
 	}
 }
+
+func TestReprioritizeRun_Statuses(t *testing.T) {
+	ns := "dlh-test-fw"
+	pending := &wfv1.Workflow{ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: ns},
+		Status: wfv1.WorkflowStatus{Phase: wfv1.WorkflowPending}}
+	running := &wfv1.Workflow{ObjectMeta: metav1.ObjectMeta{Name: "r", Namespace: ns},
+		Status: wfv1.WorkflowStatus{Phase: wfv1.WorkflowRunning}}
+	argo := wfake.NewSimpleClientset(pending, running)
+	deps := &Deps{
+		Submitter: &runs.Submitter{Argo: argo, Namespace: ns},
+		Workflows: &fakeWorkflows{items: []*wfv1.Workflow{pending, running}},
+	}
+	h := &Handlers{deps: deps}
+
+	// pending → 202
+	r202, err := h.ReprioritizeRun(context.Background(), gen.ReprioritizeRunRequestObject{
+		Id: "p", Body: &gen.ReprioritizeRunJSONRequestBody{Priority: 500}})
+	if err != nil {
+		t.Fatalf("Reprioritize pending: %v", err)
+	}
+	if _, ok := r202.(gen.ReprioritizeRun202Response); !ok {
+		t.Errorf("pending: got %T want 202", r202)
+	}
+
+	// running → 409
+	r409, _ := h.ReprioritizeRun(context.Background(), gen.ReprioritizeRunRequestObject{
+		Id: "r", Body: &gen.ReprioritizeRunJSONRequestBody{Priority: 500}})
+	if _, ok := r409.(gen.ReprioritizeRun409Response); !ok {
+		t.Errorf("running: got %T want 409", r409)
+	}
+
+	// unknown → 404
+	r404, _ := h.ReprioritizeRun(context.Background(), gen.ReprioritizeRunRequestObject{
+		Id: "nope", Body: &gen.ReprioritizeRunJSONRequestBody{Priority: 500}})
+	if _, ok := r404.(gen.ReprioritizeRun404Response); !ok {
+		t.Errorf("unknown: got %T want 404", r404)
+	}
+}
