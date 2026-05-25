@@ -155,6 +155,12 @@ export function RunDetailPage() {
               <span className="text-xs text-muted-foreground">{visibleSteps.length} steps · chronological{hidden > 0 ? " · group nodes hidden" : ""}</span>
             </CardHeader>
             <CardContent>
+              <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-slate-600" />prep / util</span>
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-500" />load</span>
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-500" />chaos</span>
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-indigo-500" />verdict</span>
+              </div>
               <div className="space-y-1.5">
                 {visibleSteps.map((s, i) => (
                   <div key={i} className="grid grid-cols-[180px_64px_1fr] items-center gap-3">
