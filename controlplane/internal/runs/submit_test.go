@@ -74,6 +74,48 @@ func TestSubmit_EmptyScenarioRejected(t *testing.T) {
 	}
 }
 
+func TestSubmit_PriorityOverrideStampsWorkflow(t *testing.T) {
+	ns := "dlh-test-fw"
+	baked := int32(100)
+	tmpl := &wfv1.WorkflowTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		Spec:       wfv1.WorkflowSpec{Priority: &baked},
+	}
+	argo := wfake.NewSimpleClientset(tmpl)
+	s := &Submitter{Argo: argo, Namespace: ns}
+
+	// explicit override wins
+	p := 500
+	res, err := s.Submit(context.Background(), SubmitRequest{ScenarioID: "mysql-pod-delete", Priority: &p})
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	got, _ := argo.ArgoprojV1alpha1().Workflows(ns).Get(context.Background(), res.RunID, metav1.GetOptions{})
+	if got.Spec.Priority == nil || *got.Spec.Priority != 500 {
+		t.Errorf("override priority: got %v want 500", got.Spec.Priority)
+	}
+}
+
+func TestSubmit_PriorityFallsBackToBaked(t *testing.T) {
+	ns := "dlh-test-fw"
+	baked := int32(100)
+	tmpl := &wfv1.WorkflowTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		Spec:       wfv1.WorkflowSpec{Priority: &baked},
+	}
+	argo := wfake.NewSimpleClientset(tmpl)
+	s := &Submitter{Argo: argo, Namespace: ns}
+
+	res, err := s.Submit(context.Background(), SubmitRequest{ScenarioID: "mysql-pod-delete"}) // no override
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	got, _ := argo.ArgoprojV1alpha1().Workflows(ns).Get(context.Background(), res.RunID, metav1.GetOptions{})
+	if got.Spec.Priority == nil || *got.Spec.Priority != 100 {
+		t.Errorf("baked priority: got %v want 100", got.Spec.Priority)
+	}
+}
+
 func TestSubmit_WithTargetID(t *testing.T) {
 	ns := "dlh-test-fw"
 	tmpl := &wfv1.WorkflowTemplate{

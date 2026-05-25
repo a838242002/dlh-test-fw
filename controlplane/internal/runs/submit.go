@@ -21,6 +21,7 @@ type Submitter struct {
 type SubmitRequest struct {
 	ScenarioID string
 	TargetID   string
+	Priority   *int // explicit override; nil = use scenario default / baked value
 	Parameters map[string]string
 	CreatedBy  string // OIDC subject
 }
@@ -39,7 +40,8 @@ func (s *Submitter) Submit(ctx context.Context, req SubmitRequest) (*SubmitResul
 		return nil, fmt.Errorf("scenarioId is required")
 	}
 	// Verify the template exists; this becomes 404 to the API caller.
-	if _, err := s.Argo.ArgoprojV1alpha1().WorkflowTemplates(s.Namespace).Get(ctx, req.ScenarioID, metav1.GetOptions{}); err != nil {
+	tmpl, err := s.Argo.ArgoprojV1alpha1().WorkflowTemplates(s.Namespace).Get(ctx, req.ScenarioID, metav1.GetOptions{})
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("scenario %q not found: %w", req.ScenarioID, err)
 		}
@@ -66,6 +68,11 @@ func (s *Submitter) Submit(ctx context.Context, req SubmitRequest) (*SubmitResul
 	tidVal := wfv1.AnyString(req.TargetID)
 	params = append(params, wfv1.Parameter{Name: "target_id", Value: &tidVal})
 
+	// Resolve the EFFECTIVE priority so the Workflow is self-describing in the
+	// UI: explicit request override → (Phase 3: scenario default) → template's
+	// baked spec.priority. nil leaves spec.priority unset (legacy behaviour).
+	effPriority := s.resolvePriority(req, tmpl)
+
 	wf := &wfv1.Workflow{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      runID,
@@ -78,6 +85,7 @@ func (s *Submitter) Submit(ctx context.Context, req SubmitRequest) (*SubmitResul
 		Spec: wfv1.WorkflowSpec{
 			WorkflowTemplateRef: &wfv1.WorkflowTemplateRef{Name: req.ScenarioID},
 			Arguments:           wfv1.Arguments{Parameters: params},
+			Priority:            effPriority,
 		},
 	}
 
@@ -86,4 +94,19 @@ func (s *Submitter) Submit(ctx context.Context, req SubmitRequest) (*SubmitResul
 		return nil, fmt.Errorf("create workflow: %w", err)
 	}
 	return &SubmitResult{RunID: created.Name, TargetID: req.TargetID, StartedAt: created.CreationTimestamp.Time}, nil
+}
+
+// resolvePriority returns the effective workflow priority pointer.
+// Order: explicit request override → template's baked spec.priority.
+// (Phase 3 inserts a scenario-default ConfigMap lookup between the two.)
+func (s *Submitter) resolvePriority(req SubmitRequest, tmpl *wfv1.WorkflowTemplate) *int32 {
+	if req.Priority != nil {
+		v := int32(*req.Priority)
+		return &v
+	}
+	if tmpl != nil && tmpl.Spec.Priority != nil {
+		v := *tmpl.Spec.Priority
+		return &v
+	}
+	return nil
 }
