@@ -1,11 +1,13 @@
 package model
 
 import (
+	"sort"
 	"time"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 )
 
 // ScenarioFromTemplate maps a WorkflowTemplate to the OpenAPI Scenario DTO.
@@ -17,14 +19,41 @@ func ScenarioFromTemplate(t *wfv1.WorkflowTemplate) gen.Scenario {
 		Id:          t.Name,
 		DisplayName: t.Name,
 	}
-	if v := t.Annotations["dlh.description"]; v != "" {
-		desc := v
-		s.Description = &desc
+
+	// Derive target type from scenario id via the links package (mirrors web-side logic).
+	// DeriveTargetType returns "generic" when nothing matches; we normalise that to ""
+	// so ScenarioDescription falls through to its id-only branch.
+	targetType := links.DeriveTargetType(t.Name)
+	if targetType == "generic" {
+		targetType = ""
 	}
-	if v := t.Annotations["dlh.target-type"]; v != "" {
+	if targetType != "" {
+		tt := targetType
+		s.TargetType = &tt
+	} else if v := t.Annotations["dlh.target-type"]; v != "" {
 		tt := v
 		s.TargetType = &tt
+		targetType = v
 	}
+
+	// Extract slo_name from the WorkflowTemplate's top-level arguments so the
+	// description can name the SLO being evaluated.
+	var sloName string
+	for _, p := range t.Spec.Arguments.Parameters {
+		if p.Name == "slo_name" {
+			if p.Value != nil {
+				sloName = p.Value.String()
+			} else if p.Default != nil {
+				sloName = p.Default.String()
+			}
+			break
+		}
+	}
+
+	// Build description: dlh.scenario/description annotation wins; else derive.
+	desc := ScenarioDescription(t.Annotations, t.Name, targetType, sloName)
+	s.Description = &desc
+
 	if len(t.Spec.Arguments.Parameters) > 0 {
 		params := make([]struct {
 			Default     *string `json:"default,omitempty"`
@@ -121,6 +150,16 @@ func RunDetailFromWorkflow(wf *wfv1.Workflow) gen.RunDetail {
 	name := wf.Name
 	d.WorkflowName = &name
 
+	// Populate description: prefer dlh.scenario/description annotation, else derived.
+	desc := ScenarioDescription(wf.Annotations, d.Scenario, links.DeriveTargetType(d.Scenario), "")
+	d.Description = &desc
+
+	// Populate priority from workflow spec (display-only).
+	if wf.Spec.Priority != nil {
+		p := int(*wf.Spec.Priority)
+		d.Priority = &p
+	}
+
 	if len(wf.Status.Nodes) > 0 {
 		// Steps uses an inline anonymous struct type in the generated code.
 		steps := make([]struct {
@@ -155,6 +194,21 @@ func RunDetailFromWorkflow(wf *wfv1.Workflow) gen.RunDetail {
 			}
 			steps = append(steps, step)
 		}
+		sort.SliceStable(steps, func(i, j int) bool {
+			si, sj := steps[i].StartedAt, steps[j].StartedAt
+			switch {
+			case si == nil && sj == nil:
+				return steps[i].Name < steps[j].Name
+			case si == nil:
+				return false
+			case sj == nil:
+				return true
+			case si.Equal(*sj):
+				return steps[i].Name < steps[j].Name
+			default:
+				return si.Before(*sj)
+			}
+		})
 		d.Steps = &steps
 	}
 	return d

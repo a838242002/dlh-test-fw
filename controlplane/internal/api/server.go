@@ -23,6 +23,7 @@ type Deps struct {
 	Templates  k8s.TemplateLister
 	Workflows  k8s.WorkflowLister
 	Reports    *mio.ReportReader
+	Verdicts   *runs.VerdictCache   // populated from Reports; caches per-run score
 	Submitter  *runs.Submitter      // Phase C
 	Manifests  *runs.ManifestWriter // Phase C
 	ArgoClient wfclient.Interface   // Phase C — for terminate patch
@@ -57,12 +58,20 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 
 	// ALL r.Use calls must come before any r.Get/r.Handle (chi requirement).
 	// Path-aware auth: only /api/* requests are forwarded through authMW.
+	// The SSE route (/api/runs/{id}/events) is excluded here because
+	// EventSource cannot set headers; its own auth guard below handles
+	// both the auth-disabled bypass and the ?access_token= query param.
 	if authMW != nil {
 		r.Use(func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				// /api/auth/info is public — the login command needs it to
 				// discover OIDC config before the user has a token.
-				if strings.HasPrefix(req.URL.Path, "/api/") && req.URL.Path != "/api/auth/info" {
+				// /api/runs/{id}/events uses its own SSE auth guard (see below).
+				isSSEPath := strings.HasPrefix(req.URL.Path, "/api/runs/") &&
+					strings.HasSuffix(req.URL.Path, "/events")
+				if strings.HasPrefix(req.URL.Path, "/api/") &&
+					req.URL.Path != "/api/auth/info" &&
+					!isSSEPath {
 					authMW(next).ServeHTTP(w, req)
 					return
 				}
@@ -79,18 +88,46 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 	r.Get("/healthz", healthHandler)
 	r.Get("/readyz", healthHandler)
 
-	// Explicit SSE route — registered BEFORE HandlerFromMux so chi matches
-	// this handler rather than the generated stub.
-	sseH := &SSEHandler{Workflows: deps.Workflows}
-	r.Get("/api/runs/{id}/events", sseH.Handle)
-
 	// Register all generated API routes (/api/scenarios, /api/runs, etc.)
-	// plus the generated /healthz + /readyz stubs.  The manually registered
-	// /healthz and /readyz above win because chi uses first-registered wins
-	// for identical patterns.
+	// plus the generated /healthz + /readyz stubs.
 	h := &Handlers{deps: deps}
 	strictSI := gen.NewStrictHandler(h, nil)
 	gen.HandlerFromMux(strictSI, r)
+
+	// Explicit SSE route — registered AFTER HandlerFromMux so it wins.
+	//
+	// chi v5 uses last-registration-wins for identical route patterns
+	// (tree.go:setEndpoint unconditionally overwrites the handler field).
+	// HandlerFromMux registers the generated stub for /api/runs/{id}/events
+	// via r.Group; registering the real handler here overwrites that stub,
+	// consistent with the /internal/chaos routes below which use the same
+	// post-HandlerFromMux pattern.
+	//
+	// Auth note: EventSource cannot send an Authorization header, so the
+	// client passes its token via ?access_token=.  The global authMW is
+	// excluded for this path (see r.Use above); instead a thin guard here:
+	//   - serves directly when auth is disabled (no token check);
+	//   - otherwise promotes the query token to the Authorization header and
+	//     delegates to authMW, reusing the same session/OIDC verification path.
+	sseH := &SSEHandler{Workflows: deps.Workflows}
+	sseCore := http.HandlerFunc(sseH.Handle)
+	var sseAuthHandler http.Handler
+	if deps.AuthInfo.AuthDisabled || authMW == nil {
+		sseAuthHandler = sseCore
+	} else {
+		sseAuthHandler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			// If there is no Authorization header, inject the ?access_token
+			// value so authMW can verify it via the standard Bearer path.
+			if req.Header.Get("Authorization") == "" {
+				if tok := bearerOrQueryToken(req); tok != "" {
+					req = req.Clone(req.Context())
+					req.Header.Set("Authorization", "Bearer "+tok)
+				}
+			}
+			authMW(sseCore).ServeHTTP(w, req)
+		})
+	}
+	r.Get("/api/runs/{id}/events", sseAuthHandler.ServeHTTP)
 
 	// /internal/chaos — chi-direct mount, X-Internal-Token auth (not OIDC).
 	// MUST be registered AFTER gen.HandlerFromMux: HandlerFromMux uses r.Group

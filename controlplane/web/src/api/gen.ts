@@ -305,6 +305,7 @@ export interface components {
         Scenario: {
             id: string;
             displayName: string;
+            /** @description Human summary; from dlh.scenario/description annotation or derived. */
             description?: string;
             /** @description e.g. mysql, kafka, doris */
             targetType?: string;
@@ -349,6 +350,9 @@ export interface components {
                 finishedAt?: string;
                 message?: string;
             }[];
+            description?: string;
+            /** @description Run priority (display-only here; set by the priority feature). */
+            priority?: number;
             /** @description Decoded from MinIO report.json. Absent if no report yet. */
             verdict?: {
                 [key: string]: unknown;

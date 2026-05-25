@@ -372,7 +372,7 @@ components:
       properties:
         id:           { type: string }
         displayName:  { type: string }
-        description:  { type: string }
+        description:  { type: string, description: "Human summary; from dlh.scenario/description annotation or derived." }
         targetType:   { type: string, description: "e.g. mysql, kafka, doris" }
         parameters:
           type: array
@@ -420,6 +420,10 @@ components:
                   startedAt: { type: string, format: date-time }
                   finishedAt: { type: string, format: date-time }
                   message:   { type: string }
+            description: { type: string }
+            priority:
+              type: integer
+              description: "Run priority (display-only here; set by the priority feature)."
             verdict:
               type: object
               nullable: true

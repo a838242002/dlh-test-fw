@@ -6,6 +6,8 @@ metadata:
   labels:
     app.kubernetes.io/part-of: dlh-test-fw
     dlh.category: scenario
+  annotations:
+    dlh.scenario/description: "Deletes a MySQL pod mid-load and verifies the service recovers within its SLO."
 spec:
   serviceAccountName: argo-workflow
   priority: 100

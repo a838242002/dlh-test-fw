@@ -47,7 +47,7 @@ func (h *Handlers) GetScenario(ctx context.Context, req gen.GetScenarioRequestOb
 }
 
 // ListRuns — GET /api/runs
-func (h *Handlers) ListRuns(_ context.Context, req gen.ListRunsRequestObject) (gen.ListRunsResponseObject, error) {
+func (h *Handlers) ListRuns(ctx context.Context, req gen.ListRunsRequestObject) (gen.ListRunsResponseObject, error) {
 	f := k8s.WorkflowFilter{}
 	if req.Params.Scenario != nil {
 		f.Scenario = *req.Params.Scenario
@@ -71,7 +71,16 @@ func (h *Handlers) ListRuns(_ context.Context, req gen.ListRunsRequestObject) (g
 	}
 	items := make([]gen.Run, 0, len(wfs))
 	for _, wf := range wfs {
-		items = append(items, model.RunFromWorkflow(wf))
+		r := model.RunFromWorkflow(wf)
+		if h.deps.Verdicts != nil {
+			terminal := r.Status == gen.RunStatusSucceeded ||
+				r.Status == gen.RunStatusFailed ||
+				r.Status == gen.RunStatusError
+			if s, ok := h.deps.Verdicts.Score(ctx, wf.Name, terminal); ok {
+				r.Score = &s
+			}
+		}
+		items = append(items, r)
 	}
 	return gen.ListRuns200JSONResponse{Items: items}, nil
 }

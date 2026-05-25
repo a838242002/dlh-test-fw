@@ -143,6 +143,7 @@ type RunStatus string
 type RunDetail struct {
 	// ArgoUrl Deep link to the Argo Workflows UI for this run. Absent when DLH_ARGO_BASE_URL is unset.
 	ArgoUrl     *string    `json:"argoUrl,omitempty"`
+	Description *string    `json:"description,omitempty"`
 	FinishedAt  *time.Time `json:"finishedAt,omitempty"`
 	GrafanaUrls *[]struct {
 		Label string `json:"label"`
@@ -150,11 +151,14 @@ type RunDetail struct {
 	} `json:"grafanaUrls,omitempty"`
 	Id         string             `json:"id"`
 	Parameters *map[string]string `json:"parameters,omitempty"`
-	Scenario   string             `json:"scenario"`
-	Score      *float64           `json:"score"`
-	StartedAt  time.Time          `json:"startedAt"`
-	Status     RunDetailStatus    `json:"status"`
-	Steps      *[]struct {
+
+	// Priority Run priority (display-only here; set by the priority feature).
+	Priority  *int            `json:"priority,omitempty"`
+	Scenario  string          `json:"scenario"`
+	Score     *float64        `json:"score"`
+	StartedAt time.Time       `json:"startedAt"`
+	Status    RunDetailStatus `json:"status"`
+	Steps     *[]struct {
 		FinishedAt *time.Time `json:"finishedAt,omitempty"`
 		Message    *string    `json:"message,omitempty"`
 		Name       string     `json:"name"`
@@ -182,6 +186,7 @@ type RunDetailStatus string
 
 // Scenario defines model for Scenario.
 type Scenario struct {
+	// Description Human summary; from dlh.scenario/description annotation or derived.
 	Description *string `json:"description,omitempty"`
 	DisplayName string  `json:"displayName"`
 	Id          string  `json:"id"`
