@@ -16,7 +16,7 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "list", "watch"]
-    resourceNames: ["dlh-roles", "dlh-targets"]
+    resourceNames: ["dlh-roles", "dlh-targets", "dlh-scenario-locks"]
   - apiGroups: [""]
     resources: ["secrets"]
     # 'get' on all secrets in the controlplane namespace so we can
