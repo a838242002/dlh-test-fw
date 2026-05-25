@@ -15,6 +15,7 @@ func runCmd() *cobra.Command {
 		paramFlags []string
 		wait       bool
 		target     string
+		priority   int
 	)
 	c := &cobra.Command{
 		Use:   "run <scenario>",
@@ -34,6 +35,9 @@ func runCmd() *cobra.Command {
 			body := map[string]any{"scenarioId": scenario}
 			if target != "" {
 				body["targetId"] = target
+			}
+			if priority != 0 {
+				body["priority"] = priority
 			}
 			if len(params) > 0 {
 				body["parameters"] = params
@@ -57,6 +61,7 @@ func runCmd() *cobra.Command {
 	c.Flags().StringArrayVarP(&paramFlags, "param", "p", nil, "Parameter override key=value (repeatable)")
 	c.Flags().BoolVar(&wait, "wait", false, "Block until the run reaches a terminal phase")
 	c.Flags().StringVar(&target, "target", "", "Optional remote target ID")
+	c.Flags().IntVar(&priority, "priority", 0, "Workflow priority override (0 = scenario default)")
 	return c
 }
 
