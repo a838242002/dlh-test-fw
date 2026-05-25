@@ -7,6 +7,7 @@ import { RunDetailPage } from "./pages/RunDetailPage";
 import { TargetsPage } from "./pages/TargetsPage";
 import { SchedulesPage } from "./pages/SchedulesPage";
 import { QueuePage } from "./pages/QueuePage";
+import { DefaultPrioritiesPage } from "./pages/DefaultPrioritiesPage";
 import { setAuthToken } from "./api/client";
 import { useTheme } from "@/lib/theme";
 import { Toaster } from "@/components/ui/sonner";
@@ -114,6 +115,7 @@ export default function App() {
           <Route path="/targets" element={<TargetsPage />} />
           <Route path="/schedules" element={<SchedulesPage />} />
           <Route path="/queue" element={<QueuePage />} />
+          <Route path="/admin/priorities" element={<DefaultPrioritiesPage />} />
         </Routes>
       </main>
       <Toaster />
