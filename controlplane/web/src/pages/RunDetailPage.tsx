@@ -11,8 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { relativeTime, formatDuration } from "@/lib/time";
 import { deriveCategory } from "@/lib/category";
-import { namedSteps, timelineLayout, windowBand } from "@/lib/steps";
-import { cn } from "@/lib/utils";
+import { namedSteps, timelineLayout } from "@/lib/steps";
 
 type RunDetail = components["schemas"]["RunDetail"];
 
@@ -131,29 +130,9 @@ export function RunDetailPage() {
         <CardContent><VerdictView verdict={run.verdict} /></CardContent>
       </Card>
 
-      {/* Steps: chronological timeline with chaos-window band + messages */}
+      {/* Steps: chronological timeline with step bars + messages */}
       {visibleSteps.length > 0 && (() => {
         const lay = timelineLayout(visibleSteps, run.finishedAt ?? undefined);
-        const windows = (() => {
-          const byName = (n: string) => visibleSteps.find((s) => s.name === n);
-          const ms = (v?: string) => (v ? Date.parse(v) : NaN);
-          const chaosStep = byName("chaos");
-          const loadStep = byName("load");
-          const out: { name: string; offsetPct: number; widthPct: number }[] = [];
-          const cStart = ms(chaosStep?.startedAt), cEnd = ms(chaosStep?.finishedAt);
-          if (Number.isFinite(cStart) && Number.isFinite(cEnd)) {
-            out.push({ name: "chaos", ...windowBand(lay.startMs, lay.windowMs, cStart, cEnd) });
-          }
-          const lEnd = ms(loadStep?.finishedAt);
-          if (Number.isFinite(cEnd) && Number.isFinite(lEnd) && lEnd > cEnd) {
-            out.push({ name: "recovery", ...windowBand(lay.startMs, lay.windowMs, cEnd, lEnd) });
-          }
-          return out;
-        })();
-        const guides = windows.flatMap((w) => [
-          { x: w.offsetPct, kind: w.name },
-          { x: w.offsetPct + w.widthPct, kind: w.name },
-        ]);
         const kindOf = (name: string) =>
           name.includes("chaos") ? "bg-amber-500"
           : name.startsWith("load") || name.includes("testrun") ? "bg-blue-500"
@@ -166,56 +145,17 @@ export function RunDetailPage() {
               <span className="text-xs text-muted-foreground">{visibleSteps.length} steps · chronological{hidden > 0 ? " · group nodes hidden" : ""}</span>
             </CardHeader>
             <CardContent>
-              <div className="relative">
-                {windows.length > 0 && (
-                  <div className="mb-1.5 grid grid-cols-[180px_64px_1fr] items-center gap-3">
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Verdict windows</span>
-                    <span></span>
-                    <span className="relative h-4">
-                      {windows.map((w) => (
-                        <span
-                          key={w.name}
-                          title={w.name}
-                          className={cn(
-                            "absolute top-0 h-4 overflow-hidden whitespace-nowrap rounded border px-1 text-[10px] leading-4",
-                            w.name === "chaos"
-                              ? "border-amber-500/50 bg-amber-500/15 text-amber-400"
-                              : "border-blue-500/50 bg-blue-500/15 text-blue-400"
-                          )}
-                          style={{ left: `${w.offsetPct}%`, width: `${w.widthPct}%` }}
-                        >
-                          {w.name}
-                        </span>
-                      ))}
+              <div className="space-y-1.5">
+                {visibleSteps.map((s, i) => (
+                  <div key={i} className="grid grid-cols-[180px_64px_1fr] items-center gap-3">
+                    <span className="flex items-center gap-2 text-sm font-medium"><StepIcon phase={s.phase} />{s.name}</span>
+                    <span className="font-mono text-xs text-muted-foreground">{formatDuration(s.startedAt, s.finishedAt)}</span>
+                    <span className="relative h-3.5 rounded bg-muted">
+                      <span className={`absolute top-0 h-3.5 rounded ${kindOf(s.name)} ${lay.bars[i].running ? "animate-pulse" : ""}`}
+                            style={{ left: `${lay.bars[i].offsetPct}%`, width: `${lay.bars[i].widthPct}%` }} />
                     </span>
                   </div>
-                )}
-                <div className="space-y-1.5">
-                  {visibleSteps.map((s, i) => (
-                    <div key={i} className="grid grid-cols-[180px_64px_1fr] items-center gap-3">
-                      <span className="flex items-center gap-2 text-sm font-medium"><StepIcon phase={s.phase} />{s.name}</span>
-                      <span className="font-mono text-xs text-muted-foreground">{formatDuration(s.startedAt, s.finishedAt)}</span>
-                      <span className="relative h-3.5 rounded bg-muted">
-                        <span className={`absolute top-0 h-3.5 rounded ${kindOf(s.name)} ${lay.bars[i].running ? "animate-pulse" : ""}`}
-                              style={{ left: `${lay.bars[i].offsetPct}%`, width: `${lay.bars[i].widthPct}%` }} />
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {guides.length > 0 && (
-                  <div className="pointer-events-none absolute inset-y-0 left-[268px] right-0">
-                    {guides.map((g, i) => (
-                      <span
-                        key={i}
-                        className={cn(
-                          "absolute inset-y-0 border-l border-dashed",
-                          g.kind === "chaos" ? "border-amber-500/40" : "border-blue-500/40"
-                        )}
-                        style={{ left: `${g.x}%` }}
-                      />
-                    ))}
-                  </div>
-                )}
+                ))}
               </div>
               {visibleSteps.some((s) => s.message) && (
                 <div className="mt-3 space-y-1">
