@@ -945,3 +945,30 @@ four environment gaps and two code bugs.
    Scenario→SLO map: mysql→pod-delete, kafka→broker-partition, doris→network-loss.
 
 - Stop strategy (`spec.stopStrategy`) — Argo 3.6's "stop scheduling after N successes" pattern is unused but supported by the underlying CRD.
+
+## Plan 2026-05-26 — controlplane Priority (visibility & control)
+
+### Layer 2 feasibility spike — patching a PENDING workflow's priority DOES re-order the semaphore queue (2026-05-26)
+
+**Question (from the priority design spec's Risks section):** Argo fixes
+semaphore admission order at the moment a workflow is admitted; does patching
+`spec.priority` on an already-created *pending* (semaphore-blocked) workflow
+actually change the release order, or is the order locked in at creation?
+
+**Experiment (Argo Workflows chart `0.45.20`, `dlh-scenario-locks` mysql=1 slot):**
+1. Submitted a holder run → Running (grabbed the single mysql slot).
+2. Submitted A (p100, older) and B (p100, newer) → both Pending (blocked on the semaphore).
+3. `kubectl patch wf <B> --type merge -p '{"spec":{"priority":500}}'` (raise the NEWER one).
+4. Terminated the holder to free the slot.
+5. **Observed: B (patched p500, newer) was admitted to Running; A (p100, older) stayed Pending.**
+
+**Result: PATCH RE-ORDERS.** Argo re-evaluates the semaphore waiting queue by
+`(priority desc, creationTimestamp asc)` at release time using the *current*
+`spec.priority`, not a value snapshotted at admission. **Decision: Layer 2's
+`POST /api/runs/{id}/priority` uses the priority-patch mechanism** (merge-patch
+`spec.priority`), NOT the cancel+resubmit fallback. The reprioritize endpoint
+guards Pending-only (409 otherwise) because a Running holder already holds the
+slot and reordering it is meaningless.
+
+**Caveat:** the spike used `kubectl patch` (merge). The handler uses the same
+client-go `types.MergePatchType` patch on `spec.priority`, so behaviour matches.
