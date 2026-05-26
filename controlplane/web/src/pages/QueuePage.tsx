@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Settings } from "lucide-react";
+import { ArrowUpToLine, Settings, X } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "../api/client";
 import type { components } from "../api/gen";
 import { ErrorState } from "@/components/ErrorState";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { relativeTime } from "@/lib/time";
@@ -30,6 +32,20 @@ export function QueuePage() {
     return () => clearInterval(poll);
   }, [reload]);
 
+  const toFront = async (lane: Lane, id: string) => {
+    const max = Math.max(0, ...lane.pending.map((e) => e.priority ?? 0), ...lane.running.map((e) => e.priority ?? 0));
+    const { error: e } = await api.POST("/api/runs/{id}/priority", {
+      params: { path: { id } }, body: { priority: max + 100 },
+    });
+    if (e) toast.error("Reprioritize failed", { description: JSON.stringify(e) });
+    else { toast.success("Moved to front"); reload(); }
+  };
+  const cancel = async (id: string) => {
+    const { error: e } = await api.DELETE("/api/runs/{id}", { params: { path: { id } } });
+    if (e) toast.error("Cancel failed", { description: JSON.stringify(e) });
+    else { toast.success("Cancelled"); reload(); }
+  };
+
   if (error) return <ErrorState message="Failed to load queue" details={error} />;
   if (!queue) return <div className="space-y-4"><Skeleton className="h-8 w-48" /><Skeleton className="h-40 w-full" /></div>;
 
@@ -45,13 +61,15 @@ export function QueuePage() {
         1 slot per target type · releases by priority (high→low, then oldest) · types run in parallel.
       </p>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {queue.lanes.map((lane) => <LaneCard key={lane.key} lane={lane} />)}
+        {queue.lanes.map((lane) => (
+          <LaneCard key={lane.key} lane={lane} onToFront={(id) => toFront(lane, id)} onCancel={cancel} />
+        ))}
       </div>
     </section>
   );
 }
 
-function LaneCard({ lane }: { lane: Lane }) {
+function LaneCard({ lane, onToFront, onCancel }: { lane: Lane; onToFront: (id: string) => void; onCancel: (id: string) => void }) {
   const idle = lane.running.length === 0 && lane.pending.length === 0;
   return (
     <Card>
@@ -89,6 +107,14 @@ function LaneCard({ lane }: { lane: Lane }) {
                   <span className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span title={new Date(e.submittedAt).toLocaleString()}>{relativeTime(e.submittedAt)}</span>
                     <span className="font-mono">p{e.priority ?? "—"}</span>
+                    {i > 0 && (
+                      <Button size="sm" variant="ghost" title="Move to front" onClick={() => onToFront(e.id)}>
+                        <ArrowUpToLine className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" title="Cancel" onClick={() => onCancel(e.id)}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
                   </span>
                 </div>
               ))}
