@@ -2,12 +2,15 @@ package api
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	wfake "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned/fake"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/dlh/dlh-test-fw/controlplane/internal/api/gen"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
@@ -30,7 +33,7 @@ func (f *fakeTemplates) GetTemplate(_ context.Context, name string) (*wfv1.Workf
 			return &f.items[i], nil
 		}
 	}
-	return nil, errFakeNotFound{}
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "argoproj.io", Resource: "workflowtemplates"}, name)
 }
 
 // fakeWorkflows implements k8s.WorkflowLister backed by an in-memory slice.
@@ -48,7 +51,7 @@ func (f *fakeWorkflows) Get(name string) (*wfv1.Workflow, error) {
 			return w, nil
 		}
 	}
-	return nil, errFakeNotFound{}
+	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "argoproj.io", Resource: "workflows"}, name)
 }
 
 func (f *fakeWorkflows) Subscribe() (<-chan k8s.WorkflowEvent, func()) {
@@ -59,6 +62,18 @@ func (f *fakeWorkflows) Subscribe() (<-chan k8s.WorkflowEvent, func()) {
 type errFakeNotFound struct{}
 
 func (errFakeNotFound) Error() string { return "not found" }
+
+// errTemplates is a TemplateLister whose GetTemplate fails with a generic
+// (non-NotFound) error — used to prove handlers surface real lookup failures
+// as 500 rather than masquerading them as 404.
+type errTemplates struct{}
+
+func (errTemplates) ListTemplates(_ context.Context) ([]wfv1.WorkflowTemplate, error) {
+	return nil, nil
+}
+func (errTemplates) GetTemplate(_ context.Context, _ string) (*wfv1.WorkflowTemplate, error) {
+	return nil, errors.New("apiserver unavailable")
+}
 
 func TestListScenarios(t *testing.T) {
 	deps := &Deps{
@@ -331,5 +346,17 @@ func TestReprioritizeRun_Statuses(t *testing.T) {
 		Id: "nope", Body: &gen.ReprioritizeRunJSONRequestBody{Priority: 500}})
 	if _, ok := r404.(gen.ReprioritizeRun404Response); !ok {
 		t.Errorf("unknown: got %T want 404", r404)
+	}
+}
+
+func TestPutScenarioPriority_NonNotFoundErrorIs500(t *testing.T) {
+	deps := &Deps{Templates: errTemplates{}, Priorities: &fakePriorities{m: map[string]int{}}}
+	h := &Handlers{deps: deps}
+	prio := 1
+	resp, err := h.PutScenarioPriority(context.Background(), gen.PutScenarioPriorityRequestObject{
+		Id: "mysql-pod-delete", Body: &gen.PutScenarioPriorityJSONRequestBody{Priority: prio}})
+	// A real lookup failure must surface as (nil, err) → 500, NOT a 404.
+	if err == nil || resp != nil {
+		t.Fatalf("expected (nil, err) for non-NotFound template error; got resp=%T err=%v", resp, err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -397,8 +398,13 @@ func (h *Handlers) PutScenarioPriority(ctx context.Context, req gen.PutScenarioP
 		return gen.PutScenarioPriority400Response{}, nil
 	}
 	tmpl, err := h.deps.Templates.GetTemplate(ctx, req.Id)
-	if err != nil || tmpl == nil {
+	if apierrors.IsNotFound(err) || (err == nil && tmpl == nil) {
 		return gen.PutScenarioPriority404Response{}, nil
+	}
+	if err != nil {
+		// A real lookup failure (transient API error, RBAC) must not masquerade
+		// as "scenario not found"; surface it as a 500.
+		return nil, err
 	}
 	if err := h.deps.Priorities.Set(ctx, req.Id, req.Body.Priority); err != nil {
 		return nil, err
@@ -419,7 +425,10 @@ func (h *Handlers) ReprioritizeRun(ctx context.Context, req gen.ReprioritizeRunR
 		return gen.ReprioritizeRun400Response{}, nil
 	}
 	if _, err := h.deps.Workflows.Get(req.Id); err != nil {
-		return gen.ReprioritizeRun404Response{}, nil
+		if apierrors.IsNotFound(err) {
+			return gen.ReprioritizeRun404Response{}, nil
+		}
+		return nil, err
 	}
 	err := h.deps.Submitter.Reprioritize(ctx, req.Id, req.Body.Priority)
 	switch {
