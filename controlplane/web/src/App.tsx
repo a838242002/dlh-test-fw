@@ -80,16 +80,19 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b bg-card">
-        <nav className="mx-auto flex max-w-7xl items-center gap-4 px-6 py-3 text-sm">
-          <span className="font-semibold text-primary">◆ dlh</span>
+      <header className="border-b">
+        <nav className="mx-auto flex max-w-7xl items-center gap-1 px-6 py-3 text-sm">
+          <span className="mr-4 flex items-center gap-2 font-semibold tracking-tight">
+            <span className="grid h-6 w-6 place-items-center rounded-md bg-primary text-[13px] font-bold text-primary-foreground">d</span>
+            dlh
+          </span>
           {NAV.map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-1.5 rounded-md px-2.5 py-1 transition-colors",
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors",
                   isActive
                     ? "bg-primary/15 font-medium text-foreground"
                     : "text-muted-foreground hover:text-foreground"
