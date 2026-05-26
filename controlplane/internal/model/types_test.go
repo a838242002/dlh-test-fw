@@ -47,3 +47,22 @@ func TestRunDetailFromWorkflow_StepsSortedByStart(t *testing.T) {
 		}
 	}
 }
+
+func TestRunFromWorkflow_Priority(t *testing.T) {
+	p := int32(200)
+	wf := &wfv1.Workflow{
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete-20260101-000000",
+			Labels: map[string]string{"dlh.scenario": "mysql-pod-delete"}},
+		Spec: wfv1.WorkflowSpec{Priority: &p},
+	}
+	r := RunFromWorkflow(wf)
+	if r.Priority == nil || *r.Priority != 200 {
+		t.Errorf("priority: got %v want 200", r.Priority)
+	}
+
+	// no priority → nil
+	wf2 := &wfv1.Workflow{ObjectMeta: metav1.ObjectMeta{Name: "x"}}
+	if RunFromWorkflow(wf2).Priority != nil {
+		t.Error("expected nil priority for workflow with no spec.priority")
+	}
+}

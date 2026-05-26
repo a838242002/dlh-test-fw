@@ -100,6 +100,10 @@ func RunFromWorkflow(wf *wfv1.Workflow) gen.Run {
 	if v := wf.Labels["dlh.target"]; v != "" {
 		r.Target = &v
 	}
+	if wf.Spec.Priority != nil {
+		p := int(*wf.Spec.Priority)
+		r.Priority = &p
+	}
 	for _, owner := range wf.OwnerReferences {
 		if owner.Kind == "CronWorkflow" {
 			kind := "Schedule"

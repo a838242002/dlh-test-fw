@@ -156,6 +156,7 @@ export function RunsPage() {
                 <TableHead>Scenario</TableHead>
                 <TableHead>Target</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Priority</TableHead>
                 <TableHead>
                   <button className="inline-flex items-center gap-1 uppercase" onClick={() => toggleSort("started")}>
                     Started <ArrowUpDown className="h-3 w-3" />
@@ -177,6 +178,7 @@ export function RunsPage() {
                     <TableCell className="font-medium">{r.scenario}</TableCell>
                     <TableCell className="text-muted-foreground">{r.target || "local"}</TableCell>
                     <TableCell><StatusBadge status={String(r.status)} /></TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">{r.priority ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground" title={new Date(r.startedAt).toLocaleString()}>
                       {relativeTime(r.startedAt)}
                     </TableCell>

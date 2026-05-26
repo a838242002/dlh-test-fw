@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/model"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/queue"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
 )
@@ -152,6 +154,7 @@ func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 	sr, err := h.deps.Submitter.Submit(ctx, runs.SubmitRequest{
 		ScenarioID: body.ScenarioId,
 		TargetID:   targetID,
+		Priority:   body.Priority,
 		Parameters: params,
 		CreatedBy:  createdBy,
 	})
@@ -339,4 +342,113 @@ func (h *Handlers) PauseSchedule(ctx context.Context, req gen.PauseScheduleReque
 }
 func (h *Handlers) ResumeSchedule(ctx context.Context, req gen.ResumeScheduleRequestObject) (gen.ResumeScheduleResponseObject, error) {
 	return h.handleResumeSchedule(ctx, req)
+}
+
+// GetQueue — GET /api/queue
+func (h *Handlers) GetQueue(ctx context.Context, _ gen.GetQueueRequestObject) (gen.GetQueueResponseObject, error) {
+	keys, err := h.deps.Locks.Keys(ctx)
+	if err != nil {
+		return nil, err
+	}
+	wfs, err := h.deps.Workflows.List(k8s.WorkflowFilter{})
+	if err != nil {
+		return nil, err
+	}
+	lanes := queue.BuildLanes(wfs, keys)
+
+	out := make([]gen.QueueLane, 0, len(lanes))
+	for _, l := range lanes {
+		gl := gen.QueueLane{Key: l.Key, Slots: l.Slots,
+			Running: mapEntries(l.Running), Pending: mapEntries(l.Pending)}
+		out = append(out, gl)
+	}
+	return gen.GetQueue200JSONResponse{Lanes: out}, nil
+}
+
+// GetScenarioPriorities — GET /api/scenario-priorities
+func (h *Handlers) GetScenarioPriorities(ctx context.Context, _ gen.GetScenarioPrioritiesRequestObject) (gen.GetScenarioPrioritiesResponseObject, error) {
+	tmpls, err := h.deps.Templates.ListTemplates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	overrides, err := h.deps.Priorities.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]gen.ScenarioPriority, 0, len(tmpls))
+	for _, t := range tmpls {
+		baked := 0
+		if t.Spec.Priority != nil {
+			baked = int(*t.Spec.Priority)
+		}
+		sp := gen.ScenarioPriority{Scenario: t.Name, Baked: baked, Effective: baked}
+		if ov, ok := overrides[t.Name]; ok {
+			o := ov
+			sp.Override = &o
+			sp.Effective = ov
+		}
+		items = append(items, sp)
+	}
+	return gen.GetScenarioPriorities200JSONResponse{Items: items}, nil
+}
+
+// PutScenarioPriority — PUT /api/scenario-priorities/{id}
+func (h *Handlers) PutScenarioPriority(ctx context.Context, req gen.PutScenarioPriorityRequestObject) (gen.PutScenarioPriorityResponseObject, error) {
+	if req.Body == nil {
+		return gen.PutScenarioPriority400Response{}, nil
+	}
+	tmpl, err := h.deps.Templates.GetTemplate(ctx, req.Id)
+	if apierrors.IsNotFound(err) || (err == nil && tmpl == nil) {
+		return gen.PutScenarioPriority404Response{}, nil
+	}
+	if err != nil {
+		// A real lookup failure (transient API error, RBAC) must not masquerade
+		// as "scenario not found"; surface it as a 500.
+		return nil, err
+	}
+	if err := h.deps.Priorities.Set(ctx, req.Id, req.Body.Priority); err != nil {
+		return nil, err
+	}
+	baked := 0
+	if tmpl.Spec.Priority != nil {
+		baked = int(*tmpl.Spec.Priority)
+	}
+	o := req.Body.Priority
+	return gen.PutScenarioPriority200JSONResponse{
+		Scenario: req.Id, Baked: baked, Override: &o, Effective: req.Body.Priority,
+	}, nil
+}
+
+// ReprioritizeRun — POST /api/runs/{id}/priority
+func (h *Handlers) ReprioritizeRun(ctx context.Context, req gen.ReprioritizeRunRequestObject) (gen.ReprioritizeRunResponseObject, error) {
+	if req.Body == nil {
+		return gen.ReprioritizeRun400Response{}, nil
+	}
+	if _, err := h.deps.Workflows.Get(req.Id); err != nil {
+		if apierrors.IsNotFound(err) {
+			return gen.ReprioritizeRun404Response{}, nil
+		}
+		return nil, err
+	}
+	err := h.deps.Submitter.Reprioritize(ctx, req.Id, req.Body.Priority)
+	switch {
+	case errors.Is(err, runs.ErrNotPending):
+		return gen.ReprioritizeRun409Response{}, nil
+	case err != nil:
+		return nil, err
+	}
+	return gen.ReprioritizeRun202Response{}, nil
+}
+
+func mapEntries(es []queue.Entry) []gen.QueueEntry {
+	out := make([]gen.QueueEntry, 0, len(es))
+	for _, e := range es {
+		ge := gen.QueueEntry{Id: e.ID, Scenario: e.Scenario, SubmittedAt: e.SubmittedAt}
+		if e.Priority != nil {
+			p := *e.Priority
+			ge.Priority = &p
+		}
+		out = append(out, ge)
+	}
+	return out
 }

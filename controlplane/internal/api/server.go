@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/queue"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/schedules"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
@@ -33,7 +35,21 @@ type Deps struct {
 	Exchanger     *auth.Exchanger      // Phase E — wired in Task 7
 	AuthInfo      AuthInfoConfig       // Phase E — wired in Task 7
 	Schedules     *schedules.Manager   // Phase F — wired in Task 6
+	Locks         LocksReader          // Phase 2 — dlh-scenario-locks semaphore reader
+	Priorities    PrioritiesStore      // Phase 3 — per-scenario default priority overrides
 	Links links.Config // deep-link base URLs (Argo/Grafana)
+}
+
+// PrioritiesStore reads + writes per-scenario default priority overrides.
+type PrioritiesStore interface {
+	All(ctx context.Context) (map[string]int, error)
+	Get(ctx context.Context, scenario string) (int, bool, error)
+	Set(ctx context.Context, scenario string, priority int) error
+}
+
+// LocksReader returns the semaphore keys + slot counts (dlh-scenario-locks).
+type LocksReader interface {
+	Keys(ctx context.Context) ([]queue.LockKey, error)
 }
 
 // AuthInfoConfig holds the IdP configuration exposed via GET /api/auth/info.
@@ -93,6 +109,22 @@ func NewRouter(deps *Deps, authMW func(http.Handler) http.Handler, internalToken
 	h := &Handlers{deps: deps}
 	strictSI := gen.NewStrictHandler(h, nil)
 	gen.HandlerFromMux(strictSI, r)
+
+	// Role-gated routes registered AFTER HandlerFromMux so they override the
+	// ungated generated routes (chi last-registration-wins). The global authMW
+	// (r.Use above) has already populated the role in context; RequireRole just
+	// checks it.
+	{
+		wrapper := gen.ServerInterfaceWrapper{Handler: strictSI}
+		// Admin-only: edit per-scenario default priorities.
+		r.With(auth.RequireRole(auth.RoleAdmin)).
+			Put("/api/scenario-priorities/{id}", wrapper.PutScenarioPriority)
+		// Runner-gated: live re-prioritize of a pending run. Registered after
+		// HandlerFromMux so it overrides the ungated generated route. Global
+		// authMW has already populated the role; RequireRole just checks it.
+		r.With(auth.RequireRole(auth.RoleRunner)).
+			Post("/api/runs/{id}/priority", wrapper.ReprioritizeRun)
+	}
 
 	// Explicit SSE route — registered AFTER HandlerFromMux so it wins.
 	//

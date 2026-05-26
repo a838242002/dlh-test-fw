@@ -116,6 +116,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{id}/priority": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reprioritizeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal/chaos": {
         parameters: {
             query?: never;
@@ -234,6 +250,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenario-priorities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getScenarioPriorities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenario-priorities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putScenarioPriority"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/schedules": {
         parameters: {
             query?: never;
@@ -326,6 +390,8 @@ export interface components {
             finishedAt?: string;
             /** Format: double */
             score?: number | null;
+            /** @description Effective workflow priority. Absent for legacy runs with no spec.priority. */
+            priority?: number;
             workflowName?: string;
             /** @description Remote target ID (Run was injected into a remote cluster). Empty = local. */
             target?: string;
@@ -378,6 +444,8 @@ export interface components {
             scenarioId: string;
             /** @description Optional remote target ID. Empty = inject chaos in framework cluster. */
             targetId?: string;
+            /** @description Optional priority override. Empty = scenario default (or baked WT value). */
+            priority?: number;
             /** @description Optional parameter overrides. Keys are WT parameter names. */
             parameters?: {
                 [key: string]: string;
@@ -471,6 +539,34 @@ export interface components {
             parameters?: {
                 [key: string]: string;
             };
+        };
+        Queue: {
+            lanes: components["schemas"]["QueueLane"][];
+        };
+        QueueLane: {
+            /** @description Semaphore key / target type (mysql/kafka/doris). */
+            key: string;
+            /** @description Concurrent slots for this key. */
+            slots: number;
+            running: components["schemas"]["QueueEntry"][];
+            /** @description Ordered by release order (priority desc, then oldest first). */
+            pending: components["schemas"]["QueueEntry"][];
+        };
+        QueueEntry: {
+            id: string;
+            scenario: string;
+            priority?: number;
+            /** Format: date-time */
+            submittedAt: string;
+        };
+        ScenarioPriority: {
+            scenario: string;
+            /** @description WorkflowTemplate's baked spec.priority. */
+            baked: number;
+            /** @description Current override from dlh-scenario-priorities; null = none (uses baked). */
+            override?: number | null;
+            /** @description override ?? baked. */
+            effective: number;
         };
     };
     responses: never;
@@ -719,6 +815,53 @@ export interface operations {
             };
         };
     };
+    reprioritizeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    priority: number;
+                };
+            };
+        };
+        responses: {
+            /** @description re-prioritized */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description run not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description run is not pending (cannot reorder a running/finished run) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     createChaos: {
         parameters: {
             query?: never;
@@ -927,6 +1070,97 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthInfo"];
                 };
+            };
+        };
+    };
+    getQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description per-target-type semaphore lanes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Queue"];
+                };
+            };
+        };
+    };
+    getScenarioPriorities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description per-scenario baked default + current override */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ScenarioPriority"][];
+                    };
+                };
+            };
+        };
+    };
+    putScenarioPriority: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    priority: number;
+                };
+            };
+        };
+        responses: {
+            /** @description updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioPriority"];
+                };
+            };
+            /** @description invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description forbidden (admin role required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description scenario not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

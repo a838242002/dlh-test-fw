@@ -23,6 +23,7 @@ export function ScenariosPage() {
   const [items, setItems] = useState<Scenario[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [submitTarget, setSubmitTarget] = useState<Record<string, string>>({});
+  const [submitPriority, setSubmitPriority] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
@@ -37,7 +38,11 @@ export function ScenariosPage() {
     setSubmitting(s.id);
     try {
       const targetId = submitTarget[s.id] || undefined;
-      const { data, error } = await api.POST("/api/runs", { body: { scenarioId: s.id, targetId } });
+      const raw = submitPriority[s.id];
+      const priority = raw && raw.trim() !== "" ? Number(raw) : undefined;
+      const { data, error } = await api.POST("/api/runs", {
+        body: { scenarioId: s.id, targetId, priority },
+      });
       if (error) toast.error("Submit failed", { description: JSON.stringify(error) });
       else if (data?.id) {
         toast.success(`Run ${data.id} submitted`);
@@ -115,6 +120,14 @@ export function ScenariosPage() {
                             </div>
                           </div>
                           <div className="mt-auto flex items-center gap-2">
+                            <Input
+                              type="number"
+                              value={submitPriority[s.id] ?? ""}
+                              onChange={(e) => setSubmitPriority((r) => ({ ...r, [s.id]: e.target.value }))}
+                              placeholder="prio"
+                              title="Priority override (blank = scenario default)"
+                              className="h-8 w-[72px]"
+                            />
                             <TargetPicker
                               value={submitTarget[s.id] ?? ""}
                               onChange={(v) => setSubmitTarget((r) => ({ ...r, [s.id]: v }))}

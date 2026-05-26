@@ -65,6 +65,9 @@ type CreateRunRequest struct {
 	// Parameters Optional parameter overrides. Keys are WT parameter names.
 	Parameters *map[string]string `json:"parameters,omitempty"`
 
+	// Priority Optional priority override. Empty = scenario default (or baked WT value).
+	Priority *int `json:"priority,omitempty"`
+
 	// ScenarioId WorkflowTemplate name (e.g. mysql-pod-delete)
 	ScenarioId string `json:"scenarioId"`
 
@@ -115,14 +118,43 @@ type ProbeResult struct {
 	Ok           bool    `json:"ok"`
 }
 
+// Queue defines model for Queue.
+type Queue struct {
+	Lanes []QueueLane `json:"lanes"`
+}
+
+// QueueEntry defines model for QueueEntry.
+type QueueEntry struct {
+	Id          string    `json:"id"`
+	Priority    *int      `json:"priority,omitempty"`
+	Scenario    string    `json:"scenario"`
+	SubmittedAt time.Time `json:"submittedAt"`
+}
+
+// QueueLane defines model for QueueLane.
+type QueueLane struct {
+	// Key Semaphore key / target type (mysql/kafka/doris).
+	Key string `json:"key"`
+
+	// Pending Ordered by release order (priority desc, then oldest first).
+	Pending []QueueEntry `json:"pending"`
+	Running []QueueEntry `json:"running"`
+
+	// Slots Concurrent slots for this key.
+	Slots int `json:"slots"`
+}
+
 // Run defines model for Run.
 type Run struct {
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
 	Id         string     `json:"id"`
-	Scenario   string     `json:"scenario"`
-	Score      *float64   `json:"score"`
-	StartedAt  time.Time  `json:"startedAt"`
-	Status     RunStatus  `json:"status"`
+
+	// Priority Effective workflow priority. Absent for legacy runs with no spec.priority.
+	Priority  *int      `json:"priority,omitempty"`
+	Scenario  string    `json:"scenario"`
+	Score     *float64  `json:"score"`
+	StartedAt time.Time `json:"startedAt"`
+	Status    RunStatus `json:"status"`
 
 	// Target Remote target ID (Run was injected into a remote cluster). Empty = local.
 	Target *string `json:"target,omitempty"`
@@ -200,6 +232,19 @@ type Scenario struct {
 	TargetType *string `json:"targetType,omitempty"`
 }
 
+// ScenarioPriority defines model for ScenarioPriority.
+type ScenarioPriority struct {
+	// Baked WorkflowTemplate's baked spec.priority.
+	Baked int `json:"baked"`
+
+	// Effective override ?? baked.
+	Effective int `json:"effective"`
+
+	// Override Current override from dlh-scenario-priorities; null = none (uses baked).
+	Override *int   `json:"override"`
+	Scenario string `json:"scenario"`
+}
+
 // Schedule defines model for Schedule.
 type Schedule struct {
 	ActiveCount     *int32             `json:"activeCount,omitempty"`
@@ -237,11 +282,27 @@ type ListRunsParams struct {
 	Limit    *int       `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ReprioritizeRunJSONBody defines parameters for ReprioritizeRun.
+type ReprioritizeRunJSONBody struct {
+	Priority int `json:"priority"`
+}
+
+// PutScenarioPriorityJSONBody defines parameters for PutScenarioPriority.
+type PutScenarioPriorityJSONBody struct {
+	Priority int `json:"priority"`
+}
+
 // OidcExchangeJSONRequestBody defines body for OidcExchange for application/json ContentType.
 type OidcExchangeJSONRequestBody = ExchangeRequest
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = CreateRunRequest
+
+// ReprioritizeRunJSONRequestBody defines body for ReprioritizeRun for application/json ContentType.
+type ReprioritizeRunJSONRequestBody ReprioritizeRunJSONBody
+
+// PutScenarioPriorityJSONRequestBody defines body for PutScenarioPriority for application/json ContentType.
+type PutScenarioPriorityJSONRequestBody PutScenarioPriorityJSONBody
 
 // CreateScheduleJSONRequestBody defines body for CreateSchedule for application/json ContentType.
 type CreateScheduleJSONRequestBody = CreateScheduleRequest

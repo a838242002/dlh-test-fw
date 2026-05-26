@@ -17,7 +17,7 @@ func runsCmd() *cobra.Command {
 		Use:   "runs",
 		Short: "View, follow, or cancel runs",
 	}
-	c.AddCommand(runsLsCmd(), runsShowCmd(), runsLogsCmd(), runsCancelCmd())
+	c.AddCommand(runsLsCmd(), runsShowCmd(), runsLogsCmd(), runsCancelCmd(), runsReprioritizeCmd())
 	return c
 }
 
@@ -142,6 +142,36 @@ func runsCancelCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func runsReprioritizeCmd() *cobra.Command {
+	var (
+		priority int
+		toFront  bool
+	)
+	c := &cobra.Command{
+		Use:   "reprioritize <run-id>",
+		Short: "Change a pending run's priority (only works while queued)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			p := priority
+			if toFront {
+				p = 1000 // above the Urgent tier (500)
+			}
+			if p == 0 {
+				return fmt.Errorf("provide --priority N or --to-front")
+			}
+			_, _, err := newClient().do("POST", "/api/runs/"+args[0]+"/priority", map[string]any{"priority": p}, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("reprioritized %s → %d\n", args[0], p)
+			return nil
+		},
+	}
+	c.Flags().IntVar(&priority, "priority", 0, "New priority")
+	c.Flags().BoolVar(&toFront, "to-front", false, "Move to front (priority 1000)")
+	return c
 }
 
 func stringOrDash(v any) string {
