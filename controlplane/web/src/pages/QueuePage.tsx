@@ -4,10 +4,13 @@ import { ArrowUpToLine, Settings, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api/client";
 import type { components } from "../api/gen";
+import { PageHeader } from "@/components/PageHeader";
+import { InfoBand, Term } from "@/components/InfoBand";
 import { ErrorState } from "@/components/ErrorState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { relativeTime } from "@/lib/time";
 
 type Queue = components["schemas"]["Queue"];
@@ -51,15 +54,17 @@ export function QueuePage() {
 
   return (
     <section className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Queue</h1>
-        <Link to="/admin/priorities" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-          <Settings className="h-4 w-4" /> Default priorities
-        </Link>
-      </div>
-      <p className="rounded-md border bg-card px-4 py-2 text-xs text-muted-foreground">
-        1 slot per target type · releases by priority (high→low, then oldest) · types run in parallel.
-      </p>
+      <PageHeader
+        title="Queue"
+        action={
+          <Link to="/admin/priorities" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+            <Settings className="h-4 w-4" /> Default priorities
+          </Link>
+        }
+      />
+      <InfoBand>
+        <Term>1 slot</Term> per target type · releases by <Term>priority</Term> (high→low, then oldest) · types run <Term>in parallel</Term>
+      </InfoBand>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {queue.lanes.map((lane) => (
           <LaneCard key={lane.key} lane={lane} onToFront={(id) => toFront(lane, id)} onCancel={cancel} />
@@ -75,7 +80,10 @@ function LaneCard({ lane, onToFront, onCancel }: { lane: Lane; onToFront: (id: s
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base capitalize">{lane.key}</CardTitle>
-        <span className="text-xs text-muted-foreground">{lane.slots} slot{lane.slots === 1 ? "" : "s"}</span>
+        <span className={cn(
+          "rounded-full px-2 py-0.5 text-xs tabular-nums",
+          lane.running.length > 0 ? "bg-status-running/15 text-status-running" : "bg-muted text-muted-foreground"
+        )}>{lane.running.length}/{lane.slots} slot</span>
       </CardHeader>
       <CardContent className="space-y-3">
         {idle && <div className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">Idle</div>}
@@ -88,7 +96,7 @@ function LaneCard({ lane, onToFront, onCancel }: { lane: Lane; onToFront: (id: s
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-running" />
                   <Link to={`/runs/${e.id}`} className="hover:underline">{e.scenario}</Link>
                 </span>
-                <span className="font-mono text-xs text-muted-foreground">p{e.priority ?? "—"}</span>
+                <span className="font-mono text-xs text-muted-foreground">p{e.priority ?? "—"} · {relativeTime(e.submittedAt)}</span>
               </div>
             ))}
           </div>
