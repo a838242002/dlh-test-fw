@@ -6,11 +6,10 @@ package queue
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	wfv1 "github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
-
-	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 )
 
 // LockKey is one semaphore key + its slot count (from dlh-scenario-locks).
@@ -64,32 +63,62 @@ func prioVal(e Entry) int {
 	return *e.Priority
 }
 
-// BuildLanes groups workflows by derived target type into one lane per lock key,
-// preserving the key order given. Running workflows are holders; Pending ones
-// are ordered priority-desc then oldest-first.
+// lockKey extracts the bare semaphore key (last path segment) from Argo's
+// fully-qualified semaphore name, e.g.
+// "dlh-test-fw/ConfigMap/dlh-scenario-locks/mysql" -> "mysql".
+func lockKey(semaphore string) string {
+	if i := strings.LastIndex(semaphore, "/"); i >= 0 {
+		return semaphore[i+1:]
+	}
+	return semaphore
+}
+
+// addEntry appends e under key, deduping by ID. Argo's sync manager places a
+// given lock in exactly one of Holding or Waiting per workflow, so cross-map
+// duplicates cannot occur in practice — this guard is defensive against
+// duplicate entries within a single status object.
+func addEntry(m map[string][]Entry, key string, e Entry) {
+	for _, x := range m[key] {
+		if x.ID == e.ID {
+			return
+		}
+	}
+	m[key] = append(m[key], e)
+}
+
+// BuildLanes groups non-terminal workflows into one lane per lock key,
+// preserving the key order given. Classification comes from Argo's own
+// synchronization record, NOT the workflow phase: a workflow is a Running
+// holder of a lane iff its status lists that lane's lock in .Holding, and a
+// Queued waiter iff in .Waiting. Workflows contending for nothing (pre-gate or
+// post-release) appear in no lane. Pending entries are ordered priority-desc
+// then oldest-first (Argo's release order).
 func BuildLanes(wfs []*wfv1.Workflow, keys []LockKey) []Lane {
+	known := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		known[k.Key] = true
+	}
+
 	running := map[string][]Entry{}
 	pending := map[string][]Entry{}
 	for _, w := range wfs {
 		if w == nil || isTerminal(w.Status.Phase) {
 			continue
 		}
-		scenario := ""
-		if w.Spec.WorkflowTemplateRef != nil {
-			scenario = w.Spec.WorkflowTemplateRef.Name
-		} else {
-			scenario = w.Labels["dlh.scenario"]
+		sync := w.Status.Synchronization
+		if sync == nil || sync.Semaphore == nil {
+			continue
 		}
-		key := links.DeriveTargetType(scenario)
 		e := entryOf(w)
-		switch w.Status.Phase {
-		case wfv1.WorkflowRunning:
-			running[key] = append(running[key], e)
-		case wfv1.WorkflowPending, "":
-			pending[key] = append(pending[key], e)
-		default:
-			// Unknown / non-running, non-pending, non-terminal — treat as pending.
-			pending[key] = append(pending[key], e)
+		for _, h := range sync.Semaphore.Holding {
+			if key := lockKey(h.Semaphore); known[key] {
+				addEntry(running, key, e)
+			}
+		}
+		for _, h := range sync.Semaphore.Waiting {
+			if key := lockKey(h.Semaphore); known[key] {
+				addEntry(pending, key, e)
+			}
 		}
 	}
 
