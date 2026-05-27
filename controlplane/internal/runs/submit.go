@@ -2,6 +2,7 @@ package runs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,11 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// ErrNotScenario is returned when a submit targets a WorkflowTemplate that is
+// not a runnable scenario (dlh.category != "scenario") — e.g. a chaos or
+// fixture building block.
+var ErrNotScenario = errors.New("template is not a runnable scenario")
 
 // ScenarioDefaults looks up a per-scenario default priority override.
 type ScenarioDefaults interface {
@@ -52,6 +58,10 @@ func (s *Submitter) Submit(ctx context.Context, req SubmitRequest) (*SubmitResul
 			return nil, fmt.Errorf("scenario %q not found: %w", req.ScenarioID, err)
 		}
 		return nil, fmt.Errorf("get workflowtemplate %q: %w", req.ScenarioID, err)
+	}
+	// Building blocks (chaos/fixture/util/…) are not runnable scenarios.
+	if tmpl.Labels["dlh.category"] != "scenario" {
+		return nil, ErrNotScenario
 	}
 
 	now := time.Now().UTC()

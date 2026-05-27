@@ -2,6 +2,7 @@ package runs
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 func TestSubmit_CreatesWorkflowWithTemplateRef(t *testing.T) {
 	ns := "dlh-test-fw"
 	tmpl := &wfv1.WorkflowTemplate{
-		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns, Labels: map[string]string{"dlh.category": "scenario"}},
 	}
 	argo := wfake.NewSimpleClientset(tmpl)
 
@@ -79,7 +80,7 @@ func TestSubmit_PriorityOverrideStampsWorkflow(t *testing.T) {
 	ns := "dlh-test-fw"
 	baked := int32(100)
 	tmpl := &wfv1.WorkflowTemplate{
-		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns, Labels: map[string]string{"dlh.category": "scenario"}},
 		Spec:       wfv1.WorkflowSpec{Priority: &baked},
 	}
 	argo := wfake.NewSimpleClientset(tmpl)
@@ -101,7 +102,7 @@ func TestSubmit_PriorityFallsBackToBaked(t *testing.T) {
 	ns := "dlh-test-fw"
 	baked := int32(100)
 	tmpl := &wfv1.WorkflowTemplate{
-		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns, Labels: map[string]string{"dlh.category": "scenario"}},
 		Spec:       wfv1.WorkflowSpec{Priority: &baked},
 	}
 	argo := wfake.NewSimpleClientset(tmpl)
@@ -128,7 +129,7 @@ func TestSubmit_PriorityUsesScenarioDefault(t *testing.T) {
 	ns := "dlh-test-fw"
 	baked := int32(100)
 	tmpl := &wfv1.WorkflowTemplate{
-		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns, Labels: map[string]string{"dlh.category": "scenario"}},
 		Spec:       wfv1.WorkflowSpec{Priority: &baked},
 	}
 	argo := wfake.NewSimpleClientset(tmpl)
@@ -161,7 +162,7 @@ func TestSubmit_PriorityUsesScenarioDefault(t *testing.T) {
 func TestSubmit_WithTargetID(t *testing.T) {
 	ns := "dlh-test-fw"
 	tmpl := &wfv1.WorkflowTemplate{
-		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns, Labels: map[string]string{"dlh.category": "scenario"}},
 	}
 	argo := wfake.NewSimpleClientset(tmpl)
 	s := &Submitter{Argo: argo, Namespace: ns}
@@ -189,5 +190,34 @@ func TestSubmit_WithTargetID(t *testing.T) {
 	}
 	if !foundTargetArg {
 		t.Errorf("target_id parameter not propagated: %+v", got.Spec.Arguments.Parameters)
+	}
+}
+
+func TestSubmit_RejectsNonScenario(t *testing.T) {
+	ns := "dlh-test-fw"
+	tmpl := &wfv1.WorkflowTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "chaos-kafka-broker-partition", Namespace: ns,
+			Labels: map[string]string{"dlh.category": "chaos"}},
+	}
+	argo := wfake.NewSimpleClientset(tmpl)
+	s := &Submitter{Argo: argo, Namespace: ns}
+	_, err := s.Submit(context.Background(), SubmitRequest{ScenarioID: "chaos-kafka-broker-partition"})
+	if !errors.Is(err, ErrNotScenario) {
+		t.Fatalf("expected ErrNotScenario, got %v", err)
+	}
+}
+
+// A template with no labels at all (nil Labels map) must also be rejected —
+// reading a nil map yields "" which is != "scenario".
+func TestSubmit_RejectsTemplateWithoutLabels(t *testing.T) {
+	ns := "dlh-test-fw"
+	tmpl := &wfv1.WorkflowTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "fixture-minio-load-mysql", Namespace: ns},
+	}
+	argo := wfake.NewSimpleClientset(tmpl)
+	s := &Submitter{Argo: argo, Namespace: ns}
+	_, err := s.Submit(context.Background(), SubmitRequest{ScenarioID: "fixture-minio-load-mysql"})
+	if !errors.Is(err, ErrNotScenario) {
+		t.Fatalf("expected ErrNotScenario, got %v", err)
 	}
 }
