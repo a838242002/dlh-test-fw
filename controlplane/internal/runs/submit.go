@@ -10,6 +10,8 @@ import (
 	wfclient "github.com/argoproj/argo-workflows/v3/pkg/client/clientset/versioned"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/dlh/dlh-test-fw/controlplane/internal/model"
 )
 
 // ErrNotScenario is returned when a submit targets a WorkflowTemplate that is
@@ -60,7 +62,7 @@ func (s *Submitter) Submit(ctx context.Context, req SubmitRequest) (*SubmitResul
 		return nil, fmt.Errorf("get workflowtemplate %q: %w", req.ScenarioID, err)
 	}
 	// Building blocks (chaos/fixture/util/…) are not runnable scenarios.
-	if tmpl.Labels["dlh.category"] != "scenario" {
+	if !model.IsScenarioTemplate(tmpl) {
 		return nil, ErrNotScenario
 	}
 
