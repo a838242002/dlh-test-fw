@@ -282,18 +282,30 @@ func TestPutAndGetScenarioPriorities(t *testing.T) {
 
 func TestGetQueue_GroupsAndOrders(t *testing.T) {
 	t0 := metav1.Now()
-	mk := func(name, scenario, phase string, prio int32) *wfv1.Workflow {
-		return &wfv1.Workflow{
+	// BuildLanes classifies by the workflow's semaphore status (holding vs
+	// waiting), not its phase — so the holder gets a Holding entry and the
+	// waiter a Waiting entry for the lock key.
+	mk := func(name, scenario, phase, holding, waiting string, prio int32) *wfv1.Workflow {
+		w := &wfv1.Workflow{
 			ObjectMeta: metav1.ObjectMeta{Name: name, CreationTimestamp: t0,
 				Labels: map[string]string{"dlh.scenario": scenario}},
 			Spec:   wfv1.WorkflowSpec{Priority: &prio},
 			Status: wfv1.WorkflowStatus{Phase: wfv1.WorkflowPhase(phase)},
 		}
+		sem := &wfv1.SemaphoreStatus{}
+		if holding != "" {
+			sem.Holding = []wfv1.SemaphoreHolding{{Semaphore: "dlh-test-fw/ConfigMap/dlh-scenario-locks/" + holding}}
+		}
+		if waiting != "" {
+			sem.Waiting = []wfv1.SemaphoreHolding{{Semaphore: "dlh-test-fw/ConfigMap/dlh-scenario-locks/" + waiting}}
+		}
+		w.Status.Synchronization = &wfv1.SynchronizationStatus{Semaphore: sem}
+		return w
 	}
 	deps := &Deps{
 		Workflows: &fakeWorkflows{items: []*wfv1.Workflow{
-			mk("m-run", "mysql-pod-delete", "Running", 100),
-			mk("m-pend", "mysql-pod-delete", "Pending", 500),
+			mk("m-run", "mysql-pod-delete", "Running", "mysql", "", 100),
+			mk("m-pend", "mysql-pod-delete", "Pending", "", "mysql", 500),
 		}},
 		Locks: &fakeLocks{keys: []queue.LockKey{{Key: "mysql", Slots: 1}, {Key: "kafka", Slots: 1}}},
 	}
