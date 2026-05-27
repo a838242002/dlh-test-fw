@@ -33,6 +33,9 @@ func (h *Handlers) ListScenarios(ctx context.Context, _ gen.ListScenariosRequest
 	}
 	out := make([]gen.Scenario, 0, len(tmpls))
 	for i := range tmpls {
+		if !model.IsScenarioTemplate(&tmpls[i]) {
+			continue
+		}
 		out = append(out, model.ScenarioFromTemplate(&tmpls[i]))
 	}
 	return gen.ListScenarios200JSONResponse{Items: out}, nil
@@ -159,6 +162,9 @@ func (h *Handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 		CreatedBy:  createdBy,
 	})
 	if err != nil {
+		if errors.Is(err, runs.ErrNotScenario) {
+			return gen.CreateRun400Response{}, nil
+		}
 		if strings.Contains(err.Error(), "not found") {
 			return gen.CreateRun404Response{}, nil
 		}
@@ -377,6 +383,9 @@ func (h *Handlers) GetScenarioPriorities(ctx context.Context, _ gen.GetScenarioP
 	}
 	items := make([]gen.ScenarioPriority, 0, len(tmpls))
 	for _, t := range tmpls {
+		if !model.IsScenarioTemplate(&t) {
+			continue
+		}
 		baked := 0
 		if t.Spec.Priority != nil {
 			baked = int(*t.Spec.Priority)

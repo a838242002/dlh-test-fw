@@ -78,7 +78,10 @@ func (errTemplates) GetTemplate(_ context.Context, _ string) (*wfv1.WorkflowTemp
 func TestListScenarios(t *testing.T) {
 	deps := &Deps{
 		Templates: &fakeTemplates{items: []wfv1.WorkflowTemplate{
-			{ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete"}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete",
+				Labels: map[string]string{"dlh.category": "scenario"}}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "chaos-kafka-broker-partition",
+				Labels: map[string]string{"dlh.category": "chaos"}}},
 		}},
 	}
 	h := &Handlers{deps: deps}
@@ -91,7 +94,7 @@ func TestListScenarios(t *testing.T) {
 		t.Fatalf("unexpected response type: %T", resp)
 	}
 	if len(out.Items) != 1 || out.Items[0].Id != "mysql-pod-delete" {
-		t.Errorf("got %+v", out.Items)
+		t.Errorf("only scenario-labeled templates expected, got %+v", out.Items)
 	}
 }
 
@@ -123,7 +126,7 @@ func TestListRuns(t *testing.T) {
 
 func TestCreateRun_Submits(t *testing.T) {
 	ns := "dlh-test-fw"
-	tmpl := &wfv1.WorkflowTemplate{ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns}}
+	tmpl := &wfv1.WorkflowTemplate{ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns, Labels: map[string]string{"dlh.category": "scenario"}}}
 	argo := wfake.NewSimpleClientset(tmpl)
 
 	deps := &Deps{
@@ -192,7 +195,7 @@ func TestCreateRun_ForwardsPriority(t *testing.T) {
 	ns := "dlh-test-fw"
 	baked := int32(100)
 	tmpl := &wfv1.WorkflowTemplate{
-		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns, Labels: map[string]string{"dlh.category": "scenario"}},
 		Spec:       wfv1.WorkflowSpec{Priority: &baked},
 	}
 	argo := wfake.NewSimpleClientset(tmpl)
@@ -240,7 +243,7 @@ func TestPutAndGetScenarioPriorities(t *testing.T) {
 	ns := "dlh-test-fw"
 	baked := int32(100)
 	tmpl := wfv1.WorkflowTemplate{
-		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete", Namespace: ns, Labels: map[string]string{"dlh.category": "scenario"}},
 		Spec:       wfv1.WorkflowSpec{Priority: &baked},
 	}
 	fp := &fakePriorities{m: map[string]int{}}
@@ -370,5 +373,45 @@ func TestPutScenarioPriority_NonNotFoundErrorIs500(t *testing.T) {
 	// A real lookup failure must surface as (nil, err) → 500, NOT a 404.
 	if err == nil || resp != nil {
 		t.Fatalf("expected (nil, err) for non-NotFound template error; got resp=%T err=%v", resp, err)
+	}
+}
+
+func TestGetScenarioPriorities_FiltersBuildingBlocks(t *testing.T) {
+	deps := &Deps{
+		Templates: &fakeTemplates{items: []wfv1.WorkflowTemplate{
+			{ObjectMeta: metav1.ObjectMeta{Name: "mysql-pod-delete",
+				Labels: map[string]string{"dlh.category": "scenario"}}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "util-write-slo",
+				Labels: map[string]string{"dlh.category": "util"}}},
+		}},
+		Priorities: &fakePriorities{m: map[string]int{}},
+	}
+	h := &Handlers{deps: deps}
+	resp, _ := h.GetScenarioPriorities(context.Background(), gen.GetScenarioPrioritiesRequestObject{})
+	out := resp.(gen.GetScenarioPriorities200JSONResponse)
+	if len(out.Items) != 1 || out.Items[0].Scenario != "mysql-pod-delete" {
+		t.Errorf("only scenario-labeled templates expected: %+v", out.Items)
+	}
+}
+
+func TestCreateRun_400OnNonScenario(t *testing.T) {
+	ns := "dlh-test-fw"
+	tmpl := &wfv1.WorkflowTemplate{ObjectMeta: metav1.ObjectMeta{
+		Name: "chaos-kafka-broker-partition", Namespace: ns,
+		Labels: map[string]string{"dlh.category": "chaos"}}}
+	argo := wfake.NewSimpleClientset(tmpl)
+	deps := &Deps{
+		Templates: &fakeTemplates{items: []wfv1.WorkflowTemplate{*tmpl}},
+		Submitter: &runs.Submitter{Argo: argo, Namespace: ns},
+		Manifests: &runs.ManifestWriter{Bucket: "artifacts"},
+	}
+	h := &Handlers{deps: deps}
+	resp, err := h.CreateRun(context.Background(), gen.CreateRunRequestObject{
+		Body: &gen.CreateRunRequest{ScenarioId: "chaos-kafka-broker-partition"}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	if _, ok := resp.(gen.CreateRun400Response); !ok {
+		t.Fatalf("expected 400, got %T", resp)
 	}
 }

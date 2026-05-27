@@ -10,6 +10,12 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 )
 
+// IsScenarioTemplate reports whether a WorkflowTemplate is a runnable scenario
+// (vs a chaos/fixture/util building block), per its dlh.category label.
+func IsScenarioTemplate(t *wfv1.WorkflowTemplate) bool {
+	return t.Labels["dlh.category"] == "scenario"
+}
+
 // ScenarioFromTemplate maps a WorkflowTemplate to the OpenAPI Scenario DTO.
 //
 // Scenario.Parameters is an inline anonymous struct slice in the generated
