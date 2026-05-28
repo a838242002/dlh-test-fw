@@ -104,6 +104,7 @@ function PriorityRow({ sp, onSave }: { sp: SP; onSave: (s: string, p: number) =>
               autoFocus
               type="number"
               inputMode="numeric"
+              step={1}
               value={customDraft}
               onChange={(e) => setCustomDraft(e.target.value)}
               onKeyDown={(e) => {
