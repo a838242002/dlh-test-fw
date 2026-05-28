@@ -17,7 +17,8 @@ import { cn } from "@/lib/utils";
 import { CATEGORIES, deriveCategory, deriveTargetType, type CategoryKey } from "@/lib/category";
 import { TargetGlyph } from "@/components/TargetGlyph";
 import { VerdictPill } from "@/components/VerdictPill";
-import { tierForPriority } from "@/lib/tier";
+import { PriorityChip } from "@/components/PriorityChip";
+import { PriorityChipMenu } from "@/components/PriorityChipMenu";
 import { relativeTime } from "@/lib/time";
 import { lastRunByScenario, type LastRun } from "@/lib/scenarioRuns";
 
@@ -28,7 +29,7 @@ export function ScenariosPage() {
   const [items, setItems] = useState<Scenario[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [submitTarget, setSubmitTarget] = useState<Record<string, string>>({});
-  const [submitPriority, setSubmitPriority] = useState<Record<string, string>>({});
+  const [submitPriority, setSubmitPriority] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [defaults, setDefaults] = useState<Record<string, number>>({});
@@ -53,8 +54,7 @@ export function ScenariosPage() {
     setSubmitting(s.id);
     try {
       const targetId = submitTarget[s.id] || undefined;
-      const raw = submitPriority[s.id];
-      const priority = raw && raw.trim() !== "" ? Number(raw) : undefined;
+      const priority = submitPriority[s.id];
       const { data, error } = await api.POST("/api/runs", {
         body: { scenarioId: s.id, targetId, priority },
       });
@@ -133,7 +133,7 @@ export function ScenariosPage() {
                               <div className="mt-0.5 flex items-center gap-1.5 text-xs">
                                 <span className="rounded bg-accent px-1.5 py-0.5 font-medium uppercase tracking-wide text-muted-foreground">{tt}</span>
                                 {defaults[s.id] != null && (
-                                  <span className="text-muted-foreground">default {tierForPriority(defaults[s.id]) ?? defaults[s.id]}</span>
+                                  <span className="flex items-center gap-1.5 text-muted-foreground">default <PriorityChip priority={defaults[s.id] ?? null} /></span>
                                 )}
                               </div>
                             </div>
@@ -152,13 +152,10 @@ export function ScenariosPage() {
                           </div>
 
                           <div className="mt-3 flex items-center gap-2 border-t pt-3">
-                            <Input
-                              type="number"
-                              value={submitPriority[s.id] ?? ""}
-                              onChange={(e) => setSubmitPriority((r) => ({ ...r, [s.id]: e.target.value }))}
-                              placeholder="prio"
-                              title="Priority override (blank = scenario default)"
-                              className="h-8 w-[64px]"
+                            <PriorityChipMenu
+                              value={submitPriority[s.id] ?? defaults[s.id] ?? null}
+                              onChange={(p) => setSubmitPriority((r) => ({ ...r, [s.id]: p }))}
+                              align="start"
                             />
                             <TargetPicker
                               value={submitTarget[s.id] ?? ""}
