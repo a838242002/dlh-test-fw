@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8" />
+<title>Queue + Priority refinement — prototype</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root.dark {
+    --bg: hsl(225 29% 6%);
+    --fg: hsl(210 40% 96%);
+    --card: hsl(221 26% 8%);
+    --muted: hsl(222 26% 11%);
+    --muted-fg: hsl(215 18% 60%);
+    --accent: hsl(222 25% 14%);
+    --border: hsl(222 22% 16%);
+    --primary: hsl(233 100% 74%);
+    --primary-fg: hsl(225 29% 6%);
+    --status-running: hsl(213 94% 68%);
+    --status-success: hsl(158 64% 52%);
+    --status-failed:  hsl(351 94% 71%);
+    --status-pending: hsl(43 96% 56%);
+
+    /* tier palette (proposed) */
+    --tier-low-bg:     hsl(220 14% 22%); --tier-low-fg:     hsl(220 14% 75%);
+    --tier-normal-bg:  hsl(217 90% 22%); --tier-normal-fg:  hsl(213 94% 80%);
+    --tier-high-bg:    hsl(35  85% 22%); --tier-high-fg:    hsl(43  96% 78%);
+    --tier-urgent-bg:  hsl(351 75% 22%); --tier-urgent-fg:  hsl(351 94% 80%);
+    --tier-custom-bg:  transparent;      --tier-custom-fg:  hsl(215 18% 70%);
+  }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter; }
+  .card  { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .muted { color: var(--muted-fg); }
+  .ring-primary { box-shadow: 0 0 0 2px var(--primary) inset; }
+
+  /* ===== TIER CHIP (the keystone) ===== */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 500; letter-spacing: .01em;
+    line-height: 18px; white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .chip-num { font-variant-numeric: tabular-nums; opacity: .85; font-weight: 400; }
+  .chip-low     { background: var(--tier-low-bg);    color: var(--tier-low-fg); }
+  .chip-normal  { background: var(--tier-normal-bg); color: var(--tier-normal-fg); }
+  .chip-high    { background: var(--tier-high-bg);   color: var(--tier-high-fg); }
+  .chip-urgent  { background: var(--tier-urgent-bg); color: var(--tier-urgent-fg); }
+  .chip-custom  { background: transparent; color: var(--tier-custom-fg); border-color: var(--border); }
+  .chip-caret   { opacity: .6; margin-left: 2px; }
+  .chip-button  { cursor: pointer; }
+  .chip-button:hover { filter: brightness(1.08); }
+  .chip-readonly { cursor: default; }
+
+  /* ===== segmented tiers (for Default-priorities) ===== */
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card); }
+  .seg button {
+    padding: 4px 10px; font-size: 12px; color: var(--muted-fg);
+    border-left: 1px solid var(--border); background: transparent;
+  }
+  .seg button:first-child { border-left: 0; }
+  .seg button.active { background: var(--primary); color: var(--primary-fg); font-weight: 500; }
+  .seg button:hover:not(.active) { background: var(--accent); color: var(--fg); }
+
+  /* misc */
+  .dot { width: 6px; height: 6px; border-radius: 999px; display: inline-block; background: var(--status-running); }
+  .dot.pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .4 } }
+  .slot-pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+  .slot-pill.active { background: rgba(96, 165, 250, .15); color: var(--status-running); }
+  .slot-pill.idle   { background: var(--muted); color: var(--muted-fg); }
+  .next-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;
+                background: rgba(129, 140, 248, .15); color: var(--primary); letter-spacing: .03em; }
+  .lane-idle { border: 1px dashed var(--border); border-radius: 8px; padding: 18px 0; text-align: center; color: var(--muted-fg); font-size: 13px; }
+  .row { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+  .row.running { background: rgba(96, 165, 250, .08); border-color: rgba(96, 165, 250, .25); }
+  .menu { position: absolute; margin-top: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.4); min-width: 168px; z-index: 10; }
+  .menu button { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border-radius: 6px; font-size: 12px; color: var(--fg); }
+  .menu button:hover { background: var(--accent); }
+  .menu .sep { height: 1px; background: var(--border); margin: 4px 0; }
+  .label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted-fg); font-weight: 500; }
+
+  .section-title { font-size: 13px; color: var(--muted-fg); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 12px; }
+  .frame { padding: 24px; }
+  .scenario-card { padding: 14px; }
+  .seg-btn-row button { padding: 4px 8px; }
+  .actions { display: flex; gap: 6px; align-items: center; }
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; color: var(--muted-fg); }
+  .icon-btn:hover { background: var(--accent); color: var(--fg); }
+  .btn { padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 500; }
+  .btn.primary { background: var(--primary); color: var(--primary-fg); }
+  .btn.ghost { color: var(--muted-fg); }
+  .btn.ghost:hover { background: var(--accent); color: var(--fg); }
+  .input { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; font-size: 12px; color: var(--fg); width: 88px; }
+
+  .pageheader { display: flex; justify-content: space-between; align-items: end; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .pageheader h1 { font-size: 18px; font-weight: 600; }
+  .infoband { display: flex; align-items: center; gap: 10px; background: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--muted-fg); margin-bottom: 16px; }
+  .infoband .ibadge { width: 18px; height: 18px; border-radius: 999px; background: var(--accent); color: var(--muted-fg); display: inline-flex; align-items: center; justify-content: center; font-style: italic; font-size: 11px; }
+  .infoband .term { color: var(--fg); font-weight: 500; }
+</style>
+</head>
+<body class="min-h-screen">
+<div class="max-w-[1280px] mx-auto p-8 space-y-12">
+
+  <header class="pb-2 border-b border-[color:var(--border)] flex items-end justify-between">
+    <div>
+      <div class="text-xs uppercase tracking-widest muted">prototype · review</div>
+      <h1 class="text-2xl font-semibold mt-1">Queue + Priority refinement</h1>
+      <p class="muted text-sm mt-1">Four proposed surfaces — chip vocabulary · Scenarios run-control · Default-priorities · Queue.</p>
+    </div>
+    <span class="muted text-xs">Dark theme · indigo</span>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- 1. CHIP VOCABULARY -->
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-title">1 · Priority chip vocabulary (colored tier + raw int)</div>
+    <div class="card p-5 space-y-5">
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="chip chip-low">Low <span class="chip-num">·10</span></span>
+        <span class="chip chip-normal">Normal <span class="chip-num">·100</span></span>
+        <span class="chip chip-high">High <span class="chip-num">·200</span></span>
+        <span class="chip chip-urgent">Urgent <span class="chip-num">·500</span></span>
+        <span class="chip chip-custom">Custom <span class="chip-num">·137</span></span>
+      </div>
+      <div class="text-xs muted">Color encodes urgency at a glance; the raw int stays visible. Values not on a tier (e.g. 137 from a precise reprioritize, or 600 from move-to-front) fall back to a neutral <span class="chip chip-custom inline-flex">Custom <span class="chip-num">·600</span></span> chip.</div>
+      <div class="text-xs muted">Where it's editable, the chip carries a <span class="chip chip-normal">Normal <span class="chip-num">·100</span> <span class="chip-caret">▾</span></span> caret. Read-only chips have no caret.</div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 2. SCENARIOS CARD — chip → click to edit -->
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-title">2 · Scenarios card · chip → click to edit (replaces the cramped <code class="text-[color:var(--fg)]">pric</code> input)</div>
+    <div class="grid grid-cols-3 gap-4">
+      <!-- Card 1: default state -->
+      <div class="card scenario-card relative">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="w-7 h-7 rounded-md bg-[color:var(--muted)] text-[color:var(--muted-fg)] flex items-center justify-center text-[10px] font-medium">MY</span>
+          <div class="font-medium">mysql-pod-delete</div>
+        </div>
+        <div class="text-[11px] muted ml-9 flex items-center gap-2">
+          <span class="rounded bg-[color:var(--muted)] px-1.5 py-0.5 uppercase tracking-wider">mysql</span>
+          <span>default <span class="chip chip-normal">Normal <span class="chip-num">·100</span></span></span>
+        </div>
+        <p class="text-sm mt-3 muted leading-snug">Deletes a MySQL pod mid-load and verifies the service recovers within its SLO.</p>
+        <div class="text-[11px] muted mt-2">last run 31s ago — PASS</div>
+        <div class="border-t border-[color:var(--border)] mt-3 pt-3 flex items-center gap-2">
+          <button class="chip chip-normal chip-button" onclick="toggleMenu('m1')">Normal <span class="chip-num">·100</span> <span class="chip-caret">▾</span></button>
+          <div class="flex-1 min-w-0">
+            <button class="btn ghost border border-[color:var(--border)] w-full text-left flex items-center justify-between gap-2">
+              <span class="truncate">local — framework cluster</span>
+              <span class="chip-caret">▾</span>
+            </button>
+          </div>
+          <button class="btn primary inline-flex items-center gap-1.5">▶ Run</button>
+        </div>
+        <div id="m1" class="menu" style="display:none; left:14px; top:auto;">
+          <button><span>Low</span><span class="chip chip-low">·10</span></button>
+          <button class="bg-[color:var(--accent)]"><span>Normal ✓</span><span class="chip chip-normal">·100</span></button>
+          <button><span>High</span><span class="chip chip-high">·200</span></button>
+          <button><span>Urgent</span><span class="chip chip-urgent">·500</span></button>
+          <div class="sep"></div>
+          <button><span class="muted">Custom…</span></button>
+        </div>
+      </div>
+
+      <!-- Card 2: menu open -->
+      <div class="card scenario-card relative">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="w-7 h-7 rounded-md bg-[color:var(--muted)] text-[color:var(--muted-fg)] flex items-center justify-center text-[10px] font-medium">KA</span>
+          <div class="font-medium">kafka-broker-partition</div>
+        </div>
+        <div class="text-[11px] muted ml-9 flex items-center gap-2">
+          <span class="rounded bg-[color:var(--muted)] px-1.5 py-0.5 uppercase tracking-wider">kafka</span>
+          <span>default <span class="chip chip-normal">Normal <span class="chip-num">·100</span></span></span>
+        </div>
+        <p class="text-sm mt-3 muted leading-snug">broker-partition chaos on a kafka target, evaluated against the broker-partition SLO.</p>
+        <div class="text-[11px] muted mt-2">no runs yet</div>
+        <div class="border-t border-[color:var(--border)] mt-3 pt-3 flex items-center gap-2">
+          <button class="chip chip-urgent chip-button">Urgent <span class="chip-num">·500</span> <span class="chip-caret">▾</span></button>
+          <div class="flex-1 min-w-0">
+            <button class="btn ghost border border-[color:var(--border)] w-full text-left flex items-center justify-between gap-2">
+              <span class="truncate">local — framework cluster</span>
+              <span class="chip-caret">▾</span>
+            </button>
+          </div>
+          <button class="btn primary inline-flex items-center gap-1.5">▶ Run</button>
+        </div>
+        <div class="menu" style="position:relative; display:block; margin-top:6px; left:0;">
+          <button><span>Low</span><span class="chip chip-low">·10</span></button>
+          <button><span>Normal</span><span class="chip chip-normal">·100</span></button>
+          <button><span>High</span><span class="chip chip-high">·200</span></button>
+          <button class="bg-[color:var(--accent)]"><span>Urgent ✓</span><span class="chip chip-urgent">·500</span></button>
+          <div class="sep"></div>
+          <button><span class="muted">Custom…</span></button>
+        </div>
+      </div>
+
+      <!-- Card 3: custom value -->
+      <div class="card scenario-card relative">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="w-7 h-7 rounded-md bg-[color:var(--muted)] text-[color:var(--muted-fg)] flex items-center justify-center text-[10px] font-medium">DO</span>
+          <div class="font-medium">doris-be-network-loss</div>
+        </div>
+        <div class="text-[11px] muted ml-9 flex items-center gap-2">
+          <span class="rounded bg-[color:var(--muted)] px-1.5 py-0.5 uppercase tracking-wider">doris</span>
+          <span>default <span class="chip chip-normal">Normal <span class="chip-num">·100</span></span></span>
+        </div>
+        <p class="text-sm mt-3 muted leading-snug">be-network-loss chaos on a doris target, evaluated against the network-loss SLO.</p>
+        <div class="text-[11px] muted mt-2">no runs yet</div>
+        <div class="border-t border-[color:var(--border)] mt-3 pt-3 flex items-center gap-2">
+          <button class="chip chip-custom chip-button">Custom <span class="chip-num">·137</span> <span class="chip-caret">▾</span></button>
+          <div class="flex-1 min-w-0">
+            <button class="btn ghost border border-[color:var(--border)] w-full text-left flex items-center justify-between gap-2">
+              <span class="truncate">local — framework cluster</span>
+              <span class="chip-caret">▾</span>
+            </button>
+          </div>
+          <button class="btn primary inline-flex items-center gap-1.5">▶ Run</button>
+        </div>
+        <div class="text-[11px] muted mt-2 pl-1">Off-tier value (137) → neutral Custom chip.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 3. DEFAULT PRIORITIES — segmented tiers, declutter -->
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-title">3 · Default priorities · <code class="text-[color:var(--fg)]">SegmentedTiers</code> + <code class="text-[color:var(--fg)]">PageHeader</code> + chip status</div>
+    <div class="frame card">
+      <div class="pageheader">
+        <div>
+          <h1>Default priorities</h1>
+          <div class="muted text-xs mt-1">Set the baked default each scenario uses when no priority is given on submit.</div>
+        </div>
+        <a href="#" class="muted text-sm hover:text-white inline-flex items-center gap-1.5">← Queue</a>
+      </div>
+
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left muted text-xs uppercase tracking-wider">
+            <th class="pb-3 font-medium">Scenario</th>
+            <th class="pb-3 font-medium">Priority</th>
+            <th class="pb-3 font-medium">Status</th>
+          </tr>
+        </thead>
+        <tbody class="[&>tr]:border-t [&>tr]:border-[color:var(--border)]">
+          <tr><td class="py-3 font-medium">doris-be-network-loss</td>
+              <td class="py-3"><div class="seg seg-btn-row"><button>Low</button><button class="active">Normal</button><button>High</button><button>Urgent</button></div>
+                <a href="#" class="text-[11px] muted ml-3 hover:underline">Custom…</a></td>
+              <td class="py-3"><span class="chip chip-normal">Normal <span class="chip-num">·100</span></span> <span class="text-[11px] muted ml-2">= baked default</span></td></tr>
+          <tr><td class="py-3 font-medium">kafka-broker-partition</td>
+              <td class="py-3"><div class="seg seg-btn-row"><button>Low</button><button>Normal</button><button class="active">High</button><button>Urgent</button></div>
+                <a href="#" class="text-[11px] muted ml-3 hover:underline">Custom…</a></td>
+              <td class="py-3"><span class="chip chip-high">High <span class="chip-num">·200</span></span> <span class="text-[11px] muted ml-2">overridden · baked 100</span></td></tr>
+          <tr><td class="py-3 font-medium">mysql-pod-delete</td>
+              <td class="py-3"><div class="seg seg-btn-row"><button>Low</button><button>Normal</button><button>High</button><button>Urgent</button></div>
+                <a href="#" class="text-[11px] muted ml-3 hover:underline">Custom… 137</a></td>
+              <td class="py-3"><span class="chip chip-custom">Custom <span class="chip-num">·137</span></span> <span class="text-[11px] muted ml-2">overridden · baked 100</span></td></tr>
+        </tbody>
+      </table>
+      <div class="muted text-xs mt-4">Clicking a tier saves immediately (no separate Save). Off-tier values use <em>Custom…</em>; the Status chip always shows the effective value with its tier color.</div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 4. QUEUE — chip read-only on RUNNING; chip clickable on QUEUED -->
+  <!-- ============================================================ -->
+  <section>
+    <div class="section-title">4 · Queue · chip on RUNNING is read-only; on QUEUED it's the reprioritize control (replaces standalone "to-front" button)</div>
+    <div class="frame card">
+      <div class="pageheader">
+        <div>
+          <h1>Queue</h1>
+        </div>
+        <a href="#" class="muted text-sm hover:text-white inline-flex items-center gap-1.5">⚙ Default priorities</a>
+      </div>
+
+      <div class="infoband">
+        <span class="ibadge">i</span>
+        <span><span class="term">1 slot</span> per target type · releases by <span class="term">priority</span> (high→low, then oldest) · types run <span class="term">in parallel</span></span>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4">
+        <!-- Doris lane idle -->
+        <div class="card p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-medium">Doris</div>
+            <span class="slot-pill idle">0/1 slot</span>
+          </div>
+          <div class="lane-idle">Idle</div>
+        </div>
+
+        <!-- Kafka lane idle -->
+        <div class="card p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-medium">Kafka</div>
+            <span class="slot-pill idle">0/1 slot</span>
+          </div>
+          <div class="lane-idle">Idle</div>
+        </div>
+
+        <!-- Mysql lane populated -->
+        <div class="card p-4 relative">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-medium">Mysql</div>
+            <span class="slot-pill active">1/1 slot</span>
+          </div>
+          <div class="space-y-3">
+            <div>
+              <div class="label mb-1">Running</div>
+              <div class="row running">
+                <span class="flex items-center gap-2"><span class="dot pulse"></span><a class="hover:underline">mysql-pod-delete</a></span>
+                <span class="flex items-center gap-2 text-[11px] muted">
+                  <span class="chip chip-normal chip-readonly">Normal <span class="chip-num">·100</span></span>
+                  <span>· 33s ago</span>
+                </span>
+              </div>
+            </div>
+            <div>
+              <div class="label mb-1">Queued · release order</div>
+              <div class="space-y-1.5">
+                <div class="row">
+                  <span class="flex items-center gap-2">
+                    <span class="muted text-[11px] font-mono">#1</span>
+                    <span class="next-badge">NEXT</span>
+                    <a class="hover:underline">mysql-pod-delete</a>
+                  </span>
+                  <span class="flex items-center gap-2 text-[11px] muted">
+                    <span>24s ago</span>
+                    <button class="chip chip-urgent chip-button" onclick="toggleMenu('mq1')">Urgent <span class="chip-num">·500</span> <span class="chip-caret">▾</span></button>
+                    <button class="icon-btn" title="Cancel">✕</button>
+                  </span>
+                </div>
+                <div class="row">
+                  <span class="flex items-center gap-2">
+                    <span class="muted text-[11px] font-mono">#2</span>
+                    <a class="hover:underline">mysql-pod-delete</a>
+                  </span>
+                  <span class="flex items-center gap-2 text-[11px] muted">
+                    <span>12s ago</span>
+                    <button class="chip chip-normal chip-button">Normal <span class="chip-num">·100</span> <span class="chip-caret">▾</span></button>
+                    <button class="icon-btn" title="Cancel">✕</button>
+                  </span>
+                </div>
+              </div>
+              <div id="mq1" class="menu" style="display:none; right:14px; top:auto;">
+                <button><span>Low</span><span class="chip chip-low">·10</span></button>
+                <button><span>Normal</span><span class="chip chip-normal">·100</span></button>
+                <button><span>High</span><span class="chip chip-high">·200</span></button>
+                <button class="bg-[color:var(--accent)]"><span>Urgent ✓</span><span class="chip chip-urgent">·500</span></button>
+                <div class="sep"></div>
+                <button><span class="muted">Custom…</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-xs muted mt-4">
+        <span class="chip chip-normal chip-readonly">Normal <span class="chip-num">·100</span></span> (RUNNING) has no caret — already holds the slot; backend rejects reprioritize on non-pending runs.
+        <br/>
+        <span class="chip chip-urgent chip-button">Urgent <span class="chip-num">·500</span> <span class="chip-caret">▾</span></span> (QUEUED) clicks to reprioritize. Selecting Urgent = move-to-front for typical cases; Custom… lets you set any int.
+      </div>
+    </div>
+  </section>
+
+  <footer class="pt-6 border-t border-[color:var(--border)] muted text-xs">
+    Throwaway prototype · proto-queue-priority.html
+  </footer>
+</div>
+
+<script>
+function toggleMenu(id){
+  document.querySelectorAll('.menu').forEach(m => { if (m.id !== id) m.style.display='none'; });
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+</script>
+</body>
+</html>
