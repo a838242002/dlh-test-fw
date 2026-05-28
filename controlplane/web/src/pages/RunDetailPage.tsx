@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, Circle, ExternalLink, Loader2, XCircle } from 
 import { api, getAuthToken } from "../api/client";
 import type { components } from "../api/gen";
 import { StatusBadge } from "@/components/StatusBadge";
+import { PriorityChip } from "@/components/PriorityChip";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { ErrorState } from "@/components/ErrorState";
 import { VerdictView } from "@/components/VerdictView";
@@ -125,7 +126,7 @@ export function RunDetailPage() {
       <div className="flex flex-wrap gap-x-10 gap-y-3 rounded-lg border bg-card px-5 py-4">
         <Meta label="Target" value={run.target || "local"} />
         <Meta label="Chaos · SLO" value={run.scenario.includes("-") ? run.scenario.split("-").slice(1).join("-") : "—"} />
-        <Meta label="Priority" value={run.priority != null ? String(run.priority) : "—"} />
+        <Meta label="Priority"><PriorityChip priority={run.priority ?? null} /></Meta>
         <Meta label="Started" value={relativeTime(run.startedAt)} title={new Date(run.startedAt).toLocaleString()} />
         <Meta label="Duration" value={formatDuration(run.startedAt, run.finishedAt)} />
         <Meta label="Triggered by">
