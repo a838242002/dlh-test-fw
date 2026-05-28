@@ -20,3 +20,26 @@ export function priorityForTier(label: string): number | null {
   const t = TIERS.find((t) => t.label === label);
   return t ? t.value : null;
 }
+
+export type TierKey = "low" | "normal" | "high" | "urgent" | "custom";
+
+// Explicit TierLabel → TierKey map. `satisfies` keeps the type system honest:
+// renaming or adding a tier label will fail to compile until this map is
+// updated, instead of silently producing an invalid key via a cast.
+const TIER_KEY_MAP = {
+  Low: "low",
+  Normal: "normal",
+  High: "high",
+  Urgent: "urgent",
+} as const satisfies Record<TierLabel, Exclude<TierKey, "custom">>;
+
+/** Returns the bare tier key for an exact-match priority value, else "custom". */
+export function tierKeyForPriority(priority: number): TierKey {
+  const label = tierForPriority(priority);
+  return label ? TIER_KEY_MAP[label] : "custom";
+}
+
+/** Returns the human label ("Low" | "Normal" | "High" | "Urgent" | "Custom"). */
+export function tierLabelForPriority(priority: number): TierLabel | "Custom" {
+  return tierForPriority(priority) ?? "Custom";
+}
