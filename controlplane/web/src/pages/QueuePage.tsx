@@ -92,12 +92,12 @@ function LaneCard({ lane, onReprioritize, onCancel }: { lane: Lane; onReprioriti
           <div>
             <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Running</div>
             {lane.running.map((e) => (
-              <div key={e.id} className="flex items-center justify-between rounded-md bg-status-running/10 px-2.5 py-1.5 text-sm">
-                <span className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-running" />
-                  <Link to={`/runs/${e.id}`} className="hover:underline">{e.scenario}</Link>
+              <div key={e.id} className="flex items-center justify-between gap-2 rounded-md bg-status-running/10 px-2.5 py-1.5 text-sm">
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-status-running" />
+                  <Link to={`/runs/${e.id}`} className="truncate hover:underline">{e.scenario}</Link>
                 </span>
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
                   <PriorityChip priority={e.priority ?? null} />
                   <span>· {relativeTime(e.submittedAt)}</span>
                 </span>
@@ -110,13 +110,13 @@ function LaneCard({ lane, onReprioritize, onCancel }: { lane: Lane; onReprioriti
             <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Queued · release order</div>
             <div className="space-y-1">
               {lane.pending.map((e, i) => (
-                <div key={e.id} className="flex items-center justify-between rounded-md border px-2.5 py-1.5 text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-muted-foreground">#{i + 1}</span>
-                    {i === 0 && <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">NEXT</span>}
-                    <Link to={`/runs/${e.id}`} className="hover:underline">{e.scenario}</Link>
+                <div key={e.id} className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-sm">
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">#{i + 1}</span>
+                    {i === 0 && <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">NEXT</span>}
+                    <Link to={`/runs/${e.id}`} className="truncate hover:underline">{e.scenario}</Link>
                   </span>
-                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
                     <span title={new Date(e.submittedAt).toLocaleString()}>{relativeTime(e.submittedAt)}</span>
                     <PriorityChipMenu value={e.priority ?? null} onChange={(p) => onReprioritize(e.id, p)} align="end" />
                     <Button size="sm" variant="ghost" title="Cancel" onClick={() => onCancel(e.id)}>
