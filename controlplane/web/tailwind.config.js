@@ -44,6 +44,17 @@ export default {
           failed: "hsl(var(--status-failed) / <alpha-value>)",
           pending: "hsl(var(--status-pending) / <alpha-value>)",
         },
+        tier: {
+          "low-bg":     "hsl(var(--tier-low-bg) / <alpha-value>)",
+          "low-fg":     "hsl(var(--tier-low-fg) / <alpha-value>)",
+          "normal-bg":  "hsl(var(--tier-normal-bg) / <alpha-value>)",
+          "normal-fg":  "hsl(var(--tier-normal-fg) / <alpha-value>)",
+          "high-bg":    "hsl(var(--tier-high-bg) / <alpha-value>)",
+          "high-fg":    "hsl(var(--tier-high-fg) / <alpha-value>)",
+          "urgent-bg":  "hsl(var(--tier-urgent-bg) / <alpha-value>)",
+          "urgent-fg":  "hsl(var(--tier-urgent-fg) / <alpha-value>)",
+          "custom-fg":  "hsl(var(--tier-custom-fg) / <alpha-value>)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

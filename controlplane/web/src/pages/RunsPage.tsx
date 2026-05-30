@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { StatPanel, type Stat } from "@/components/StatPanel";
 import { TargetGlyph } from "@/components/TargetGlyph";
 import { VerdictPill } from "@/components/VerdictPill";
+import { PriorityChip } from "@/components/PriorityChip";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
@@ -185,7 +186,7 @@ export function RunsPage() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{r.target || "local"}</TableCell>
                   <TableCell><StatusBadge status={String(r.status)} /></TableCell>
-                  <TableCell className="text-right font-mono tabular-nums text-muted-foreground">{r.priority ?? "—"}</TableCell>
+                  <TableCell className="text-right"><PriorityChip priority={r.priority ?? null} /></TableCell>
                   <TableCell className="text-muted-foreground tabular-nums" title={new Date(r.startedAt).toLocaleString()}>
                     {relativeTime(r.startedAt)}
                   </TableCell>

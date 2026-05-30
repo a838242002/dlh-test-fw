@@ -29,6 +29,17 @@
     --status-running: 213 80% 50%;
     --status-failed: 351 74% 52%;
     --status-pending: 38 92% 44%;
+
+    /* tier palette — light */
+    --tier-low-bg: 220 14% 92%;
+    --tier-low-fg: 220 14% 35%;
+    --tier-normal-bg: 213 94% 92%;
+    --tier-normal-fg: 217 90% 35%;
+    --tier-high-bg: 43 96% 90%;
+    --tier-high-fg: 35 85% 35%;
+    --tier-urgent-bg: 351 94% 92%;
+    --tier-urgent-fg: 351 75% 38%;
+    --tier-custom-fg: 215 18% 40%;
   }
 
   .dark {
@@ -56,6 +67,17 @@
     --status-running: 213 94% 68%;
     --status-failed: 351 94% 71%;
     --status-pending: 43 96% 56%;
+
+    /* tier palette — dark */
+    --tier-low-bg: 220 14% 22%;
+    --tier-low-fg: 220 14% 75%;
+    --tier-normal-bg: 217 90% 22%;
+    --tier-normal-fg: 213 94% 80%;
+    --tier-high-bg: 35 85% 22%;
+    --tier-high-fg: 43 96% 78%;
+    --tier-urgent-bg: 351 75% 22%;
+    --tier-urgent-fg: 351 94% 80%;
+    --tier-custom-fg: 215 18% 70%;
   }
 }
 

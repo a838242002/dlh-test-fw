@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpToLine, Settings, X } from "lucide-react";
+import { Settings, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../api/client";
 import type { components } from "../api/gen";
@@ -12,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { relativeTime } from "@/lib/time";
+import { PriorityChip } from "@/components/PriorityChip";
+import { PriorityChipMenu } from "@/components/PriorityChipMenu";
 
 type Queue = components["schemas"]["Queue"];
 type Lane = components["schemas"]["QueueLane"];
@@ -35,13 +37,12 @@ export function QueuePage() {
     return () => clearInterval(poll);
   }, [reload]);
 
-  const toFront = async (lane: Lane, id: string) => {
-    const max = Math.max(0, ...lane.pending.map((e) => e.priority ?? 0), ...lane.running.map((e) => e.priority ?? 0));
+  const reprioritize = async (id: string, priority: number) => {
     const { error: e } = await api.POST("/api/runs/{id}/priority", {
-      params: { path: { id } }, body: { priority: max + 100 },
+      params: { path: { id } }, body: { priority },
     });
     if (e) toast.error("Reprioritize failed", { description: JSON.stringify(e) });
-    else { toast.success("Moved to front"); reload(); }
+    else { toast.success(`Priority set to ${priority}`); reload(); }
   };
   const cancel = async (id: string) => {
     const { error: e } = await api.DELETE("/api/runs/{id}", { params: { path: { id } } });
@@ -67,14 +68,14 @@ export function QueuePage() {
       </InfoBand>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {queue.lanes.map((lane) => (
-          <LaneCard key={lane.key} lane={lane} onToFront={(id) => toFront(lane, id)} onCancel={cancel} />
+          <LaneCard key={lane.key} lane={lane} onReprioritize={reprioritize} onCancel={cancel} />
         ))}
       </div>
     </section>
   );
 }
 
-function LaneCard({ lane, onToFront, onCancel }: { lane: Lane; onToFront: (id: string) => void; onCancel: (id: string) => void }) {
+function LaneCard({ lane, onReprioritize, onCancel }: { lane: Lane; onReprioritize: (id: string, priority: number) => void; onCancel: (id: string) => void }) {
   const idle = lane.running.length === 0 && lane.pending.length === 0;
   return (
     <Card>
@@ -91,12 +92,15 @@ function LaneCard({ lane, onToFront, onCancel }: { lane: Lane; onToFront: (id: s
           <div>
             <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Running</div>
             {lane.running.map((e) => (
-              <div key={e.id} className="flex items-center justify-between rounded-md bg-status-running/10 px-2.5 py-1.5 text-sm">
-                <span className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-running" />
-                  <Link to={`/runs/${e.id}`} className="hover:underline">{e.scenario}</Link>
+              <div key={e.id} className="flex items-center justify-between gap-2 rounded-md bg-status-running/10 px-2.5 py-1.5 text-sm">
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-status-running" />
+                  <Link to={`/runs/${e.id}`} className="truncate hover:underline">{e.scenario}</Link>
                 </span>
-                <span className="font-mono text-xs text-muted-foreground">p{e.priority ?? "—"} · {relativeTime(e.submittedAt)}</span>
+                <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
+                  <PriorityChip priority={e.priority ?? null} />
+                  <span>· {relativeTime(e.submittedAt)}</span>
+                </span>
               </div>
             ))}
           </div>
@@ -106,20 +110,15 @@ function LaneCard({ lane, onToFront, onCancel }: { lane: Lane; onToFront: (id: s
             <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Queued · release order</div>
             <div className="space-y-1">
               {lane.pending.map((e, i) => (
-                <div key={e.id} className="flex items-center justify-between rounded-md border px-2.5 py-1.5 text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-muted-foreground">#{i + 1}</span>
-                    {i === 0 && <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">NEXT</span>}
-                    <Link to={`/runs/${e.id}`} className="hover:underline">{e.scenario}</Link>
+                <div key={e.id} className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-sm">
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">#{i + 1}</span>
+                    {i === 0 && <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">NEXT</span>}
+                    <Link to={`/runs/${e.id}`} className="truncate hover:underline">{e.scenario}</Link>
                   </span>
-                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
                     <span title={new Date(e.submittedAt).toLocaleString()}>{relativeTime(e.submittedAt)}</span>
-                    <span className="font-mono">p{e.priority ?? "—"}</span>
-                    {i > 0 && (
-                      <Button size="sm" variant="ghost" title="Move to front" onClick={() => onToFront(e.id)}>
-                        <ArrowUpToLine className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
+                    <PriorityChipMenu value={e.priority ?? null} onChange={(p) => onReprioritize(e.id, p)} align="end" />
                     <Button size="sm" variant="ghost" title="Cancel" onClick={() => onCancel(e.id)}>
                       <X className="h-3.5 w-3.5" />
                     </Button>
