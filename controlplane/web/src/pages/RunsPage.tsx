@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, AlertTriangle, ArrowUpDown, CalendarClock, CalendarDays, CheckCircle2, Search } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, Search } from "lucide-react";
 import { api } from "../api/client";
 import type { components } from "../api/gen";
 import { StatusBadge } from "@/components/StatusBadge";
-import { StatCard } from "@/components/StatCard";
+import { StatPanel, type Stat } from "@/components/StatPanel";
+import { TargetGlyph } from "@/components/TargetGlyph";
+import { VerdictPill } from "@/components/VerdictPill";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
@@ -16,7 +18,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { computeStats } from "@/lib/stats";
 import { relativeTime, formatDuration } from "@/lib/time";
-import { verdictFromScore } from "@/lib/run";
 import { filterRuns, sortRuns, type RunFilter, type RunSort } from "@/lib/runsFilter";
 
 type Run = components["schemas"]["Run"];
@@ -74,20 +75,23 @@ export function RunsPage() {
   const toggleSort = (key: RunSort["key"]) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" }));
 
+  const statItems: Stat[] = [
+    {
+      label: "Pass rate · 7d",
+      value: stats == null ? "—" : stats.passRate7d == null ? "—" : `${Math.round(stats.passRate7d * 100)}%`,
+      accent: "success",
+    },
+    { label: "Runs today", value: stats == null ? "—" : stats.runsToday },
+    { label: "Running now", value: stats == null ? "—" : stats.runningNow, accent: "running" },
+    { label: "Active schedules", value: stats == null ? "—" : stats.activeSchedules },
+  ];
+
   return (
     <section>
       <PageHeader title="Runs" />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard
-          label="Pass rate (7d)"
-          accent="success"
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          value={stats == null ? "—" : stats.passRate7d == null ? "—" : `${Math.round(stats.passRate7d * 100)}%`}
-        />
-        <StatCard label="Runs today" icon={<CalendarDays className="h-4 w-4" />} value={stats == null ? "—" : String(stats.runsToday)} />
-        <StatCard label="Running now" accent="running" icon={<Activity className="h-4 w-4" />} value={stats == null ? "—" : String(stats.runningNow)} />
-        <StatCard label="Active schedules" icon={<CalendarClock className="h-4 w-4" />} value={stats == null ? "—" : String(stats.activeSchedules)} />
+      <div className="mb-5">
+        <StatPanel stats={statItems} />
       </div>
 
       <Card>
@@ -156,12 +160,13 @@ export function RunsPage() {
                 <TableHead>Scenario</TableHead>
                 <TableHead>Target</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right">Priority</TableHead>
                 <TableHead>
                   <button className="inline-flex items-center gap-1 uppercase" onClick={() => toggleSort("started")}>
                     Started <ArrowUpDown className="h-3 w-3" />
                   </button>
                 </TableHead>
-                <TableHead>
+                <TableHead className="text-right">
                   <button className="inline-flex items-center gap-1 uppercase" onClick={() => toggleSort("duration")}>
                     Duration <ArrowUpDown className="h-3 w-3" />
                   </button>
@@ -170,29 +175,24 @@ export function RunsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.map((r) => {
-                const v = verdictFromScore(r.score);
-                return (
-                  <TableRow key={r.id} className="cursor-pointer" onClick={() => navigate(`/runs/${r.id}`)}>
-                    <TableCell className="font-medium">{r.scenario}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.target || "local"}</TableCell>
-                    <TableCell><StatusBadge status={String(r.status)} /></TableCell>
-                    <TableCell className="text-muted-foreground" title={new Date(r.startedAt).toLocaleString()}>
-                      {relativeTime(r.startedAt)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{formatDuration(r.startedAt, r.finishedAt)}</TableCell>
-                    <TableCell>
-                      {v == null ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : v === "pass" ? (
-                        <span className="text-xs font-semibold text-status-success">✓ pass</span>
-                      ) : (
-                        <span className="text-xs font-semibold text-status-failed">✗ fail</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {visible.map((r) => (
+                <TableRow key={r.id} className="cursor-pointer" onClick={() => navigate(`/runs/${r.id}`)}>
+                  <TableCell>
+                    <div className="flex items-center gap-2.5">
+                      <TargetGlyph scenario={r.scenario} />
+                      <span className="font-medium">{r.scenario}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{r.target || "local"}</TableCell>
+                  <TableCell><StatusBadge status={String(r.status)} /></TableCell>
+                  <TableCell className="text-right font-mono tabular-nums text-muted-foreground">{r.priority ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground tabular-nums" title={new Date(r.startedAt).toLocaleString()}>
+                    {relativeTime(r.startedAt)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums text-muted-foreground">{formatDuration(r.startedAt, r.finishedAt)}</TableCell>
+                  <TableCell><VerdictPill score={r.score} /></TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         )}

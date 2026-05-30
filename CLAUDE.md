@@ -218,6 +218,47 @@ Fake tokens for `DLH_AUTH_DISABLED=true` mode:
   Workflow has a CronWorkflow owner reference; UI links to /schedules.
 - Role extended to grant cronworkflows alongside workflows verbs.
 
+### Priority — visibility & control (Plan `2026-05-26`)
+
+Makes the baked workflow-priority mechanism (`spec.priority` + the
+per-target-type `dlh-scenario-locks` semaphore) visible and controllable.
+Three layers + a Queue view:
+
+- **Submit + display (Layer 1):** `priority` on `CreateRunRequest`/`Run`
+  (RunDetail already had it). The submitter ALWAYS resolves an *effective*
+  priority — request override → per-scenario default → template's baked
+  `spec.priority` (read from the template Get it already does) — and stamps
+  `wf.Spec.Priority`, so every Workflow is self-describing. `dlh run
+  --priority N`; priority shown in Runs list + Run-detail meta + Scenarios
+  run control.
+- **Queue view:** `GET /api/queue` (viewer) → per-semaphore-key lanes
+  (running holder + pending ordered priority-desc, oldest-first), backed by
+  pure `internal/queue.BuildLanes`. UI `Queue` nav page (idle/running/queued
+  states); `dlh queue`. Reads `dlh-scenario-locks` (RBAC + `DLH_LOCKS_CONFIGMAP`).
+- **Editable defaults (Layer 3):** `dlh-scenario-priorities` ConfigMap
+  (helm template, `resource-policy: keep`) read by the submitter; `GET
+  /api/scenario-priorities` (viewer) + `PUT /api/scenario-priorities/{id}`
+  (admin) via `internal/priorities.Store`. UI `Default priorities` admin page
+  (tier chips Low/Normal/High/Urgent = 10/100/200/500 — pure UI sugar in
+  `web/src/lib/tier.ts`; raw int authoritative). `DLH_PRIORITIES_CONFIGMAP`.
+- **Live re-prioritize (Layer 2):** `POST /api/runs/{id}/priority` (runner;
+  409 unless Pending) merge-patches `spec.priority`. **Spike-verified
+  (FINDINGS, Argo `0.45.20`): patching a pending workflow's priority DOES
+  re-order the semaphore release queue** — so this is a patch, not
+  cancel+resubmit. `dlh runs reprioritize <id> --priority/--to-front`; Queue
+  page per-pending to-front + cancel controls.
+- **Role-gated routes** are explicit `r.With(auth.RequireRole(...))` routes
+  registered after `gen.HandlerFromMux` (chi last-wins), wrapping
+  `gen.ServerInterfaceWrapper{Handler: strictSI}.<Op>` — the global authMW has
+  already populated the role. This is the first use of `RequireRole`.
+- **Local-dev gotcha:** `RequireRole` resolves every identity to `viewer`
+  unless the `dlh-roles` bindings map the token's groups. The shipped bindings
+  are `REPLACE-*` placeholders and the web app's fake token uses group
+  `dlh-admin` (singular). For local-dev admin/runner gating to work, bind the
+  dev groups (e.g. `admin: ["dlh-admin","dlh-admins"]`, etc.) in `dlh-roles`,
+  and ensure `dlh-scenario-priorities` exists (helm creates it; a stale
+  cluster needs `helm upgrade` or a manual `kubectl create cm`).
+
 ### controlplane UI refresh
 
 - `controlplane/web` uses **shadcn/ui** primitives (vendored in `src/components/ui/`)

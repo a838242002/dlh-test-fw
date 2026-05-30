@@ -1,0 +1,17 @@
+# Per-scenario default priority overrides, managed by the controlplane
+# (admin "Default priorities" page) at runtime. Data keys are scenario ids;
+# values are stringified ints. Empty by default — when a scenario has no
+# entry, the submitter falls back to the WorkflowTemplate's baked spec.priority.
+#
+# helm.sh/resource-policy: keep prevents `helm upgrade`/uninstall from
+# clobbering operator-set values (the controlplane owns this data at runtime).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlh-scenario-priorities
+  namespace: {{ include "dlh.namespace" . }}
+  labels:
+    {{- include "dlh.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+data: {}

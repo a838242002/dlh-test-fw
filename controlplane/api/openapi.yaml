@@ -149,6 +149,32 @@ paths:
             text/event-stream:
               schema:
                 type: string
+  /api/runs/{id}/priority:
+    post:
+      operationId: reprioritizeRun
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority: { type: integer }
+      responses:
+        "202":
+          description: re-prioritized
+        "400":
+          description: invalid request
+        "404":
+          description: run not found
+        "409":
+          description: run is not pending (cannot reorder a running/finished run)
   /internal/chaos:
     post:
       operationId: createChaos
@@ -269,6 +295,59 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuthInfo" }
+  /api/queue:
+    get:
+      operationId: getQueue
+      responses:
+        "200":
+          description: per-target-type semaphore lanes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+  /api/scenario-priorities:
+    get:
+      operationId: getScenarioPriorities
+      responses:
+        "200":
+          description: per-scenario baked default + current override
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ScenarioPriority" }
+  /api/scenario-priorities/{id}:
+    put:
+      operationId: putScenarioPriority
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority: { type: integer }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScenarioPriority" }
+        "400":
+          description: invalid request
+        "403":
+          description: forbidden (admin role required)
+        "404":
+          description: scenario not found
   /api/schedules:
     get:
       operationId: listSchedules
@@ -393,6 +472,7 @@ components:
         startedAt:  { type: string, format: date-time }
         finishedAt: { type: string, format: date-time }
         score:      { type: number, format: double, nullable: true }
+        priority:   { type: integer, description: "Effective workflow priority. Absent for legacy runs with no spec.priority." }
         workflowName: { type: string }
         target:       { type: string, description: "Remote target ID (Run was injected into a remote cluster). Empty = local." }
         triggeredBy:
@@ -459,6 +539,9 @@ components:
         targetId:
           type: string
           description: "Optional remote target ID. Empty = inject chaos in framework cluster."
+        priority:
+          type: integer
+          description: "Optional priority override. Empty = scenario default (or baked WT value)."
         parameters:
           type: object
           description: "Optional parameter overrides. Keys are WT parameter names."
@@ -572,5 +655,41 @@ components:
           type: object
           description: "Optional WorkflowTemplate parameter overrides."
           additionalProperties: { type: string }
+    Queue:
+      type: object
+      required: [lanes]
+      properties:
+        lanes:
+          type: array
+          items: { $ref: "#/components/schemas/QueueLane" }
+    QueueLane:
+      type: object
+      required: [key, slots, running, pending]
+      properties:
+        key:    { type: string, description: "Semaphore key / target type (mysql/kafka/doris)." }
+        slots:  { type: integer, description: "Concurrent slots for this key." }
+        running:
+          type: array
+          items: { $ref: "#/components/schemas/QueueEntry" }
+        pending:
+          type: array
+          description: "Ordered by release order (priority desc, then oldest first)."
+          items: { $ref: "#/components/schemas/QueueEntry" }
+    QueueEntry:
+      type: object
+      required: [id, scenario, submittedAt]
+      properties:
+        id:          { type: string }
+        scenario:    { type: string }
+        priority:    { type: integer }
+        submittedAt: { type: string, format: date-time }
+    ScenarioPriority:
+      type: object
+      required: [scenario, baked, effective]
+      properties:
+        scenario: { type: string }
+        baked:    { type: integer, description: "WorkflowTemplate's baked spec.priority." }
+        override: { type: integer, nullable: true, description: "Current override from dlh-scenario-priorities; null = none (uses baked)." }
+        effective: { type: integer, description: "override ?? baked." }
 security:
   - bearerAuth: []

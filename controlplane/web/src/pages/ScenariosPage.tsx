@@ -15,6 +15,11 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, deriveCategory, deriveTargetType, type CategoryKey } from "@/lib/category";
+import { TargetGlyph } from "@/components/TargetGlyph";
+import { VerdictPill } from "@/components/VerdictPill";
+import { tierForPriority } from "@/lib/tier";
+import { relativeTime } from "@/lib/time";
+import { lastRunByScenario, type LastRun } from "@/lib/scenarioRuns";
 
 type Scenario = components["schemas"]["Scenario"];
 
@@ -23,13 +28,24 @@ export function ScenariosPage() {
   const [items, setItems] = useState<Scenario[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [submitTarget, setSubmitTarget] = useState<Record<string, string>>({});
+  const [submitPriority, setSubmitPriority] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [defaults, setDefaults] = useState<Record<string, number>>({});
+  const [lastRuns, setLastRuns] = useState<Record<string, LastRun>>({});
 
   useEffect(() => {
     api.GET("/api/scenarios", {}).then(({ data, error }) => {
       if (error) setError(error);
       else setItems(data?.items ?? []);
+    });
+    api.GET("/api/scenario-priorities", {}).then(({ data }) => {
+      const m: Record<string, number> = {};
+      for (const sp of data?.items ?? []) m[sp.scenario] = sp.effective;
+      setDefaults(m);
+    });
+    api.GET("/api/runs", {}).then(({ data }) => {
+      setLastRuns(lastRunByScenario(data?.items ?? []));
     });
   }, []);
 
@@ -37,7 +53,11 @@ export function ScenariosPage() {
     setSubmitting(s.id);
     try {
       const targetId = submitTarget[s.id] || undefined;
-      const { data, error } = await api.POST("/api/runs", { body: { scenarioId: s.id, targetId } });
+      const raw = submitPriority[s.id];
+      const priority = raw && raw.trim() !== "" ? Number(raw) : undefined;
+      const { data, error } = await api.POST("/api/runs", {
+        body: { scenarioId: s.id, targetId, priority },
+      });
       if (error) toast.error("Submit failed", { description: JSON.stringify(error) });
       else if (data?.id) {
         toast.success(`Run ${data.id} submitted`);
@@ -69,6 +89,7 @@ export function ScenariosPage() {
     <section>
       <PageHeader
         title="Scenarios"
+        subtitle={items ? <>Pick a scenario and launch a run · <span className="tabular-nums text-foreground/70">{items.length}</span> available</> : "Pick a scenario and launch a run"}
         action={
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -103,18 +124,42 @@ export function ScenariosPage() {
                   const tt = s.targetType ?? deriveTargetType(s.id);
                   return (
                     <li key={s.id}>
-                      <Card className="h-full">
-                        <CardContent className="flex h-full flex-col gap-3 p-4">
+                      <Card className="h-full transition hover:ring-1 hover:ring-primary/40">
+                        <CardContent className="flex h-full flex-col p-4">
                           <div className="flex items-start gap-3">
-                            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
-                              <CategoryIcon category={cat.key} />
-                            </div>
+                            <TargetGlyph scenario={s.id} />
                             <div className="min-w-0">
-                              <div className="truncate font-semibold">{s.displayName}</div>
-                              <div className="text-xs text-muted-foreground">{tt}</div>
+                              <div className="truncate font-medium">{s.displayName}</div>
+                              <div className="mt-0.5 flex items-center gap-1.5 text-xs">
+                                <span className="rounded bg-accent px-1.5 py-0.5 font-medium uppercase tracking-wide text-muted-foreground">{tt}</span>
+                                {defaults[s.id] != null && (
+                                  <span className="text-muted-foreground">default {tierForPriority(defaults[s.id]) ?? defaults[s.id]}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <div className="mt-auto flex items-center gap-2">
+
+                          <p className="mt-2.5 line-clamp-2 min-h-[2.5rem] text-sm leading-relaxed text-muted-foreground">
+                            {s.description ?? "—"}
+                          </p>
+
+                          <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            {lastRuns[s.id] ? (
+                              <>last run {relativeTime(lastRuns[s.id].startedAt)} <VerdictPill score={lastRuns[s.id].score} /></>
+                            ) : (
+                              <span>no runs yet</span>
+                            )}
+                          </div>
+
+                          <div className="mt-3 flex items-center gap-2 border-t pt-3">
+                            <Input
+                              type="number"
+                              value={submitPriority[s.id] ?? ""}
+                              onChange={(e) => setSubmitPriority((r) => ({ ...r, [s.id]: e.target.value }))}
+                              placeholder="prio"
+                              title="Priority override (blank = scenario default)"
+                              className="h-8 w-[64px]"
+                            />
                             <TargetPicker
                               value={submitTarget[s.id] ?? ""}
                               onChange={(v) => setSubmitTarget((r) => ({ ...r, [s.id]: v }))}

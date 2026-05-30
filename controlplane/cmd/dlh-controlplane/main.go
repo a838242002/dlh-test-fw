@@ -17,6 +17,7 @@ import (
 	"github.com/dlh/dlh-test-fw/controlplane/internal/k8s"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/links"
 	mio "github.com/dlh/dlh-test-fw/controlplane/internal/minio"
+	"github.com/dlh/dlh-test-fw/controlplane/internal/priorities"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/runs"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/schedules"
 	"github.com/dlh/dlh-test-fw/controlplane/internal/targets"
@@ -63,7 +64,11 @@ func main() {
 
 	// Phase C: submission + manifest writes.
 	manifests := &runs.ManifestWriter{Client: mc, Bucket: cfg.MinIOBucket}
-	submitter := &runs.Submitter{Argo: clients.Argo, Namespace: cfg.K8sNamespace}
+	submitter := &runs.Submitter{
+		Argo:      clients.Argo,
+		Namespace: cfg.K8sNamespace,
+		Defaults:  &priorities.Store{Client: clients.Core, Namespace: cfg.K8sNamespace, Name: cfg.PrioritiesConfigMapName},
+	}
 	syncer := &runs.Syncer{Source: wfLister, Manifests: manifests, Reports: reports}
 	go syncer.Run(ctx)
 
@@ -133,6 +138,8 @@ func main() {
 		SessionIssuer: sessionIssuer,
 		Exchanger:     exchanger,
 		Schedules:     scheduleMgr,
+		Locks:         &api.ConfigMapLocks{Client: clients.Core, Namespace: cfg.K8sNamespace, Name: cfg.LocksConfigMapName},
+		Priorities:    &priorities.Store{Client: clients.Core, Namespace: cfg.K8sNamespace, Name: cfg.PrioritiesConfigMapName},
 		AuthInfo: api.AuthInfoConfig{
 			OIDCIssuer:   cfg.OIDCIssuerURL,
 			OIDCClientID: cfg.OIDCClientID,
